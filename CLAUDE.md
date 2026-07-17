@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state: greenfield scaffold
 
-This repository contains **no application code, build system, dependency manifest, or test runner yet**. As of the `Initial commit`, the only tracked files are `LICENSE` (MIT) and `AGENTS.md`. There is no `README.md` and no `.gitignore`. When making the first changes, you will likely be establishing the project's foundation — commit the relevant config (package manifest, lint/format config, `.gitignore`) in the same change rather than relying on undocumented global tools.
+This repository contains **no application code, build system, dependency manifest, or test runner yet**. It currently consists of the MIT license and repository-level planning and contributor documentation, including the README, project plan, remaining-task list, and contributor guidance. There is no `.gitignore`. When implementation begins, commit the relevant foundation files (package manifest, lint/format config, `.gitignore`) in the same change rather than relying on undocumented global tools.
 
 ## Project identity & intended stack
 

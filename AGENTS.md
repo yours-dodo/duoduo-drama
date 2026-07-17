@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently a minimal scaffold containing only the root `LICENSE` file. Keep repository-level documentation and configuration at the root. As implementation is added, use a predictable layout such as `src/` for application code, `tests/` for automated tests, and `assets/` for static resources. Keep modules focused, and place tests near the code they cover or mirror the `src/` hierarchy under `tests/`. Document any new top-level directory in this guide or the README.
+This repository is currently a documentation-only scaffold containing planning, contributor guidance, and the root `LICENSE` file. There is no application code yet. Keep repository-level documentation and configuration at the root. As implementation is added, use a predictable layout such as `src/` for application code, `tests/` for automated tests, and `assets/` for static resources. Keep modules focused, and place tests near the code they cover or mirror the `src/` hierarchy under `tests/`. Document any new top-level directory in this guide or the README.
 
 ## Build, Test, and Development Commands
 
