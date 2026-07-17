@@ -11,12 +11,10 @@
     "test": "vitest run src"
   },
   "dependencies": {
-    "@duoduo/contracts": "workspace:*",
     "@hono/node-server": "^1.19.9",
     "hono": "^4.12.30"
   },
   "devDependencies": {
-    "@duoduo/tsconfig": "workspace:*",
     "@types/node": "^22.0.0",
     "tsx": "^4.23.1",
     "typescript": "catalog:",

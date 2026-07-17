@@ -266,6 +266,18 @@ pnpm test
 
 `pnpm dev` 并行启动 Nuxt Web（3000）、NestJS Server（3001）和 Hono Agent（3002）。可以使用 `pnpm --filter @duoduo/server dev` 等命令只启动单个 workspace。
 
+主要代码目录：
+
+```text
+apps/web/       Nuxt Web 工作台
+apps/server/    NestJS 业务服务
+apps/mobile/    移动端预留目录，尚未加入 workspace
+agent/          Hono Agent 服务
+vendor/         仅限本地使用的外部参考项目
+```
+
+代码默认放在唯一负责它的项目内。只有两个以上项目真实复用同一稳定抽象时，才提取共享包。每个项目根目录的 `AGENTS.md` 记录该项目特有的职责、依赖边界、命令和测试要求。
+
 ## 路线图
 
 ### 当前重点

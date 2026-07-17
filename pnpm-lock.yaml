@@ -47,9 +47,6 @@ importers:
 
   agent:
     dependencies:
-      '@duoduo/contracts':
-        specifier: workspace:*
-        version: link:../packages/contracts
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.14(hono@4.12.30)
@@ -57,9 +54,6 @@ importers:
         specifier: ^4.12.30
         version: 4.12.30
     devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -75,9 +69,6 @@ importers:
 
   apps/server:
     dependencies:
-      '@duoduo/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@nestjs/common':
         specifier: ^11.1.28
         version: 11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -94,9 +85,6 @@ importers:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -131,56 +119,6 @@ importers:
       vue-tsc:
         specifier: ^3.1.0
         version: 3.3.7(typescript@6.0.3)
-
-  packages/config:
-    devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
-
-  packages/contracts:
-    devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
-
-  packages/domain:
-    devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
-
-  packages/shared:
-    devDependencies:
-      '@duoduo/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.10(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
-
-  packages/tsconfig: {}
 
 packages:
 

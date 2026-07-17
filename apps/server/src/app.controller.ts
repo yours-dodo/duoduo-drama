@@ -1,5 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
-import type { HealthResponse } from '@duoduo/contracts';
+
+interface HealthResponse {
+  service: 'server';
+  status: 'ok';
+}
 
 @Controller()
 export class AppController {

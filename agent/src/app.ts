@@ -1,5 +1,9 @@
-import type { HealthResponse } from '@duoduo/contracts';
 import { Hono } from 'hono';
+
+interface HealthResponse {
+  service: 'agent';
+  status: 'ok';
+}
 
 export const app = new Hono();
 
