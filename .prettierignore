@@ -1,0 +1,15 @@
+.nuxt
+.output
+.claude
+coverage
+dist
+node_modules
+pnpm-lock.yaml
+vendor/*
+
+# Preserve existing repository documents without unrelated reformatting.
+AGENTS.md
+CLAUDE.md
+PROJECT-PLAN.md
+README.md
+remaining-tasks.md

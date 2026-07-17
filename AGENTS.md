@@ -2,25 +2,28 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently a documentation-only scaffold containing planning, contributor guidance, and the root `LICENSE` file. There is no application code yet. Keep repository-level documentation and configuration at the root. As implementation is added, use a predictable layout such as `src/` for application code, `tests/` for automated tests, and `assets/` for static resources. Keep modules focused, and place tests near the code they cover or mirror the `src/` hierarchy under `tests/`. Document any new top-level directory in this guide or the README.
+This repository is a TypeScript pnpm monorepo. Runtime applications live in `apps/`: `apps/web` is Nuxt, `apps/server` is NestJS, and `apps/mobile` is reserved until a mobile framework is selected. The Hono-based Agent service lives in the top-level `agent/` workspace. Reusable code belongs in focused packages under `packages/`: `domain`, `contracts`, `shared`, `config`, and `tsconfig`. Local third-party reference repositories may be cloned under `vendor/`; they are ignored by Git, excluded from the workspace, and must never become runtime dependencies.
 
 ## Build, Test, and Development Commands
 
-No build system, dependency manifest, or test runner is configured yet. Before submitting changes, use the available Git checks:
+Use Node.js 22 or newer and the pnpm version declared in the root `package.json`. Install dependencies with `pnpm install`. Standard commands are:
 
-- `git status` — review tracked and untracked files.
-- `git diff` — inspect unstaged changes.
-- `git diff --check` — detect whitespace errors.
+- `pnpm dev` — run Web, Server, and Agent development processes in parallel.
+- `pnpm build` — build all runnable workspaces and shared packages.
+- `pnpm typecheck` — type-check all participating workspaces.
+- `pnpm lint` — run the repository ESLint configuration.
+- `pnpm format` / `pnpm format:check` — write or check Prettier formatting.
+- `pnpm test` — run all Vitest suites.
 
-When adding a language or framework, provide standard, reproducible commands (for example, `npm run dev`, `npm test`, and `npm run build`) in the relevant manifest and update this section in the same pull request. Do not require undocumented global tools.
+Use `pnpm --filter <workspace> <script>` for a single workspace. Before submitting changes, also run `git status`, `git diff`, and `git diff --check`. Do not require undocumented global tools.
 
 ## Coding Style & Naming Conventions
 
-Follow the formatter and linter conventions of the technology introduced. Commit their configuration so all contributors receive identical results. Until then, use UTF-8 files, LF line endings, spaces rather than tabs, and a final newline. Prefer descriptive names: lowercase kebab-case for documentation and asset files, and language-standard conventions for source identifiers. Avoid unrelated formatting changes.
+Use the committed ESLint, Prettier, and strict TypeScript configuration. Use UTF-8 files, LF line endings, spaces rather than tabs, and a final newline. Prefer descriptive names: lowercase kebab-case for documentation and assets, PascalCase for classes and types, and camelCase for functions and variables. Keep `packages/domain` framework-independent, share Server/Agent protocol definitions through `packages/contracts`, and avoid turning `packages/shared` into a catch-all. Avoid unrelated formatting changes.
 
 ## Testing Guidelines
 
-There is currently no automated test suite. New functionality should include tests once a test framework is established. Name tests consistently with the chosen ecosystem, such as `*.test.ts` or `test_*.py`, and cover normal behavior, edge cases, and failure paths. Record the exact test command here and ensure it passes before opening a pull request.
+Vitest is the default test runner. Co-locate tests as `*.test.ts` near the source they cover. New behavior should cover normal behavior, edge cases, and failure paths. Run `pnpm test` plus the relevant `typecheck` and `build` commands before opening a pull request.
 
 ## Commit & Pull Request Guidelines
 
