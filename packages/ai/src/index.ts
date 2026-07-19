@@ -1,3 +1,52 @@
+export type {
+  ActiveCredentialRecord,
+  AuthBinding,
+  CatalogAuthView,
+  Clock,
+  Credential,
+  CredentialRecord,
+  CredentialScopeKey,
+  CredentialStore,
+} from './auth/credential-store.js';
+export { createCredentialRecordSealer } from './auth/record-sealer.js';
+export type {
+  CredentialCodec,
+  CredentialRecordSealer,
+  PersistedCredentialRecord,
+} from './auth/record-sealer.js';
+export type {
+  AuthApi,
+  AuthInteraction,
+  AuthLogoutResult,
+  AuthStatus,
+} from './auth/login.js';
+export type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+  CredentialScopeFingerprintVerification,
+} from './auth/scope-authority.js';
+export {
+  canonicalizeCredentialScope,
+  validateResolvedScope,
+} from './auth/scope-authority.js';
+export { createEnvironmentCredentialResolver } from './auth/ambient.js';
+export type {
+  EnvironmentCredentialResolution,
+  EnvironmentCredentialResolver,
+  EnvironmentSource,
+  SecretCredentialSource,
+} from './auth/ambient.js';
+export { canonicalizeCatalogCacheKey } from './catalog/cache-key.js';
+export type { CatalogCacheKey } from './catalog/cache-key.js';
+export type {
+  CachedCatalog,
+  CatalogCommitResult,
+  CatalogRefreshTicket,
+  CatalogStore,
+  CatalogWriteValue,
+} from './catalog/catalog-store.js';
+export { digestCatalogPayload } from './catalog/manifest.js';
+
 export { secret } from './auth/secret-value.js';
 export type { SecretValue } from './auth/secret-value.js';
 export type { RequestCredentialOverride } from './auth/api-key.js';

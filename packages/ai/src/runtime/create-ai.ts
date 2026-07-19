@@ -4,6 +4,9 @@ import { AiRuntimeError, type AiError } from '../core/errors.js';
 import type { RequestCredentialOverride } from '../auth/api-key.js';
 import { credentialScheme } from '../auth/api-key.js';
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
+import type { CredentialStore } from '../auth/credential-store.js';
+import type { AuthApi } from '../auth/login.js';
+import type { CredentialScopeAuthority } from '../auth/scope-authority.js';
 import { revealSecret } from '../auth/secret-value.js';
 import { validateContext } from '../core/context.js';
 import { parseToolArguments } from '../core/tools.js';
@@ -35,10 +38,16 @@ import {
   type Provider,
   type ProvidersApi,
 } from './registry.js';
+import {
+  createAuthCoordinator,
+  type AuthCoordinator,
+  type StoredRequestAuth,
+} from './auth-coordinator.js';
 
 const handleProvider = new WeakMap<object, string>();
 const handleRuntime = new WeakMap<object, symbol>();
 const handleCredentialFingerprint = new WeakMap<object, string>();
+const handleStoredAuth = new WeakMap<object, StoredRequestAuth>();
 
 export interface StreamOptionsInput {
   readonly signal?: AbortSignal;
@@ -105,6 +114,7 @@ export interface InventoryApi {
 export interface AiRuntime<TScopeHandle = unknown> {
   readonly providers: ProvidersApi;
   readonly inventory: InventoryApi;
+  readonly auth: AuthApi<TScopeHandle>;
   readonly models: ModelsApi<TScopeHandle>;
   stream<TProtocol extends string>(
     model: ModelHandle<TProtocol>,
@@ -136,6 +146,8 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly transport?: TransportDriver;
   readonly networkPolicy?: NetworkPolicy;
   readonly credentialOverridePolicy?: CredentialOverridePolicy<TScopeHandle>;
+  readonly credentialStore?: CredentialStore;
+  readonly scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
 }
 
 interface BlockState {
@@ -157,6 +169,29 @@ export function createAi<TScopeHandle = unknown>(
   const registry = new ProviderRegistry();
   const runtimeId = Symbol('duoduo-ai-runtime');
   const credentialFingerprintKey = randomBytes(32);
+  if (
+    (options.credentialStore === undefined) !==
+    (options.scopeAuthority === undefined)
+  )
+    throw new TypeError(
+      'credentialStore and scopeAuthority must be configured together',
+    );
+  const authCoordinator =
+    options.credentialStore && options.scopeAuthority
+      ? createAuthCoordinator({
+          store: options.credentialStore,
+          scopeAuthority: options.scopeAuthority,
+          getProvider: (providerInstanceId) => {
+            const entry = registry.get(providerInstanceId);
+            return entry
+              ? {
+                  snapshot: entry.snapshot,
+                  transport: entry.provider.chat?.transport,
+                }
+              : undefined;
+          },
+        })
+      : undefined;
   let disposed = false;
 
   const inventory: InventoryApi = {
@@ -196,19 +231,22 @@ export function createAi<TScopeHandle = unknown>(
         sameRef(model, ref),
       );
       if (!definition || !entry) return undefined;
-      const credentialFingerprint = await authorizeCredentialOverride({
+      const resolvedAuth = await resolveModelAuth({
         chat: entry.provider.chat,
         provider: entry.snapshot,
         scope,
         override: readOptions?.credentialOverride,
         policy: options.credentialOverridePolicy,
         key: credentialFingerprintKey,
+        coordinator: authCoordinator,
+        signal: readOptions?.signal,
       });
       return makeHandle<TProtocol>(
         definition as ModelDefinition<TProtocol>,
         entry.snapshot,
         runtimeId,
-        credentialFingerprint,
+        resolvedAuth.credentialFingerprint,
+        resolvedAuth.storedAuth,
       );
     },
     require: async <TProtocol extends string>(
@@ -240,20 +278,28 @@ export function createAi<TScopeHandle = unknown>(
         )
           continue;
         const entry = registry.get(snapshot.id);
-        const credentialFingerprint = entry
-          ? await authorizeCredentialOverride({
+        const resolvedAuth = entry
+          ? await resolveModelAuth({
               chat: entry.provider.chat,
               provider: snapshot,
               scope,
               override: readOptions?.credentialOverride,
               policy: options.credentialOverridePolicy,
               key: credentialFingerprintKey,
+              coordinator: authCoordinator,
+              signal: readOptions?.signal,
             })
-          : undefined;
+          : {};
         for (const model of entry?.provider.chat?.models ?? []) {
           if (matchesFilter(model, filter))
             handles.push(
-              makeHandle(model, snapshot, runtimeId, credentialFingerprint),
+              makeHandle(
+                model,
+                snapshot,
+                runtimeId,
+                resolvedAuth.credentialFingerprint,
+                resolvedAuth.storedAuth,
+              ),
             );
         }
       }
@@ -264,6 +310,7 @@ export function createAi<TScopeHandle = unknown>(
   const runtime: AiRuntime<TScopeHandle> = {
     providers: registry,
     inventory,
+    auth: authCoordinator?.api ?? createUnavailableAuthApi(),
     models,
     stream: (model, context, streamOptions) => {
       if (disposed)
@@ -316,6 +363,8 @@ export function createAi<TScopeHandle = unknown>(
             resolved,
             credentialOverride: streamOptions?.credentialOverride,
             credentialFingerprintKey,
+            storedAuth: handleStoredAuth.get(model as object),
+            authCoordinator,
             driver: options.transport,
             networkPolicy: options.networkPolicy,
             stream: ownedStream,
@@ -357,6 +406,7 @@ function makeHandle<TProtocol extends string>(
   snapshot: ProviderSnapshot,
   runtimeId: symbol,
   credentialFingerprint?: string,
+  storedAuth?: StoredRequestAuth,
 ): ModelHandle<TProtocol> {
   const handle = Object.freeze({
     ref: Object.freeze({
@@ -374,6 +424,7 @@ function makeHandle<TProtocol extends string>(
   handleRuntime.set(handle, runtimeId);
   if (credentialFingerprint !== undefined)
     handleCredentialFingerprint.set(handle, credentialFingerprint);
+  if (storedAuth !== undefined) handleStoredAuth.set(handle, storedAuth);
   return handle;
 }
 
@@ -421,6 +472,58 @@ function resolveOptions<TProtocol extends string>(
     protocolOptions: (input?.protocolOptions ??
       {}) as ResolvedStreamOptions<TProtocol>['protocolOptions'],
   };
+}
+
+async function resolveModelAuth<TScopeHandle>(input: {
+  chat: Provider['chat'];
+  provider: ProviderSnapshot;
+  scope: TScopeHandle;
+  override?: RequestCredentialOverride;
+  policy?: CredentialOverridePolicy<TScopeHandle>;
+  key: Uint8Array;
+  coordinator?: ReturnType<typeof createAuthCoordinator<TScopeHandle>>;
+  signal?: AbortSignal;
+}): Promise<{
+  credentialFingerprint?: string;
+  storedAuth?: StoredRequestAuth;
+}> {
+  if (!input.chat?.transport?.credential) return {};
+  if (input.override)
+    return {
+      credentialFingerprint: await authorizeCredentialOverride(input),
+    };
+  if (!input.coordinator)
+    return {
+      credentialFingerprint: await authorizeCredentialOverride(input),
+    };
+  const storedAuth = await input.coordinator.resolveStoredAuth(
+    { snapshot: input.provider, transport: input.chat.transport },
+    input.scope,
+    input.signal,
+  );
+  return {
+    credentialFingerprint: fingerprintCredential(
+      storedAuth.override,
+      input.key,
+    ),
+    storedAuth,
+  };
+}
+
+function createUnavailableAuthApi<TScopeHandle>(): AuthApi<TScopeHandle> {
+  const unavailable = () =>
+    Promise.reject(
+      new AiRuntimeError(
+        'AUTH_PERSISTENCE_UNAVAILABLE',
+        'auth',
+        'credentialStore and scopeAuthority are not configured',
+      ),
+    );
+  return Object.freeze({
+    status: unavailable,
+    login: unavailable,
+    logout: unavailable,
+  }) as AuthApi<TScopeHandle>;
 }
 
 async function authorizeCredentialOverride<TScopeHandle>(input: {
@@ -557,6 +660,8 @@ async function runChat<TProtocol extends string>(input: {
   resolved: ResolvedStreamOptions<TProtocol>;
   credentialOverride?: RequestCredentialOverride;
   credentialFingerprintKey: Uint8Array;
+  storedAuth?: StoredRequestAuth;
+  authCoordinator?: Pick<AuthCoordinator<unknown>, 'assertCurrent'>;
   driver?: TransportDriver;
   networkPolicy?: NetworkPolicy;
   stream: ResponseStream;
@@ -607,7 +712,16 @@ async function runChat<TProtocol extends string>(input: {
         input.resolved.timeoutMs,
       );
       try {
-        const transportResult = resolveRequestTransport(input);
+        if (input.storedAuth && input.authCoordinator)
+          await input.authCoordinator.assertCurrent(
+            input.storedAuth,
+            input.stream.signal,
+          );
+        const transportResult = resolveRequestTransport({
+          ...input,
+          credentialOverride:
+            input.credentialOverride ?? input.storedAuth?.override,
+        });
         if (transportResult instanceof AiRuntimeError) {
           terminal = { status: 'failed', error: transportResult };
         } else {

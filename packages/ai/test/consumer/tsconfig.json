@@ -4,6 +4,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["faux-chat.ts", "openai-responses.ts"],
+  "include": ["faux-chat.ts", "openai-responses.ts", "stored-auth.ts"],
   "references": []
 }

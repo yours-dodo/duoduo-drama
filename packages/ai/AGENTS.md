@@ -5,6 +5,7 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 ## Public Boundaries
 
 - `@duoduo/ai` exposes provider-neutral runtime, auth, model, stream, and response types.
+- `@duoduo/ai/auth/node` exposes Node-only credential persistence, key-source, and local scope-authority factories. Keep these implementations out of provider-neutral modules.
 - `@duoduo/ai/transport` exposes transport contracts and network policy helpers, but not test drivers.
 - `@duoduo/ai/protocols/openai-responses` owns OpenAI Responses wire parsing and protocol types.
 - `@duoduo/ai/providers/openai` owns the explicit OpenAI provider factory and must not read environment variables or credentials implicitly.
@@ -12,12 +13,15 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 
 Adapters receive only a request-scoped, already-bound `RequestTransport`; they must not choose or mutate the final URL or protected authentication headers. Provider-specific wire details stay outside provider-neutral core modules.
 
+Stored authentication must flow through an explicit `CredentialStore` and `CredentialScopeAuthority`. Catalog identities are persistent only when both the credential store and scope fingerprint declare `cross-runtime` lifetime; process-local or ambient identities must never read or write a persistent `CatalogStore`.
+
 ## Commands
 
 Run from the repository root:
 
 - `pnpm --filter @duoduo/ai test -- --run core stream testing`
 - `pnpm --filter @duoduo/ai test -- --run transport openai-responses openai`
+- `pnpm --filter @duoduo/ai test -- --run auth catalog runtime`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
 - `pnpm --filter @duoduo/ai build`
