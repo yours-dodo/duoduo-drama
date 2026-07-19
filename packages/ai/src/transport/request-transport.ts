@@ -31,6 +31,22 @@ export interface SecretHeaderValue {
   readonly prefix: string;
 }
 
+export interface RequestAuthorizationInput {
+  readonly url: URL;
+  readonly method: BoundTransportRequest['method'];
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body?: BoundTransportRequest['body'];
+  readonly signal: AbortSignal;
+}
+
+export type RequestAuthorizationHeaders = Readonly<
+  Record<string, string | SecretValue | SecretHeaderValue>
+>;
+
+export type RequestAuthorizer = (
+  input: RequestAuthorizationInput,
+) => Promise<RequestAuthorizationHeaders> | RequestAuthorizationHeaders;
+
 export interface FinalRequestTarget {
   readonly [finalRequestTargetBrand]: true;
   readonly endpoint: URL;
@@ -89,6 +105,7 @@ export function bindRequestTransport(input: {
   readonly retry?: false | RetryPolicy;
   readonly retrySafety?: RetrySafety;
   readonly redirect?: 'error' | 'same-origin';
+  readonly authorize?: RequestAuthorizer;
 }): RequestTransport {
   return Object.freeze({
     send: async (request: BoundTransportRequest) => {
@@ -142,18 +159,30 @@ export function bindRequestTransport(input: {
           },
           request.signal,
         );
+        const materializedRequest = {
+          url: new URL(url),
+          method: request.method,
+          headers: Object.freeze({ ...headers }),
+          body,
+          responseMode: request.responseMode,
+          redirect: 'manual' as const,
+          limits: input.target.limits,
+          signal: request.signal,
+        };
         const response = await dispatchWithRetry({
           driver: input.driver,
-          request: {
-            url: new URL(url),
-            method: request.method,
-            headers: Object.freeze({ ...headers }),
-            body,
-            responseMode: request.responseMode,
-            redirect: 'manual',
-            limits: input.target.limits,
-            signal: request.signal,
-          },
+          request: materializedRequest,
+          ...(input.authorize
+            ? {
+                requestForAttempt: async () => ({
+                  ...materializedRequest,
+                  headers: await authorizeRequestHeaders(
+                    input.authorize!,
+                    materializedRequest,
+                  ),
+                }),
+              }
+            : {}),
           retry: input.retry,
           retrySafety: input.retrySafety,
         });
@@ -190,6 +219,41 @@ export function bindRequestTransport(input: {
       }
     },
   });
+}
+
+async function authorizeRequestHeaders(
+  authorize: RequestAuthorizer,
+  request: import('./types.js').MaterializedTransportRequest,
+): Promise<Readonly<Record<string, string>>> {
+  const authorizedHeaders = { ...request.headers };
+  const additions = await authorize({
+    url: new URL(request.url),
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+    signal: request.signal,
+  });
+  for (const [name, value] of Object.entries(additions)) {
+    const normalized = normalizeHeaderName(name);
+    if (normalized in authorizedHeaders)
+      throw new AiRuntimeError(
+        'PROTECTED_HEADER_CONFLICT',
+        'invalid_request',
+        'ambient authorization header conflicts with the request',
+      );
+    authorizedHeaders[normalized] = materializeHeaderValue(value);
+  }
+  return Object.freeze(authorizedHeaders);
+}
+
+function materializeHeaderValue(
+  value: string | SecretValue | SecretHeaderValue,
+): string {
+  return typeof value === 'string'
+    ? value
+    : 'secret' in value
+      ? `${value.prefix}${revealSecret(value.secret)}`
+      : revealSecret(value);
 }
 
 function limitResponseBody(

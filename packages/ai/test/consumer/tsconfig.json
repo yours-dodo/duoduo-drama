@@ -10,7 +10,8 @@
     "stored-auth.ts",
     "azure-openai-responses.ts",
     "anthropic-messages.ts",
-    "anthropic-oauth.ts"
+    "anthropic-oauth.ts",
+    "google-vertex-bedrock.ts"
   ],
   "references": []
 }

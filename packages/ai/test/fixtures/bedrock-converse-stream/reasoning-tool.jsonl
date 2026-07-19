@@ -1,0 +1,11 @@
+{"type":"messageStart","role":"assistant"}
+{"type":"contentBlockDelta","contentBlockIndex":0,"delta":{"reasoningContent":{"text":"think","signature":"signed-reasoning"}}}
+{"type":"contentBlockStop","contentBlockIndex":0}
+{"type":"contentBlockDelta","contentBlockIndex":1,"delta":{"text":"Calling tool"}}
+{"type":"contentBlockStop","contentBlockIndex":1}
+{"type":"contentBlockStart","contentBlockIndex":2,"start":{"toolUse":{"toolUseId":"tool-1","name":"weather"}}}
+{"type":"contentBlockDelta","contentBlockIndex":2,"delta":{"toolUse":{"input":"{\"city\":"}}}
+{"type":"contentBlockDelta","contentBlockIndex":2,"delta":{"toolUse":{"input":"\"Paris\"}"}}}
+{"type":"contentBlockStop","contentBlockIndex":2}
+{"type":"messageStop","stopReason":"tool_use"}
+{"type":"metadata","usage":{"inputTokens":20,"outputTokens":8,"cacheReadInputTokens":4,"cacheWriteInputTokens":2,"totalTokens":28},"metrics":{"latencyMs":42}}

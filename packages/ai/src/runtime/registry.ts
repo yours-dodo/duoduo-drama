@@ -11,6 +11,7 @@ import type {
 import type { RetrySafety } from '../transport/dispatcher.js';
 import type { TransportLimits } from '../transport/types.js';
 import type { OAuthFlow } from '../auth/oauth.js';
+import type { AmbientAuth } from '../auth/ambient.js';
 
 export interface ProtocolEventSink {
   publish(event: ProtocolContentEvent): Promise<void>;
@@ -18,6 +19,7 @@ export interface ProtocolEventSink {
 
 export interface ChatTransportBinding {
   readonly endpoint: string;
+  readonly endpointForModel?: (model: Readonly<ModelDefinition>) => string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly credential?: Readonly<{
     readonly headerName: string;
@@ -49,6 +51,7 @@ export interface ChatProvider<TProtocol extends string = string> {
 export interface ProviderAuth {
   readonly policyFingerprint?: string;
   readonly oauth?: OAuthFlow;
+  readonly ambient?: AmbientAuth;
 }
 
 export interface Provider {

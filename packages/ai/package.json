@@ -55,6 +55,38 @@
     "./auth/oauth/anthropic": {
       "types": "./dist/auth/oauth/anthropic/index.d.ts",
       "import": "./dist/auth/oauth/anthropic/index.js"
+    },
+    "./protocols/google-generative-ai": {
+      "types": "./dist/protocols/google-generative-ai/index.d.ts",
+      "import": "./dist/protocols/google-generative-ai/index.js"
+    },
+    "./protocols/google-vertex": {
+      "types": "./dist/protocols/google-vertex/index.d.ts",
+      "import": "./dist/protocols/google-vertex/index.js"
+    },
+    "./protocols/bedrock-converse-stream": {
+      "types": "./dist/protocols/bedrock-converse-stream/index.d.ts",
+      "import": "./dist/protocols/bedrock-converse-stream/index.js"
+    },
+    "./providers/google": {
+      "types": "./dist/providers/google/index.d.ts",
+      "import": "./dist/providers/google/index.js"
+    },
+    "./providers/google-vertex": {
+      "types": "./dist/providers/google-vertex/index.d.ts",
+      "import": "./dist/providers/google-vertex/index.js"
+    },
+    "./providers/amazon-bedrock": {
+      "types": "./dist/providers/amazon-bedrock/index.d.ts",
+      "import": "./dist/providers/amazon-bedrock/index.js"
+    },
+    "./auth/ambient/google-adc": {
+      "types": "./dist/auth/ambient/google-adc.d.ts",
+      "import": "./dist/auth/ambient/google-adc.js"
+    },
+    "./auth/ambient/aws": {
+      "types": "./dist/auth/ambient/aws.d.ts",
+      "import": "./dist/auth/ambient/aws.js"
     }
   },
   "files": [
@@ -65,7 +97,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test"
   },

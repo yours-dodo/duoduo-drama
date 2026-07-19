@@ -2,6 +2,10 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { AiRuntimeError, type AiError } from '../core/errors.js';
 import type { RequestCredentialOverride } from '../auth/api-key.js';
+import type {
+  AmbientAuthPolicy,
+  AmbientAuthResolution,
+} from '../auth/ambient.js';
 import { credentialScheme } from '../auth/api-key.js';
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
 import type { CredentialStore } from '../auth/credential-store.js';
@@ -54,6 +58,7 @@ const handleRuntime = new WeakMap<object, symbol>();
 const handleCredentialFingerprint = new WeakMap<object, string>();
 const handleSessionScopeFingerprint = new WeakMap<object, string>();
 const handleStoredAuth = new WeakMap<object, StoredRequestAuth>();
+const handleAmbientAuth = new WeakMap<object, AmbientAuthResolution>();
 
 export interface StreamOptionsInput {
   readonly signal?: AbortSignal;
@@ -165,6 +170,7 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly transport?: TransportDriver;
   readonly networkPolicy?: NetworkPolicy;
   readonly credentialOverridePolicy?: CredentialOverridePolicy<TScopeHandle>;
+  readonly ambientAuthPolicy?: AmbientAuthPolicy<TScopeHandle>;
   readonly credentialStore?: CredentialStore;
   readonly scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
   readonly auth?: AuthRuntimeOptions;
@@ -264,6 +270,7 @@ export function createAi<TScopeHandle = unknown>(
         scope,
         override: readOptions?.credentialOverride,
         policy: options.credentialOverridePolicy,
+        ambientPolicy: options.ambientAuthPolicy,
         key: credentialFingerprintKey,
         coordinator: authCoordinator,
         signal: readOptions?.signal,
@@ -272,6 +279,7 @@ export function createAi<TScopeHandle = unknown>(
         providerInstanceId: entry.snapshot.id,
         scope,
         storedAuth: resolvedAuth.storedAuth,
+        ambientAuth: resolvedAuth.ambientAuth,
         scopeAuthority: options.scopeAuthority,
         runtimeScopeFingerprint,
         signal: readOptions?.signal,
@@ -283,6 +291,7 @@ export function createAi<TScopeHandle = unknown>(
         sessionScopeFingerprint,
         resolvedAuth.credentialFingerprint,
         resolvedAuth.storedAuth,
+        resolvedAuth.ambientAuth,
       );
     },
     require: async <TProtocol extends string>(
@@ -322,6 +331,7 @@ export function createAi<TScopeHandle = unknown>(
           scope,
           override: readOptions?.credentialOverride,
           policy: options.credentialOverridePolicy,
+          ambientPolicy: options.ambientAuthPolicy,
           key: credentialFingerprintKey,
           coordinator: authCoordinator,
           signal: readOptions?.signal,
@@ -330,6 +340,7 @@ export function createAi<TScopeHandle = unknown>(
           providerInstanceId: snapshot.id,
           scope,
           storedAuth: resolvedAuth.storedAuth,
+          ambientAuth: resolvedAuth.ambientAuth,
           scopeAuthority: options.scopeAuthority,
           runtimeScopeFingerprint,
           signal: readOptions?.signal,
@@ -344,6 +355,7 @@ export function createAi<TScopeHandle = unknown>(
                 sessionScopeFingerprint,
                 resolvedAuth.credentialFingerprint,
                 resolvedAuth.storedAuth,
+                resolvedAuth.ambientAuth,
               ),
             );
         }
@@ -439,6 +451,7 @@ export function createAi<TScopeHandle = unknown>(
             credentialOverride: streamOptions?.credentialOverride,
             credentialFingerprintKey,
             storedAuth: handleStoredAuth.get(model as object),
+            ambientAuth: handleAmbientAuth.get(model as object),
             authCoordinator,
             driver: options.transport,
             networkPolicy: options.networkPolicy,
@@ -485,6 +498,7 @@ function makeHandle<TProtocol extends string>(
   sessionScopeFingerprint: string,
   credentialFingerprint?: string,
   storedAuth?: StoredRequestAuth,
+  ambientAuth?: AmbientAuthResolution,
 ): ModelHandle<TProtocol> {
   const handle = Object.freeze({
     ref: Object.freeze({
@@ -504,6 +518,7 @@ function makeHandle<TProtocol extends string>(
   if (credentialFingerprint !== undefined)
     handleCredentialFingerprint.set(handle, credentialFingerprint);
   if (storedAuth !== undefined) handleStoredAuth.set(handle, storedAuth);
+  if (ambientAuth !== undefined) handleAmbientAuth.set(handle, ambientAuth);
   return handle;
 }
 
@@ -562,37 +577,65 @@ async function resolveModelAuth<TScopeHandle>(input: {
   scope: TScopeHandle;
   override?: RequestCredentialOverride;
   policy?: CredentialOverridePolicy<TScopeHandle>;
+  ambientPolicy?: AmbientAuthPolicy<TScopeHandle>;
   key: Uint8Array;
   coordinator?: ReturnType<typeof createAuthCoordinator<TScopeHandle>>;
   signal?: AbortSignal;
 }): Promise<{
   credentialFingerprint?: string;
   storedAuth?: StoredRequestAuth;
+  ambientAuth?: AmbientAuthResolution;
 }> {
   if (!input.chat?.transport?.credential) return {};
   if (input.override)
     return {
       credentialFingerprint: await authorizeCredentialOverride(input),
     };
-  if (!input.coordinator)
-    return {
-      credentialFingerprint: await authorizeCredentialOverride(input),
-    };
-  const storedAuth = await input.coordinator.resolveStoredAuth(
-    {
-      snapshot: input.provider,
-      transport: input.chat.transport,
-      auth: input.auth,
-    },
-    input.scope,
-    input.signal,
-  );
+  if (input.coordinator) {
+    try {
+      const storedAuth = await input.coordinator.resolveStoredAuth(
+        {
+          snapshot: input.provider,
+          transport: input.chat.transport,
+          auth: input.auth,
+        },
+        input.scope,
+        input.signal,
+      );
+      return {
+        credentialFingerprint: fingerprintCredential(
+          storedAuth.override,
+          input.key,
+        ),
+        storedAuth,
+      };
+    } catch (error) {
+      if (
+        !(error instanceof AiRuntimeError) ||
+        error.code !== 'CREDENTIAL_UNCONFIGURED'
+      )
+        throw error;
+    }
+  }
+  if (input.auth?.ambient) {
+    const allowed = await input.ambientPolicy?.allow(
+      input.scope,
+      input.provider,
+    );
+    if (allowed !== true)
+      throw new AiRuntimeError(
+        'AMBIENT_AUTH_DENIED',
+        'auth',
+        'ambient authentication is not allowed',
+      );
+    const ambientAuth = await input.auth.ambient.resolve({
+      provider: input.provider,
+      signal: input.signal ?? new AbortController().signal,
+    });
+    if (ambientAuth) return { ambientAuth };
+  }
   return {
-    credentialFingerprint: fingerprintCredential(
-      storedAuth.override,
-      input.key,
-    ),
-    storedAuth,
+    credentialFingerprint: await authorizeCredentialOverride(input),
   };
 }
 
@@ -600,11 +643,14 @@ async function resolveSessionScopeFingerprint<TScopeHandle>(input: {
   providerInstanceId: string;
   scope: TScopeHandle;
   storedAuth?: StoredRequestAuth;
+  ambientAuth?: AmbientAuthResolution;
   scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
   runtimeScopeFingerprint(scope: TScopeHandle): string;
   signal?: AbortSignal;
 }): Promise<string> {
   if (input.storedAuth) return input.storedAuth.scopeFingerprint;
+  if (input.ambientAuth)
+    return `ambient:${input.ambientAuth.credentialInstanceId}`;
   if (!input.scopeAuthority) return input.runtimeScopeFingerprint(input.scope);
   const resolvedScope = await input.scopeAuthority.resolve(
     input.scope,
@@ -712,6 +758,7 @@ function resolveRequestTransport(input: {
   driver?: TransportDriver;
   networkPolicy?: NetworkPolicy;
   retry: false | RetryPolicy;
+  ambientAuth?: AmbientAuthResolution;
 }):
   | import('../transport/types.js').RequestTransport
   | undefined
@@ -723,17 +770,20 @@ function resolveRequestTransport(input: {
   );
   const override = input.credentialOverride;
   if (binding.credential) {
-    if (!override || expectedFingerprint === undefined)
+    if (!input.ambientAuth && (!override || expectedFingerprint === undefined))
       return new AiRuntimeError(
         'CREDENTIAL_OVERRIDE_MISMATCH',
         'auth',
         'request credential override does not match the model handle',
       );
-    const actualFingerprint = fingerprintCredential(
-      override,
-      input.credentialFingerprintKey,
-    );
-    if (!credentialFingerprintsEqual(actualFingerprint, expectedFingerprint))
+    const actualFingerprint = override
+      ? fingerprintCredential(override, input.credentialFingerprintKey)
+      : undefined;
+    if (
+      !input.ambientAuth &&
+      actualFingerprint !== undefined &&
+      !credentialFingerprintsEqual(actualFingerprint, expectedFingerprint!)
+    )
       return new AiRuntimeError(
         'CREDENTIAL_OVERRIDE_MISMATCH',
         'auth',
@@ -751,6 +801,24 @@ function resolveRequestTransport(input: {
       'TRANSPORT_UNAVAILABLE',
       'invalid_request',
       'transport and network policy are required for this provider',
+    );
+  const endpoint =
+    binding.endpointForModel?.(input.model.definition) ?? binding.endpoint;
+  let endpointUrl: URL;
+  try {
+    endpointUrl = new URL(endpoint);
+  } catch {
+    return new AiRuntimeError(
+      'INVALID_REQUEST_TARGET',
+      'invalid_request',
+      'provider model endpoint is not a valid URL',
+    );
+  }
+  if (endpointUrl.origin !== new URL(binding.endpoint).origin)
+    return new AiRuntimeError(
+      'MODEL_ENDPOINT_ORIGIN_MISMATCH',
+      'invalid_request',
+      'provider model endpoint must keep the configured origin',
     );
   const headers: Record<
     string,
@@ -774,7 +842,7 @@ function resolveRequestTransport(input: {
   }
   return bindRequestTransport({
     target: createFinalRequestTarget({
-      endpoint: new URL(binding.endpoint),
+      endpoint: endpointUrl,
       headers,
       limits: binding.limits,
     }),
@@ -783,6 +851,7 @@ function resolveRequestTransport(input: {
     retry: input.retry,
     retrySafety: binding.retrySafety,
     redirect: binding.redirect,
+    authorize: input.ambientAuth?.authorize,
   });
 }
 
@@ -795,6 +864,7 @@ async function runChat<TProtocol extends string>(input: {
   credentialOverride?: RequestCredentialOverride;
   credentialFingerprintKey: Uint8Array;
   storedAuth?: StoredRequestAuth;
+  ambientAuth?: AmbientAuthResolution;
   authCoordinator?: Pick<AuthCoordinator<unknown>, 'assertCurrent'>;
   driver?: TransportDriver;
   networkPolicy?: NetworkPolicy;
@@ -856,6 +926,7 @@ async function runChat<TProtocol extends string>(input: {
           ...input,
           credentialOverride:
             input.credentialOverride ?? input.storedAuth?.override,
+          ambientAuth: input.ambientAuth,
           retry: input.resolved.retry,
         });
         if (transportResult instanceof AiRuntimeError) {
@@ -864,6 +935,7 @@ async function runChat<TProtocol extends string>(input: {
           const storedAuth = input.storedAuth;
           const credentialIdentity =
             storedAuth?.credentialInstanceId ??
+            input.ambientAuth?.credentialInstanceId ??
             handleCredentialFingerprint.get(input.model as object) ??
             'no-credential';
           const sessionScopeFingerprint = handleSessionScopeFingerprint.get(

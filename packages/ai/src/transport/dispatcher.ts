@@ -60,6 +60,10 @@ export function createIdempotencyHeaders(
 export async function dispatchWithRetry(input: {
   readonly driver: TransportDriver;
   readonly request: MaterializedTransportRequest;
+  readonly requestForAttempt?: (
+    request: MaterializedTransportRequest,
+    attempt: number,
+  ) => Promise<MaterializedTransportRequest> | MaterializedTransportRequest;
   readonly retry?: false | RetryPolicy;
   readonly retrySafety?: RetrySafety;
 }): Promise<TransportResponse> {
@@ -67,15 +71,18 @@ export async function dispatchWithRetry(input: {
   if (policy) validateRetryPolicy(policy);
   const maxAttempts = policy?.maxAttempts ?? 1;
   for (let attempt = 1; ; attempt += 1) {
+    const request = input.requestForAttempt
+      ? await input.requestForAttempt(input.request, attempt)
+      : input.request;
     try {
-      const response = await input.driver.send(input.request);
+      const response = await input.driver.send(request);
       const kind = retryKindForStatus(response.status);
       if (
         !kind ||
         !policy ||
         attempt >= maxAttempts ||
         !policy.retryOn.includes(kind) ||
-        !canRetryAfterDispatch(input.retrySafety, input.request.body)
+        !canRetryAfterDispatch(input.retrySafety, request.body)
       )
         return response;
       await discardResponseBody(response.body);
@@ -85,7 +92,7 @@ export async function dispatchWithRetry(input: {
           attempt,
           parseRetryAfter(response.headers['retry-after']),
         ),
-        input.request.signal,
+        request.signal,
       );
     } catch (error) {
       if (!(error instanceof TransportDriverFailure)) throw error;
@@ -96,7 +103,7 @@ export async function dispatchWithRetry(input: {
         !canRetryFailure(error, input.retrySafety)
       )
         throw error;
-      await waitForRetry(retryDelay(policy, attempt), input.request.signal);
+      await waitForRetry(retryDelay(policy, attempt), request.signal);
     }
   }
 }

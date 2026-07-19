@@ -32,3 +32,8 @@ export type {
   TransportResponse,
   TransportResponseMode,
 } from './types.js';
+export type {
+  RequestAuthorizationHeaders,
+  RequestAuthorizationInput,
+  RequestAuthorizer,
+} from './request-transport.js';

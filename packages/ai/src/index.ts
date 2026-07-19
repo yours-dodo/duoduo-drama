@@ -31,6 +31,9 @@ export {
 } from './auth/scope-authority.js';
 export { createEnvironmentCredentialResolver } from './auth/ambient.js';
 export type {
+  AmbientAuth,
+  AmbientAuthPolicy,
+  AmbientAuthResolution,
   EnvironmentCredentialResolution,
   EnvironmentCredentialResolver,
   EnvironmentSource,

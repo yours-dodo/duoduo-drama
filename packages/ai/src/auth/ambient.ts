@@ -2,6 +2,8 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 import type { RequestCredentialOverride } from './api-key.js';
 import { secret } from './secret-value.js';
+import type { ProviderSnapshot } from '../core/models.js';
+import type { RequestAuthorizer } from '../transport/request-transport.js';
 
 export interface EnvironmentSource {
   get(name: string): string | undefined;
@@ -23,6 +25,26 @@ export interface EnvironmentCredentialResolver {
     source: SecretCredentialSource,
   ): EnvironmentCredentialResolution | undefined;
   dispose(): void;
+}
+
+export interface AmbientAuthResolution {
+  readonly credentialInstanceId: string;
+  readonly credentialIdentityLifetime: 'cross-runtime' | 'process-local';
+  readonly authorize: RequestAuthorizer;
+}
+
+export interface AmbientAuth {
+  resolve(context: {
+    readonly provider: Readonly<ProviderSnapshot>;
+    readonly signal: AbortSignal;
+  }): Promise<AmbientAuthResolution | undefined>;
+}
+
+export interface AmbientAuthPolicy<TScopeHandle = unknown> {
+  allow(
+    scope: TScopeHandle,
+    provider: Readonly<ProviderSnapshot>,
+  ): Promise<boolean> | boolean;
 }
 
 export function createEnvironmentCredentialResolver(options: {

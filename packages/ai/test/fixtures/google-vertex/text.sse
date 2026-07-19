@@ -1,0 +1,1 @@
+data: {"responseId":"resp-vertex","modelVersion":"gemini-2.5-flash-001","candidates":[{"content":{"role":"model","parts":[{"text":"vertex ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":4,"candidatesTokenCount":2,"totalTokenCount":6}}

@@ -248,6 +248,55 @@ describe('bound request transport security', () => {
     expect(JSON.stringify(response)).not.toContain(canary);
   });
 
+  it('refreshes request authorization before every retry attempt', async () => {
+    const authorizationHeaders: string[] = [];
+    let attempts = 0;
+    let authorizations = 0;
+    const transport = bindRequestTransport({
+      target: createFinalRequestTarget({
+        endpoint: new URL('https://api.example.com/v1/chat'),
+        headers: { 'content-type': 'application/json' },
+      }),
+      driver: {
+        send: async (request) => {
+          attempts += 1;
+          authorizationHeaders.push(request.headers.authorization ?? '');
+          return {
+            status: attempts === 1 ? 500 : 200,
+            headers: {},
+            body: { async *[Symbol.asyncIterator]() {} },
+          };
+        },
+      },
+      networkPolicy: { authorize: async () => undefined },
+      retry: {
+        maxAttempts: 2,
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+        jitterRatio: 0,
+        retryOn: ['provider_5xx'],
+      },
+      retrySafety: { mode: 'idempotent' },
+      authorize: () => {
+        authorizations += 1;
+        return { authorization: `Signature attempt-${authorizations}` };
+      },
+    });
+
+    await expect(
+      transport.send({
+        method: 'POST',
+        body: '{}',
+        responseMode: 'stream',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    expect(authorizationHeaders).toEqual([
+      'Signature attempt-1',
+      'Signature attempt-2',
+    ]);
+  });
+
   it('fails closed on case-insensitive protected header conflicts before dispatch', async () => {
     const transport = createFixtureTransportDriver();
     const ai = createAi({

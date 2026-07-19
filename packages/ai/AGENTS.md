@@ -15,6 +15,10 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/providers/openai` owns the explicit OpenAI provider factory and must not read environment variables or credentials implicitly.
 - `@duoduo/ai/providers/azure-openai-responses` owns explicit Azure endpoint, deployment, API-version, and environment resolution.
 - `@duoduo/ai/providers/anthropic` owns the explicit Anthropic provider factory and API-key/OAuth transport bindings.
+- `@duoduo/ai/protocols/google-generative-ai` and `@duoduo/ai/providers/google` own the Gemini Developer API SSE path and explicit API-key binding.
+- `@duoduo/ai/protocols/google-vertex` and `@duoduo/ai/providers/google-vertex` own the Vertex API-key/ADC branches, project/location identity, and shared Google wire semantics.
+- `@duoduo/ai/protocols/bedrock-converse-stream` and `@duoduo/ai/providers/amazon-bedrock` own Bedrock Converse Stream mapping, event-stream parsing, regional endpoints, bearer auth, and AWS signing.
+- `@duoduo/ai/auth/ambient/google-adc` and `@duoduo/ai/auth/ambient/aws` expose explicit injected ambient capabilities; they must not read SDK state, profiles, metadata services, or process environment implicitly.
 - `@duoduo/ai/auth/oauth/anthropic` exposes the explicit Anthropic OAuth flow; provider-neutral OAuth ports remain exported from `@duoduo/ai`.
 - `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
 
@@ -33,6 +37,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run auth catalog runtime`
 - `pnpm --filter @duoduo/ai test -- --run transport session azure-openai-responses`
 - `pnpm --filter @duoduo/ai test -- --run anthropic-messages anthropic oauth`
+- `pnpm --filter @duoduo/ai test -- --run google vertex bedrock ambient`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
 - `pnpm --filter @duoduo/ai build`
