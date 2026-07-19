@@ -1,9 +1,14 @@
+export { secret } from './auth/secret-value.js';
+export type { SecretValue } from './auth/secret-value.js';
+export type { RequestCredentialOverride } from './auth/api-key.js';
+export type { CredentialOverridePolicy } from './auth/override-policy.js';
 export { createAi } from './runtime/create-ai.js';
 export type {
   AiRuntime,
   CreateAiOptions,
   InventoryApi,
   ModelListFilter,
+  ModelReadOptions,
   ModelsApi,
   RuntimeResourcePolicyInput,
   StreamOptionsInput,

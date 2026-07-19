@@ -7,6 +7,25 @@ import {
 } from '../testing.js';
 
 describe('createAi', () => {
+  it('disposes the transport once', async () => {
+    let disposeCalls = 0;
+    const ai = createAi({
+      transport: {
+        send: async () => {
+          throw new Error('unexpected transport call');
+        },
+        dispose: async () => {
+          disposeCalls += 1;
+        },
+      },
+    });
+
+    await ai.dispose();
+    await ai.dispose();
+
+    expect(disposeCalls).toBe(1);
+  });
+
   it('does not auto-register providers', async () => {
     const ai = createAi();
     expect(ai.providers.list()).toEqual([]);

@@ -1,4 +1,10 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+
 import { AiRuntimeError, type AiError } from '../core/errors.js';
+import type { RequestCredentialOverride } from '../auth/api-key.js';
+import { credentialScheme } from '../auth/api-key.js';
+import type { CredentialOverridePolicy } from '../auth/override-policy.js';
+import { revealSecret } from '../auth/secret-value.js';
 import { validateContext } from '../core/context.js';
 import { parseToolArguments } from '../core/tools.js';
 import { AttemptLocalSink } from '../stream/attempt-sink.js';
@@ -18,6 +24,12 @@ import type {
   ProviderSnapshot,
 } from '../core/models.js';
 import { ResponseStream } from '../stream/response-stream.js';
+import type { NetworkPolicy, TransportDriver } from '../transport/types.js';
+import {
+  bindRequestTransport,
+  createFinalRequestTarget,
+  createSecretHeaderValue,
+} from '../transport/request-transport.js';
 import {
   ProviderRegistry,
   type Provider,
@@ -26,6 +38,7 @@ import {
 
 const handleProvider = new WeakMap<object, string>();
 const handleRuntime = new WeakMap<object, symbol>();
+const handleCredentialFingerprint = new WeakMap<object, string>();
 
 export interface StreamOptionsInput {
   readonly signal?: AbortSignal;
@@ -33,6 +46,7 @@ export interface StreamOptionsInput {
   readonly stop?: readonly string[];
   readonly timeoutMs?: number;
   readonly protocolOptions?: Readonly<Record<string, unknown>>;
+  readonly credentialOverride?: RequestCredentialOverride;
 }
 
 export interface ModelListFilter {
@@ -41,18 +55,28 @@ export interface ModelListFilter {
   readonly input?: 'text' | 'image';
 }
 
+export interface ModelReadOptions {
+  readonly allowNetwork?: boolean;
+  readonly force?: boolean;
+  readonly signal?: AbortSignal;
+  readonly credentialOverride?: RequestCredentialOverride;
+}
+
 export interface ModelsApi<TScopeHandle> {
   find<TProtocol extends string>(
     ref: ModelRef<TProtocol>,
     scope: TScopeHandle,
+    options?: ModelReadOptions,
   ): Promise<ModelHandle<TProtocol> | undefined>;
   require<TProtocol extends string>(
     ref: ModelRef<TProtocol>,
     scope: TScopeHandle,
+    options?: ModelReadOptions,
   ): Promise<ModelHandle<TProtocol>>;
   list(
     scope: TScopeHandle,
     filter?: ModelListFilter,
+    options?: ModelReadOptions,
   ): Promise<{ models: readonly ModelHandle[] }>;
 }
 
@@ -109,6 +133,9 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   }>;
   readonly scope?: TScopeHandle;
   readonly resourcePolicy?: RuntimeResourcePolicyInput;
+  readonly transport?: TransportDriver;
+  readonly networkPolicy?: NetworkPolicy;
+  readonly credentialOverridePolicy?: CredentialOverridePolicy<TScopeHandle>;
 }
 
 interface BlockState {
@@ -129,6 +156,7 @@ export function createAi<TScopeHandle = unknown>(
 ): AiRuntime<TScopeHandle> {
   const registry = new ProviderRegistry();
   const runtimeId = Symbol('duoduo-ai-runtime');
+  const credentialFingerprintKey = randomBytes(32);
   let disposed = false;
 
   const inventory: InventoryApi = {
@@ -158,24 +186,37 @@ export function createAi<TScopeHandle = unknown>(
   };
 
   const models: ModelsApi<TScopeHandle> = {
-    find: async <TProtocol extends string>(ref: ModelRef<TProtocol>) => {
+    find: async <TProtocol extends string>(
+      ref: ModelRef<TProtocol>,
+      scope: TScopeHandle,
+      readOptions?: ModelReadOptions,
+    ) => {
       const entry = registry.get(ref.providerInstanceId);
       const definition = entry?.provider.chat?.models.find((model) =>
         sameRef(model, ref),
       );
-      return definition && entry
-        ? makeHandle<TProtocol>(
-            definition as ModelDefinition<TProtocol>,
-            entry.snapshot,
-            runtimeId,
-          )
-        : undefined;
+      if (!definition || !entry) return undefined;
+      const credentialFingerprint = await authorizeCredentialOverride({
+        chat: entry.provider.chat,
+        provider: entry.snapshot,
+        scope,
+        override: readOptions?.credentialOverride,
+        policy: options.credentialOverridePolicy,
+        key: credentialFingerprintKey,
+      });
+      return makeHandle<TProtocol>(
+        definition as ModelDefinition<TProtocol>,
+        entry.snapshot,
+        runtimeId,
+        credentialFingerprint,
+      );
     },
     require: async <TProtocol extends string>(
       ref: ModelRef<TProtocol>,
       scope: TScopeHandle,
+      readOptions?: ModelReadOptions,
     ) => {
-      const model = await models.find(ref, scope);
+      const model = await models.find(ref, scope, readOptions);
       if (!model)
         throw new AiRuntimeError(
           'MODEL_NOT_FOUND',
@@ -184,7 +225,13 @@ export function createAi<TScopeHandle = unknown>(
         );
       return model;
     },
-    list: async (_scope, filter) => {
+    list: async (scope, filter, readOptions) => {
+      if (readOptions?.credentialOverride && !filter?.providerInstanceId)
+        throw new AiRuntimeError(
+          'CREDENTIAL_OVERRIDE_PROVIDER_REQUIRED',
+          'invalid_request',
+          'providerInstanceId is required when listing with a credential override',
+        );
       const handles: ModelHandle[] = [];
       for (const snapshot of registry.list()) {
         if (
@@ -193,9 +240,21 @@ export function createAi<TScopeHandle = unknown>(
         )
           continue;
         const entry = registry.get(snapshot.id);
+        const credentialFingerprint = entry
+          ? await authorizeCredentialOverride({
+              chat: entry.provider.chat,
+              provider: snapshot,
+              scope,
+              override: readOptions?.credentialOverride,
+              policy: options.credentialOverridePolicy,
+              key: credentialFingerprintKey,
+            })
+          : undefined;
         for (const model of entry?.provider.chat?.models ?? []) {
           if (matchesFilter(model, filter))
-            handles.push(makeHandle(model, snapshot, runtimeId));
+            handles.push(
+              makeHandle(model, snapshot, runtimeId, credentialFingerprint),
+            );
         }
       }
       return { models: handles };
@@ -251,11 +310,14 @@ export function createAi<TScopeHandle = unknown>(
       const stream = new ResponseStream(
         async (ownedStream) => {
           await runChat({
-            entry,
             chat,
             model,
             context,
             resolved,
+            credentialOverride: streamOptions?.credentialOverride,
+            credentialFingerprintKey,
+            driver: options.transport,
+            networkPolicy: options.networkPolicy,
             stream: ownedStream,
           });
         },
@@ -280,7 +342,10 @@ export function createAi<TScopeHandle = unknown>(
       return stream.result();
     },
     dispose: async () => {
+      if (disposed) return;
       disposed = true;
+      credentialFingerprintKey.fill(0);
+      await options.transport?.dispose?.();
     },
   };
 
@@ -291,6 +356,7 @@ function makeHandle<TProtocol extends string>(
   definition: ModelDefinition<TProtocol>,
   snapshot: ProviderSnapshot,
   runtimeId: symbol,
+  credentialFingerprint?: string,
 ): ModelHandle<TProtocol> {
   const handle = Object.freeze({
     ref: Object.freeze({
@@ -306,6 +372,8 @@ function makeHandle<TProtocol extends string>(
   });
   handleProvider.set(handle, definition.providerInstanceId);
   handleRuntime.set(handle, runtimeId);
+  if (credentialFingerprint !== undefined)
+    handleCredentialFingerprint.set(handle, credentialFingerprint);
   return handle;
 }
 
@@ -355,12 +423,142 @@ function resolveOptions<TProtocol extends string>(
   };
 }
 
+async function authorizeCredentialOverride<TScopeHandle>(input: {
+  chat: Provider['chat'];
+  provider: ProviderSnapshot;
+  scope: TScopeHandle;
+  override?: RequestCredentialOverride;
+  policy?: CredentialOverridePolicy<TScopeHandle>;
+  key: Uint8Array;
+}): Promise<string | undefined> {
+  if (!input.chat?.transport?.credential) return undefined;
+  if (!input.override)
+    throw new AiRuntimeError(
+      'CREDENTIAL_OVERRIDE_REQUIRED',
+      'auth',
+      'a request credential override is required for this provider',
+    );
+  const allowed = await input.policy?.allow(input.scope, input.provider, {
+    type: input.override.type,
+    scheme: input.override.scheme,
+  });
+  if (allowed !== true)
+    throw new AiRuntimeError(
+      'CREDENTIAL_OVERRIDE_DENIED',
+      'auth',
+      'request credential override is not allowed',
+    );
+  return fingerprintCredential(input.override, input.key);
+}
+
+function fingerprintCredential(
+  override: RequestCredentialOverride,
+  key: Uint8Array,
+): string {
+  return createHmac('sha256', key)
+    .update(override.type)
+    .update('\0')
+    .update(credentialScheme(override))
+    .update('\0')
+    .update(revealSecret(override.secret))
+    .digest('base64url');
+}
+
+function credentialFingerprintsEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, 'base64url');
+  const rightBytes = Buffer.from(right, 'base64url');
+  return (
+    leftBytes.length === rightBytes.length &&
+    timingSafeEqual(leftBytes, rightBytes)
+  );
+}
+
+function resolveRequestTransport(input: {
+  chat: NonNullable<Provider['chat']>;
+  model: ModelHandle;
+  credentialOverride?: RequestCredentialOverride;
+  credentialFingerprintKey: Uint8Array;
+  driver?: TransportDriver;
+  networkPolicy?: NetworkPolicy;
+}):
+  | import('../transport/types.js').RequestTransport
+  | undefined
+  | AiRuntimeError {
+  const binding = input.chat.transport;
+  if (!binding) return undefined;
+  const expectedFingerprint = handleCredentialFingerprint.get(
+    input.model as object,
+  );
+  const override = input.credentialOverride;
+  if (binding.credential) {
+    if (!override || expectedFingerprint === undefined)
+      return new AiRuntimeError(
+        'CREDENTIAL_OVERRIDE_MISMATCH',
+        'auth',
+        'request credential override does not match the model handle',
+      );
+    const actualFingerprint = fingerprintCredential(
+      override,
+      input.credentialFingerprintKey,
+    );
+    if (!credentialFingerprintsEqual(actualFingerprint, expectedFingerprint))
+      return new AiRuntimeError(
+        'CREDENTIAL_OVERRIDE_MISMATCH',
+        'auth',
+        'request credential override does not match the model handle',
+      );
+  } else if (override) {
+    return new AiRuntimeError(
+      'CREDENTIAL_OVERRIDE_MISMATCH',
+      'auth',
+      'model handle is not bound to a request credential override',
+    );
+  }
+  if (!input.driver || !input.networkPolicy)
+    return new AiRuntimeError(
+      'TRANSPORT_UNAVAILABLE',
+      'invalid_request',
+      'transport and network policy are required for this provider',
+    );
+  const headers: Record<
+    string,
+    string | import('../transport/request-transport.js').SecretHeaderValue
+  > = { ...(binding.headers ?? {}) };
+  if (binding.credential && override) {
+    const headerName = binding.credential.headerName.toLowerCase();
+    if (Object.keys(headers).some((name) => name.toLowerCase() === headerName))
+      return new AiRuntimeError(
+        'PROTECTED_HEADER_CONFLICT',
+        'invalid_request',
+        'credential header conflicts with a configured request header',
+      );
+    headers[headerName] = createSecretHeaderValue(
+      override.secret,
+      override.scheme ??
+        binding.credential.defaultScheme ??
+        credentialScheme(override),
+    );
+  }
+  return bindRequestTransport({
+    target: createFinalRequestTarget({
+      endpoint: new URL(binding.endpoint),
+      headers,
+      limits: binding.limits,
+    }),
+    driver: input.driver,
+    networkPolicy: input.networkPolicy,
+  });
+}
+
 async function runChat<TProtocol extends string>(input: {
-  entry: { provider: Provider; snapshot: ProviderSnapshot };
   chat: NonNullable<Provider['chat']>;
   model: ModelHandle<TProtocol>;
   context: AiContext;
   resolved: ResolvedStreamOptions<TProtocol>;
+  credentialOverride?: RequestCredentialOverride;
+  credentialFingerprintKey: Uint8Array;
+  driver?: TransportDriver;
+  networkPolicy?: NetworkPolicy;
   stream: ResponseStream;
 }): Promise<void> {
   const startedAt = Date.now();
@@ -409,13 +607,19 @@ async function runChat<TProtocol extends string>(input: {
         input.resolved.timeoutMs,
       );
       try {
-        const request: ChatRequest<TProtocol> = {
-          model: input.model.definition,
-          context: input.context,
-          options: { ...input.resolved, signal: input.stream.signal },
-          signal: input.stream.signal,
-        };
-        terminal = await input.chat.runChat(request, sink);
+        const transportResult = resolveRequestTransport(input);
+        if (transportResult instanceof AiRuntimeError) {
+          terminal = { status: 'failed', error: transportResult };
+        } else {
+          const request: ChatRequest<TProtocol> = {
+            model: input.model.definition,
+            context: input.context,
+            options: { ...input.resolved, signal: input.stream.signal },
+            signal: input.stream.signal,
+            ...(transportResult ? { transport: transportResult } : {}),
+          };
+          terminal = await input.chat.runChat(request, sink);
+        }
       } finally {
         clearTimeout(abortTimer);
       }

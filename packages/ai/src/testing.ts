@@ -21,3 +21,11 @@ export {
   collectResponseStream,
 } from './testing/assertions.js';
 export type { CollectedResponseStream } from './testing/assertions.js';
+
+export { createFixtureTransportDriver } from './transport/fixture-driver.js';
+export type {
+  ExpectedFixtureRequest,
+  FixtureTransportDriver,
+  FixtureTransportResponse,
+  RedactedFixtureRequest,
+} from './transport/fixture-driver.js';

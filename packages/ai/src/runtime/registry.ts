@@ -8,13 +8,25 @@ import type {
   ProviderInstanceId,
   ProviderSnapshot,
 } from '../core/models.js';
+import type { TransportLimits } from '../transport/types.js';
 
 export interface ProtocolEventSink {
   publish(event: ProtocolContentEvent): Promise<void>;
 }
 
+export interface ChatTransportBinding {
+  readonly endpoint: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly credential?: Readonly<{
+    readonly headerName: string;
+    readonly defaultScheme?: string;
+  }>;
+  readonly limits?: Partial<TransportLimits>;
+}
+
 export interface ChatProvider<TProtocol extends string = string> {
   readonly models: readonly ModelDefinition<TProtocol>[];
+  readonly transport?: ChatTransportBinding;
   runChat(
     request: ChatRequest<TProtocol>,
     sink: ProtocolEventSink,
