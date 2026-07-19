@@ -240,6 +240,7 @@ HarmonyOS 客户端 ─┘
 
 - [`PROJECT-PLAN.md`](PROJECT-PLAN.md)：项目级规划、已确认决策和讨论记录。
 - [`Duoduo AI 单包模块化设计`](docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)：`@duoduo/ai` 的权威设计规范。
+- [`Duoduo AI 可执行实施计划`](docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)：按依赖关系拆分的纵向实现切片、验收命令与 gate 证据要求。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
 - [`CLAUDE.md`](CLAUDE.md)：面向 AI 编码工具的仓库上下文说明。
