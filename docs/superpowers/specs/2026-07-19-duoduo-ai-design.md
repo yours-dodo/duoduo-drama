@@ -1,5 +1,24 @@
 # Duoduo AI 单包模块化设计
 
+## 文档状态、读者与使用方式
+
+| 项目         | 当前结论                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| 状态         | 设计基线 v1；可以按本文进入实现，但 `packages/ai` 尚未创建，六个实现 gate 当前均未完成                                |
+| 权威范围     | 本文是 `@duoduo/ai` 的范围、架构、公共合同、安全边界与验收要求的唯一权威；项目级业务规划仍以根 `PROJECT-PLAN.md` 为准 |
+| 对照基线     | 本地 `vendor/pi/packages/ai`，固定 commit `3da591ab74ab9ab407e72ed882600b2c851fae21`                                  |
+| 目标读者     | 实现 Runtime/Provider/Protocol 的开发者、接入 `duoduo-agent-core` 的调用方、做安全与发布验收的审查者                  |
+| 读完后的动作 | 实现者从 Foundation gate 开始；接入方只依赖公共 export map；审查者按“Gate 追踪与验收证据”逐项收集证据                 |
+
+本文描述的是要实现的合同，不代表代码已经完成。PI 仅是固定的行为基线和 fixture 来源，不得成为构建时或运行时依赖；本文与 PI 内部实现冲突时，以本文冻结的安全边界、类型和错误语义为准，但“PI 基线能力”不得在没有明确差异说明时被删减。
+
+建议阅读路径：
+
+- 实现核心与 Runtime：依次阅读[总体模块结构](#module-structure)、[核心领域协议](#core-contract)、[公共 Runtime API](#runtime-api)、[统一调用流](#call-flow)和[安全与威胁模型](#security-model)。
+- 实现 Provider/Protocol：再阅读[Provider 与 ProtocolAdapter](#provider-protocol)、[文本协议 wire 与类型矩阵](#text-protocol-matrix)、[Provider 覆盖](#provider-coverage)和[扩展开发模板](#extension-template)。
+- 实现图片：阅读[图片生成](#images)、[图片流与任务恢复](#image-operation)与[内建图片矩阵](#image-matrix)。
+- 做交付验收：阅读[公共导出](#public-exports)、[测试设计](#testing)、[实现顺序](#implementation-gates)和[Gate 追踪与验收证据](#gate-evidence)。
+
 ## 背景
 
 多多短剧需要一个稳定的模型运行时层，将 OpenAI、Anthropic、Google、DeepSeek、Kimi、GLM、MiniMax、Qwen、豆包等不同服务的认证、模型目录、请求协议、流式事件、Usage 和错误统一起来。未来的 `duoduo-agent-core` 应只依赖这一统一边界，不直接认识任何模型厂商 SDK 或 wire protocol。
@@ -52,6 +71,8 @@ PI AI 的 OAuth 不是多多短剧的“用户登录”。它解决模型 Provid
 - 新建 `packages/ai/AGENTS.md`，固定模块依赖和测试安全规则。
 - 更新根 `AGENTS.md` 和 README 中的 package 边界说明。
 - 增加一个只依赖公共 export map 的编译型消费 fixture，证明包在不深度导入源码时可被未来 Agent runtime 使用；本阶段不修改 `agent` workspace。
+
+<a id="module-structure"></a>
 
 ## 总体模块结构
 
@@ -153,6 +174,8 @@ runtime/providers                         → CLI / 业务调用方
 
 ESLint 依赖图测试按这张表逐边验证，不只检查是否存在循环。type-only import 也必须遵守所有权；如果两个模块需要同一类型，应下沉到 `core` 或抽成上表已有的窄端口，不能用 barrel re-export 隐藏反向依赖。
 
+<a id="core-contract"></a>
+
 ## 核心领域协议
 
 ### 模型
@@ -173,6 +196,7 @@ interface ModelDefinition<TProtocol extends string = string> {
   name: string;
   providerInstanceId: ProviderInstanceId;
   protocol: TProtocol;
+  protocolProfileId: string;
   capabilities: ModelCapabilities;
   limits: ModelLimits;
   requestDefaults?: Readonly<CommonStreamRequestDefaults>;
@@ -203,6 +227,9 @@ interface TokenRates {
   reasoning?: number;
   cacheRead?: number;
   cacheWrite?: number;
+  cacheWriteByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
 }
 
 interface ModelPricing {
@@ -213,6 +240,7 @@ interface ModelPricing {
     aboveInputTokens: number;
     rates: TokenRates;
   }[];
+  serviceTierMultipliers?: Readonly<Record<string, number>>;
 }
 ```
 
@@ -355,9 +383,42 @@ interface ToolDefinition {
   inputSchema: JsonSchema;
   deferred?: boolean;
 }
+
+interface ToolValidationIssue {
+  instancePath: string;
+  keyword: string;
+  message: string;
+}
+
+type JsonParseResult =
+  | Readonly<{ ok: true; value: JsonValue; repaired: boolean }>
+  | Readonly<{ ok: false; error: 'invalid_json' | 'too_large' }>;
+
+type ToolValidationResult =
+  | Readonly<{ valid: true; value: JsonValue }>
+  | Readonly<{ valid: false; issues: readonly ToolValidationIssue[] }>;
+
+declare function parseToolArguments(
+  rawArguments: string,
+  options?: { maxBytes?: number; repairTruncatedJson?: boolean },
+): JsonParseResult;
+
+declare function validateToolArguments(
+  tool: ToolDefinition,
+  argumentsValue: JsonValue,
+): ToolValidationResult;
+
+declare function validateToolCall(
+  tools: readonly ToolDefinition[],
+  call: ToolCallContent,
+): ToolValidationResult;
+
+declare function isContextOverflowError(error: AiError): boolean;
 ```
 
-公共 schema 方言以 JSON Schema 2020-12 为准。Adapter 必须显式拒绝或安全降级目标 Provider 不支持的关键字，不得静默扩大允许输入。`deferred` 表示工具定义可由支持该能力的协议延迟加载；不支持时严格遵循上述显式 `eager-fallback | require-deferred` 策略。AI package 不执行工具，只提供 schema 和解析辅助函数。
+公共 schema 方言以 JSON Schema 2020-12 为准。Adapter 必须显式拒绝或安全降级目标 Provider 不支持的关键字，不得静默扩大允许输入。`deferred` 表示工具定义可由支持该能力的协议延迟加载；不支持时严格遵循上述显式 `eager-fallback | require-deferred` 策略。AI package 不执行工具，但必须提供上面的 Agent-facing 纯函数：解析始终保留 `rawArguments`，修复只处理可确定的截断括号/引号且必须标记 `repaired`；无论是否修复，只有完整 JSON 再通过对应工具 schema 后才可执行。校验 issue 必须限长且不得回显 secret-shaped value。
+
+ProtocolAdapter 将明确的 Provider overflow、HTTP overflow 错误和经 curated profile 证明的 silent-overflow 响应统一映射为 `CONTEXT_OVERFLOW`；不能仅凭空文本或 `finishReason: length` 猜测。每个 silent detector 必须是 protocol contract 中带 ID/version 的受信规则，并有正例、反例和临界 token fixture。`isContextOverflowError()` 只检查稳定 code，不解析 message。
 
 ### Usage 与成本
 
@@ -368,7 +429,11 @@ interface Usage {
   reasoningTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  cacheWriteTokensByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
   totalTokens?: number;
+  serviceTier?: string;
   providerReportedCost?: { currency: string; amount: number };
 }
 
@@ -379,12 +444,36 @@ interface Cost {
   reasoning?: number;
   cacheRead?: number;
   cacheWrite?: number;
+  cacheWriteByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
   total?: number;
   source: 'computed' | 'provider' | 'mixed';
 }
+
+declare function calculateCost(
+  model: Readonly<ModelDefinition>,
+  usage: Readonly<Usage>,
+): Cost | undefined;
+
+declare function estimateContextTokens(context: Readonly<AiContext>): number;
+
+declare function parseRetryAfter(
+  value: string | undefined,
+  nowMs: number,
+): number | undefined;
+
+declare function computeRetryDelay(input: {
+  attempt: number;
+  policy: RetryPolicy;
+  retryAfterMs?: number;
+  randomUnit: number;
+}): number | undefined;
 ```
 
-所有 token/cost 字段都用 `undefined` 表示 Provider 未提供或无法可靠计算，0 只表示已知为零。`totalTokens` 若由分项计算必须标记 diagnostic；价格按请求开始时的 model snapshot 与实际 input tier 计算，Provider 返回的实际 cost 优先并保留来源。
+所有 token/cost 字段都用 `undefined` 表示 Provider 未提供或无法可靠计算，0 只表示已知为零。`totalTokens` 若由分项计算必须标记 diagnostic；价格按请求开始时的 model snapshot、实际 input tier、cache-write retention 与已知 service tier 计算。`CacheRetention.long` 是请求偏好，不自动等于某个计费桶；adapter 必须按实际上游语义报告。Anthropic 1 小时 cache write 必须进入 `one_hour` 分桶并使用该模型快照的对应 rate，不能混入普通 cache write；若上游只给总数，则只保留 `cacheWriteTokens`，不伪造分桶。
+
+`serviceTierMultipliers` 的 key 是协议规范化后的 tier 名，倍率必须为有限正数；Usage 报告未知 tier 时，本地 cost 保持 `undefined` 并产生 diagnostic。只有 `providerReportedCost.currency === 'USD'` 才能进入固定 USD 的 `Cost`；其他币种完整保留在 Usage，`Cost` 不做隐式汇率换算。Provider 返回的 USD cost 优先并保留 `source: 'provider' | 'mixed'`。
 
 ### 终态响应
 
@@ -435,6 +524,8 @@ type AssistantResponse =
 
 核心提供 `toAssistantMessage(response)` 纯函数，保留 model/status/finishReason 和可重放 metadata。这样 `context` 能确定性过滤失败、取消或被截断的历史 turn，而不依赖调用方另存隐藏状态。
 
+<a id="runtime-api"></a>
+
 ## 公共 Runtime API
 
 ```ts
@@ -453,18 +544,96 @@ interface CreateAiOptions<TScopeHandle> {
   authAuditSink?: AuthAuditSink;
   telemetrySink?: AiTelemetrySink;
   transportObserver?: TransportObserver;
+  trustedRequestPolicy?: TrustedRequestPolicy<TScopeHandle>;
   secureRandom?: SecureRandom;
   loopbackCallbackFactory?: (signal: AbortSignal) => Promise<LoopbackCallback>;
   commonDefaults?: CommonStreamRequestDefaults;
   protocolDefaults?: RuntimeProtocolDefaults;
   imageDefaults?: CommonImageRequestDefaults;
   imageProtocolDefaults?: RuntimeImageProtocolDefaults;
+  resourcePolicy?: RuntimeResourcePolicyInput;
 }
 
 declare function createAi<TScopeHandle>(
   options: CreateAiOptions<TScopeHandle>,
 ): AiRuntime<TScopeHandle>;
 ```
+
+所有“可配置”资源边界只有这一个装配入口；Provider、adapter 和 per-call options 只能收紧，不能扩大。Runtime 先把 partial input 合并为完整冻结策略：
+
+```ts
+interface RuntimeResourcePolicy {
+  transport: TransportLimits;
+  maxMediaBytes: number;
+  maxMediaItems: number;
+  maxReplayMetadataBytes: number;
+  maxRequestMetadataBytes: number;
+  streamQueue: { maxEvents: number; maxBytes: number };
+  catalog: {
+    defaultMaxAgeMs: number;
+    maxMaxAgeMs: number;
+    staleIfErrorMs: number;
+  };
+  session: {
+    idleTtlMs: number;
+    maxSessions: number;
+    maxResourcesPerSession: number;
+  };
+  refresh: {
+    leaseMs: number;
+    heartbeatMs: number;
+    hardDeadlineMs: number;
+    waiterDeadlineMs: number;
+    minBackoffMs: number;
+    maxBackoffMs: number;
+  };
+  auth: {
+    loginDeadlineMs: number;
+    interactionDeadlineMs: number;
+    maxResponseBytes: number;
+  };
+}
+
+interface RuntimeResourcePolicyInput {
+  transport?: Partial<TransportLimits>;
+  maxMediaBytes?: number;
+  maxMediaItems?: number;
+  maxReplayMetadataBytes?: number;
+  maxRequestMetadataBytes?: number;
+  streamQueue?: Partial<RuntimeResourcePolicy['streamQueue']>;
+  catalog?: Partial<RuntimeResourcePolicy['catalog']>;
+  session?: Partial<RuntimeResourcePolicy['session']>;
+  refresh?: Partial<RuntimeResourcePolicy['refresh']>;
+  auth?: Partial<RuntimeResourcePolicy['auth']>;
+}
+
+interface TrustedRequestPolicy<TScopeHandle> {
+  allow(input: {
+    scope: TScopeHandle;
+    provider: Readonly<ProviderSnapshot>;
+    capability: 'chat' | 'images';
+    modelId: string;
+  }): Promise<boolean> | boolean;
+  responseHeaderAllowlist?: readonly string[];
+}
+```
+
+第一版默认值与合法范围固定如下；数值均为整数，越界在注册或请求联网前失败：
+
+| 项目                         | 默认值                                                           | 可配置范围/规则                                           |
+| ---------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------- |
+| request/response/error/frame | 16 MiB / 64 MiB / 256 KiB / 4 MiB                                | 1 KiB–64 MiB / 1 KiB–256 MiB / 1 KiB–1 MiB / 1 KiB–16 MiB |
+| 单个媒体、媒体项数           | 20 MiB、16                                                       | 64 KiB–64 MiB、1–64；还受模型 limits 收紧                 |
+| replay/请求 metadata         | 256 KiB / 64 KiB                                                 | 1 KiB–1 MiB / 1 KiB–256 KiB，按 canonical UTF-8 JSON 计数 |
+| observer queue               | 256 events / 4 MiB                                               | 8–4096 events、64 KiB–32 MiB；任一先到即 backpressure     |
+| catalog                      | max-age 1 h、stale-if-error 24 h                                 | max-age 5 s–24 h；stale 0–7 d；远端值只能收紧             |
+| session                      | idle 15 min、最多 1000 个 session、每个 64 个资源                | idle 1 min–24 h；session 1–10000；资源 1–256              |
+| refresh                      | lease 30 s、heartbeat 10 s、hard/waiter 2 min、backoff 5 s–5 min | heartbeat 小于 lease/2；hard ≥ lease；所有值 1 s–15 min   |
+| OAuth                        | login/interaction 10 min、响应 1 MiB                             | deadline 30 s–30 min；响应 16 KiB–4 MiB                   |
+
+公共文本默认值为：`stop=[]`、`toolChoice='auto'`、`reasoning='none'`、`cacheRetention='short'`、总 `timeoutMs=120_000`、retry `{ maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 5_000, jitterRatio: 0.2, retryOn: ['network','rate_limit','timeout','provider_5xx'] }`；`maxOutputTokens` 为 `min(model.maxOutputTokens, 8192)`，temperature/topP 保持未设置。默认 context policy 为图片不支持即 reject、跨 Provider 可读 reasoning 转 text、失败 turn drop、incomplete tool drop、deferred eager fallback、超预算 reject。图片默认总 timeout 600 秒、poll 2 秒，response format 优先 URL、模型不支持 URL 时使用其首个 output format；resume 默认允许目录联网。
+
+per-call `timeoutMs` 文本允许 1 秒–15 分钟、图片/resume 1 秒–1 小时；retry attempts 1–5、单次 delay 不超过 30 秒、jitter 0–1；temperature 0–2、topP 0–1、stop 最多 16 项且每项不超过 256 UTF-8 bytes。`maxOutputTokens` 必须为正整数且不超过 model limit。任何 Runtime 默认也要经过同一硬范围，不能因为来自可信配置就跳过验证。
 
 `imageOperationCodec` 与 `operationCredentialVerifier` 对普通文本、`direct` 图片以及 stored/ambient 凭据均为可选端口。图片 model capability 与 binding mode 必须完全一致；只有 `asyncOperation: true` 的模型能指向 `resumable` binding。带 `credentialOverride` 调用这类模型时，Runtime 必须在启动 adapter 前确认 verifier 已配置；缺失时同步抛出 `AiConfigurationError('OPERATION_CREDENTIAL_VERIFIER_REQUIRED')`。这样不会先创建一个远端付费任务，再发现它无法安全恢复。跨进程序列化还要求持久 `imageOperationCodec`；没有 codec 的异步任务仍可生成有界 TTL 的进程内 ref，但 `serializeOperation()` 明确失败。`imageOperationPolicy` 未提供时使用本文冻结的安全默认值，不能由 Provider 放宽。
 
@@ -505,6 +674,8 @@ Runtime 能力按命名空间组织：
 ai.providers.register();
 ai.providers.registerAll(providers);
 ai.providers.unregister();
+ai.inventory.models.find();
+ai.inventory.models.list();
 ai.models.find();
 ai.models.require();
 ai.models.list();
@@ -618,6 +789,23 @@ interface ModelsApi<TScopeHandle> {
   ): Promise<ModelRefreshReport>;
 }
 
+interface InventoryModelEntry<TProtocol extends string = string> {
+  definition: Readonly<ModelDefinition<TProtocol>>;
+  source: 'static' | 'explicit';
+  availability: 'unknown';
+}
+
+interface ModelInventoryApi {
+  find<TProtocol extends string>(
+    ref: ModelRef<TProtocol>,
+  ): Promise<InventoryModelEntry<TProtocol> | undefined>;
+  list(filter?: ModelListFilter): Promise<readonly InventoryModelEntry[]>;
+}
+
+interface InventoryApi {
+  readonly models: ModelInventoryApi;
+}
+
 interface AuthApi<TScopeHandle> {
   status(
     providerInstanceId: ProviderInstanceId,
@@ -666,6 +854,7 @@ interface SessionsApi<TScopeHandle> {
 interface AiRuntime<TScopeHandle> {
   readonly providers: ProvidersApi;
   readonly models: ModelsApi<TScopeHandle>;
+  readonly inventory: InventoryApi;
   readonly auth: AuthApi<TScopeHandle>;
   readonly images: ImagesApi<TScopeHandle>;
   readonly sessions: SessionsApi<TScopeHandle>;
@@ -687,7 +876,7 @@ interface AiRuntime<TScopeHandle> {
 
 Runtime 把模型 Provider 与本次 action 传给 `CredentialScopeAuthority.resolve()`；authority 返回的内部 key 仍须与 expected Provider 等值，否则在任何凭据读取前失败为 `CREDENTIAL_SCOPE_MISMATCH`。在 `models.*` 等 control-plane Promise 中它表现为 reject；在 `stream()` 返回后则表现为失败终态，绝不伪装成同步异常。`ModelHandle` 带 runtime 私有 brand 与不可序列化的 `CatalogResolutionIdentity`，普通对象无法伪造；Runtime 总是提取稳定 `ModelRef`，按当前 scope 重新解析目录并校验 handle 的 Provider/config/auth/scope/credential/visibility/digest 身份。仅凭本地 registry 就能发现的 registration generation 失效可在 producer 前同步报 `MODEL_HANDLE_STALE`；需要 authority/store/catalog 才能发现的身份变化必须在 control plane 或流终态报 `MODEL_IDENTITY_CHANGED`，不能伪装成同步检查。Provider subpath 可导出带 type-only `protocolBrand` 的 ref helper，传这种 ref/handle 时 protocol options 获得静态类型；普通动态 ref 在运行时做 schema 验证。Brand 不参与授权，真正授权仍来自 authority。
 
-`models.find/require/list` 全部是 scope-aware async API，统一覆盖静态、explicit、凭据过滤和 Radius/custom discovery；不存在会遗漏动态目录的同步 `list()`。`ModelReadOptions` 默认 `allowNetwork: true`、`force: false`，`force: true` 与 `allowNetwork: false` 组合直接 reject invalid control-plane request。跨 Provider `list()` 允许部分成功，但必须在 `ModelListResult.reports` 逐一暴露 static/fresh/cached/stale/failed，不能静默吞错。`stream/complete` 只接受已异步解析的 handle，确保首个 `response_start` 与任何失败终态总有确定 model 快照；刷新期间返回的 handle 绑定产生它的完整 catalog/auth identity，不能换一个 scope 重用。静态 shard 的注册时 schema 验证属于 Provider registry 内部能力，不另暴露容易被误认为“当前账号可用”的同步模型 API。图片模型 API 使用相同规则。
+`models.find/require/list` 全部是 scope-aware async API，统一覆盖静态、explicit、凭据过滤和 Radius/custom discovery；不存在会遗漏动态目录的同步“可用模型” API。无 scope 的 `inventory.models` 只读取已注册 Provider 的 static/explicit inventory，绝不联网、读 CredentialStore、运行账号过滤或返回可调用 handle，`availability` 固定为 `unknown`；它用于登录前的 CLI/配置选择器，不能代替 `models.*`。`ModelReadOptions` 默认 `allowNetwork: true`、`force: false`，`force: true` 与 `allowNetwork: false` 组合直接 reject invalid control-plane request。跨 Provider `list()` 允许部分成功，但必须在 `ModelListResult.reports` 逐一暴露 static/fresh/cached/stale/failed，不能静默吞错。`stream/complete` 只接受已异步解析的 handle，确保首个 `response_start` 与任何失败终态总有确定 model 快照；刷新期间返回的 handle 绑定产生它的完整 catalog/auth identity，不能换一个 scope 重用。图片模型 API 使用相同规则。
 
 需要 request credential override 时，调用方必须在 `models.find/require/list` 与随后的 `stream/complete`（图片对应 models API 与 stream/generate）传入同一 override。lookup 先经 `CredentialOverridePolicy`，以 Runtime 内随机 HMAC key 对 credential material 生成只存在于私有 handle identity 的 `requestCredentialFingerprint`；override 目录只允许进程内 ephemeral cache，禁止 `CatalogStore`、session 和 ambient fallback。带 override 的 chat/image `list()` 强制要求 `filter.providerInstanceId`，否则在 auth/network 前 reject，避免把同一 secret 按多个 Provider 默认 scheme 尝试；find/require 已由 ref 唯一限定 Provider。推理时缺失 override、类型/scheme/secret 指纹不同或换 Runtime 都在联网前产生失败终态；普通 stored/ambient handle 也不能临时切换成 override。该指纹不可导出、不可反推出 secret，Runtime dispose 时销毁 key；它只保护当前 Runtime 内的 model handle，不进入可序列化 operation。异步图片 operation 另用后文的持久 `OperationCredentialProof`，不得复用这个进程内指纹。
 
@@ -788,6 +977,26 @@ interface StreamOptions<
   sessionId?: string;
   credentialOverride?: RequestCredentialOverride;
   metadata?: Readonly<Record<string, JsonValue>>;
+  trustedRequest?: TrustedRequestCustomization;
+}
+
+interface TrustedRequestCustomization {
+  headers?: Readonly<Record<string, string | null>>;
+  transformHeaders?(
+    headers: Readonly<Record<string, string>>,
+    context: { providerInstanceId: string; protocol: string; modelId: string },
+  ):
+    | Readonly<Record<string, string | null>>
+    | Promise<Readonly<Record<string, string | null>>>;
+  transformPayload?(
+    payload: JsonValue,
+    context: { providerInstanceId: string; protocol: string; modelId: string },
+  ): JsonValue | undefined | Promise<JsonValue | undefined>;
+  onResponse?(response: {
+    status: number;
+    headers: Readonly<Record<string, string>>;
+    requestId?: string;
+  }): void | Promise<void>;
 }
 
 interface ResolvedStreamOptions<TProtocol extends string = string> {
@@ -808,13 +1017,26 @@ interface ResolvedStreamOptions<TProtocol extends string = string> {
 }
 ```
 
-公共字段的合并顺序为：`ProtocolAdapter.contract.requestDefaults` → `ProtocolBinding.requestDefaults` → `ModelDefinition.requestDefaults` 与 binding 中该 model ID 的 `modelProtocolDefaults` → Runtime `commonDefaults`/匹配当前 protocol 的 `protocolDefaults` → per-call options；后者覆盖前者。`ModelDefinition` 只携带 core common defaults，避免 core 反向依赖 protocol declaration map；模型特有的 typed protocol options 由 Provider binding 维护。`protocolOptions` 由 contract 在各自 schema 内按同一顺序独立合并，不能覆盖 endpoint、auth、timeout、retry、model ID 或公共字段。所有值随后通过 common schema、model capability/limits 和 protocol schema；硬安全上限只能拒绝或收紧，不能被 options 放宽。
+公共字段的合并顺序为：`ProtocolAdapter.contract.requestDefaults` → `ProtocolBinding.requestDefaults` → `ModelDefinition.requestDefaults` 与选中 `ModelProtocolProfile.protocolDefaults` → Runtime `commonDefaults`/匹配当前 protocol 的 `protocolDefaults` → per-call options；后者覆盖前者。`ModelDefinition` 只携带 core common defaults和稳定 `protocolProfileId`，避免 core 反向依赖 protocol declaration map；模型特有的 typed protocol options/compatibility/reasoning map 由 Provider binding profile 维护。`protocolOptions` 由 contract 在各自 schema 内按同一顺序独立合并，不能覆盖 endpoint、auth、timeout、retry、model ID 或公共字段。所有值随后通过 common schema、model capability/limits 和 protocol schema；硬安全上限只能拒绝或收紧，不能被 options 放宽。
 
 `timeoutMs` 覆盖 scope 解析、认证/刷新、context、连接和读取到终态的总 deadline；单次重试必须共享剩余预算。`cacheRetention` 默认 `short`：`none` 禁止包主动放 cache marker，`short` 使用协议普通 ephemeral cache，`long` 是可降级偏好；binding 不支持 long 时回退 short 并产生 `CACHE_RETENTION_DOWNGRADED` diagnostic，不伪装已获得长缓存。`RequestCredentialOverride` 仍需授权 scope，并经过宿主 `CredentialOverridePolicy`，只对当前请求有效。override 默认禁用目录持久缓存、session 复用和 ambient fallback。`ContextNormalizationPolicy` 固定图片不支持时的 reject/placeholder、replay scope、incomplete turn 与 token-budget 策略，不允许 adapter 自行猜测。
+
+`trustedRequest` 保留 PI 的 headers/transformHeaders/payload/response 调试与修改能力，但属于显式 TCB，不是可从 HTTP/Agent tool 参数反序列化的普通数据。未配置 `TrustedRequestPolicy` 或 policy 拒绝时，在序列化/联网前进入非重试失败终态 `REQUEST_CUSTOMIZATION_FORBIDDEN`。静态 `headers` 先合入，`transformHeaders` 随后只看到非 protected header；两者的结果都在 auth 合并前规范化。protected/auth/signature/host/content-length header 不能新增、覆盖或删除，冲突必须失败而不是静默忽略。`transformPayload` 在 protocol 生成 JSON 后、签名与发送前执行；返回值重新经过 protocol payload schema、prototype/深度/byte limits，不能改变 endpoint/model/auth 字段。`onResponse` 在消费 body 前调用，只看到 policy allowlist 中的 header value；默认 allowlist 为空，永不暴露 `set-cookie`、认证 challenge 或 secret-shaped header。hook 失败成为稳定的非重试 invalid-request error，不能触发另一份请求。
 
 ## 快速开始
 
 下面是 Node.js 本地开发的最小显式装配。它展示完整控制面：应用自己读取环境变量并包装 secret、注册 Provider、按 scope 解析 model handle，再调用 Runtime。包导入本身不会读取环境变量、注册 Provider 或发请求。
+
+实现完成后把示例保存为 `packages/ai/examples/quickstart.ts`，从仓库根运行：
+
+```text
+pnpm install
+pnpm --filter @duoduo/ai build
+OPENAI_API_KEY=... OPENAI_MODEL=... \
+  pnpm --filter @duoduo/ai example:quickstart
+```
+
+`package.json` 必须提供这个脚本，consumer compile fixture 编译同一示例；示例环境变量只在进程内作为 request override，退出后不会落盘。需要跨命令持久化时使用 CLI 章节的 `duoduo-ai auth login`，不要把 `.env` 当 CredentialStore。
 
 ```ts
 import { createAi, secret } from '@duoduo/ai';
@@ -908,15 +1130,67 @@ try {
 
 生产部署必须替换内存 store 和 local authority：CredentialStore 使用 `CredentialRecordSealer + AEAD/KMS`，CatalogStore 使用共享持久后端，scope authority 从已认证请求上下文产生 handle，并让 scope fingerprint keyring、operation codec keyring 与 verifier keyring 跨实例一致。只有这些端口确实共享且通过 contract test 时才能声明 `cross-runtime`；错误声明属于部署配置错误，不能靠重试修复。共享服务默认禁止 ambient auth；如果允许 request override，应按 tenant、Provider 和 scheme 收窄 policy。应用还应在 `finally`/shutdown hook 中 `dispose()`，并把 Provider origin、OAuth issuer、catalog/media 目的分别列入 NetworkPolicy，而不是允许任意 HTTPS。
 
-API-key 登录而非 per-request override 时，调用方通过 `ai.auth.login(providerId, 'api_key', scope, interaction)` 让 `AuthInteraction.prompt({ secret: true })` 收集 key，并由 CredentialStore 持久化；后续 `models.require()`/`complete()` 不再传 override。OAuth 使用同一个入口选择 `'oauth'`。图片调用先通过 `ai.images.models.require()` 获取 `ImageModelHandle`，再调用 `images.stream()`/`generate()`；任务式结果按“图片流与任务恢复”章节处理。
+API-key 登录而非 per-request override 时，调用方通过 `ai.auth.login(providerId, 'api_key', scope, interaction)` 让 `AuthInteraction.prompt({ type: 'secret', ... })` 收集 key，并由 CredentialStore 持久化；后续 `models.require()`/`complete()` 不再传 override。OAuth 使用同一个入口选择 `'oauth'`。图片调用先通过 `ai.images.models.require()` 获取 `ImageModelHandle`，再调用 `images.stream()`/`generate()`；任务式结果按“图片流与任务恢复”章节处理。
+
+<a id="provider-protocol"></a>
 
 ## Provider 与 ProtocolAdapter
 
 ```ts
+type ProviderConfigurationValue =
+  | Readonly<{ kind: 'json'; value: JsonValue }>
+  | Readonly<{ kind: 'url'; value: string }>
+  | Readonly<{ kind: 'origin'; value: string }>;
+
+interface ProviderIdentityDescriptor {
+  version: 1;
+  configuration: Readonly<Record<string, ProviderConfigurationValue>>;
+}
+
+interface DerivedOriginPolicyDescriptor {
+  id: string;
+  version: number;
+  configuration: Readonly<Record<string, ProviderConfigurationValue>>;
+}
+
+interface AuthBindingDescriptor {
+  version: 1;
+  allowedOrigins: readonly string[];
+  issuer?: string;
+  audience?: string;
+  derivedOriginPolicy?: DerivedOriginPolicyDescriptor;
+}
+
+interface ProviderContractSource {
+  kind: 'pi' | 'official' | 'fixture';
+  locator: string;
+  digest?: string;
+}
+
+interface ProviderProtocolManifest {
+  capability: 'chat' | 'images';
+  protocol: string;
+  profileIds: readonly string[];
+  authSchemes: readonly string[];
+  endpointBranchIds: readonly string[];
+  requestFixtureIds: readonly string[];
+  streamFixtureIds: readonly string[];
+  errorFixtureIds: readonly string[];
+  sources: readonly ProviderContractSource[];
+}
+
+interface ProviderContractManifest {
+  schemaVersion: 1;
+  providerKind: string;
+  bindings: readonly ProviderProtocolManifest[];
+}
+
 interface Provider {
   id: string;
   kind: string;
   name: string;
+  identity: ProviderIdentityDescriptor;
+  contractManifest: ProviderContractManifest;
   auth: ProviderAuth;
   chat?: ChatProviderBinding;
   images?: ImageProviderBinding;
@@ -928,7 +1202,7 @@ interface ProviderSnapshot {
   name: string;
   registrationGeneration: string;
   configFingerprint: string;
-  authBindingFingerprint: string;
+  authPolicyFingerprint: string;
 }
 
 interface ChatProviderBinding {
@@ -944,7 +1218,13 @@ interface ChatProviderBinding {
 
 `kind` 是内建 Provider 种类，例如 `qwen`、`openai` 或 `doubao`；`id` 是运行时注册实例的唯一标识。工厂默认使用 `kind` 作为 `id`，但允许调用方同时注册 `qwen-cn`、`qwen-sg` 或多个企业网关实例。`ModelDefinition.providerInstanceId` 始终引用实例 `id`，避免请求被路由到错误账号或区域。Provider capability 可以只有 `chat`、只有 `images` 或同时具备两者；认证只定义一次。
 
+Provider 不能提交自己算好的 opaque fingerprint。Runtime 先按 tagged kind 规范化 `identity.configuration`：`json` 使用 RFC 8785/JCS（UTF-8、有限数值、对象 key 排序），`url` 要求无 userinfo/fragment 的绝对 URL并规范 hostname/default port，`origin` 还要求 path/query 为空；字段名排序后计算 `SHA-256(canonical(['@duoduo/ai/provider-config',1,kind,id,configuration]))` 的 base64url 值。Provider 因而不能把 URL 混成 Runtime 无法识别的普通字符串。`configuration` 只含影响 region/workspace/base URL/routing/catalog/profile 的非秘密值；不含函数、时间、随机数、环境变量实际值或 `SecretValue`。contract suite 以 factory schema 的字段清单证明每个安全相关 option 均被覆盖，并用 secret canary 证明它不会进入 descriptor。
+
+`authPolicyFingerprint` 同样由 Runtime 从 `ProviderAuth.binding.descriptor` 计算：`SHA-256(canonical(['@duoduo/ai/auth-policy',1,kind,id,normalizedDescriptor]))`。动态 callback 永不参与序列化；其 `id/version/configuration` 参与 descriptor，callback 行为不兼容变化必须递增 version。登录/解析 credential 后得到的具体 `AuthBinding.fingerprint` 是另一个值，绑定该 credential 实际允许的 origin/issuer/audience；handle、session、credential record 与 operation 使用后者，ProviderSnapshot 使用前者，二者不得混称。
+
 重复注册同一 `id` 直接失败；必须先 unregister，再注册才会得到新的随机/单调 `registrationGeneration`。同一 Provider 的 `chat.protocols` 内 protocol ID 必须唯一，`images.protocols` 内也必须唯一，重复项在注册时失败；chat 与 images 是不同 binding namespace，可以合法复用同名 ID。每个 model.protocol 必须在所属 capability 中恰好匹配一个 binding。`ProviderSnapshot` 只含非秘密、冻结的路由身份，进入请求、catalog/session key 和进程内 handle；旧请求继续使用旧快照，新请求只见新 generation。`registrationGeneration` 不得进入可持久化 operation claims，因为它无法跨 Runtime 重算；图片任务改用稳定的 `providerOperationBindingFingerprint`。
+
+`contractManifest` 是 checked-in、strict-schema、无秘密的机器可读注册表。每个矩阵 binding 必须列出所有认证/endpoint 分支、完整 profile ID、request/stream/error fixture ID 和精确来源；空数组不允许用来跳过真实分支。PI parity 的来源映射固定为：模型/profile 数据来自 pinned commit 的 `src/models.generated.ts` 与 `src/providers/*.models.ts`，Provider/auth/endpoint 来自 `src/providers/*.ts`，协议 wire 来自 `src/api/*.ts`，OAuth 来自 `src/auth/oauth/*.ts`，工具/overflow/testing 来自 `src/utils/{validation,overflow}.ts` 与 `src/providers/faux.ts`。Qwen/豆包只使用本文链接的官方文档与经审查 fixture。Productization gate 生成“矩阵行 ↔ manifest binding ↔ fixture file”报告，任何缺失都失败。
 
 `await ai.models.find(ref, scope)` 返回 scope-bound、只读的已验证 handle 或 `undefined`，`require()` 对不可见/缺失模型 reject typed control-plane error。`ModelRef` 只用于这些异步解析 API；推理入口只接受 Runtime 返回的 branded handle，不接受 ref 或调用方构造的裸 `ModelDefinition`。
 
@@ -989,11 +1269,39 @@ interface ProtocolBinding<TProtocol extends string = string> {
   ):
     | Promise<Readonly<Record<string, string>>>
     | Readonly<Record<string, string>>;
-  compatibility?: Readonly<ProtocolCompatibility<TProtocol>>;
   requestDefaults?: Readonly<StreamRequestDefaults<TProtocol>>;
-  modelProtocolDefaults?: Readonly<Record<string, ProtocolOptions<TProtocol>>>;
+  defaultProfile: Readonly<ModelProtocolProfile<TProtocol>>;
+  profiles?: Readonly<Record<string, ModelProtocolProfile<TProtocol>>>;
+  resolveDiscoveredModelProfile?(
+    context: Readonly<{
+      model: ModelDefinition<TProtocol>;
+      providerState?: JsonValue;
+    }>,
+  ): string | Promise<string>;
   contextPolicy?: ContextPolicy<ProtocolCompatibility<TProtocol>>;
+  retrySafety: RetrySafety;
 }
+
+type ReasoningWireValue = string | number | boolean | null;
+type ReasoningLevelMap = Readonly<
+  Partial<Record<ReasoningLevel, ReasoningWireValue>>
+>;
+
+interface ModelProtocolProfile<TProtocol extends string = string> {
+  id: string;
+  compatibility: Readonly<ProtocolCompatibility<TProtocol>>;
+  reasoningLevelMap?: ReasoningLevelMap;
+  protocolDefaults?: Readonly<ProtocolOptions<TProtocol>>;
+}
+
+type RetrySafety =
+  | Readonly<{ mode: 'before-dispatch-only' }>
+  | Readonly<{ mode: 'idempotent' }>
+  | Readonly<{
+      mode: 'idempotency-key';
+      headerName: string;
+      keyVersion: number;
+    }>;
 
 interface ProtocolAdapter<TProtocol extends string = string> {
   id: TProtocol;
@@ -1013,13 +1321,24 @@ interface ProtocolContract<TProtocol extends string = string> {
   parseCompatibility(input: unknown): ProtocolCompatibility<TProtocol>;
 }
 
-interface ProtocolTerminal {
-  finishReason: CompletedFinishReason;
+interface ProtocolTerminalBase {
   usage?: Usage;
   responseModelId?: string;
   responseId?: string;
   replay?: ReplayMetadata;
+  diagnostics?: readonly AiDiagnostic[];
 }
+
+type ProtocolTerminal =
+  | (ProtocolTerminalBase & {
+      status: 'completed';
+      finishReason: CompletedFinishReason;
+    })
+  | (ProtocolTerminalBase & { status: 'failed'; error: AiError })
+  | (ProtocolTerminalBase & {
+      status: 'cancelled';
+      error: AiError & { category: 'cancelled' };
+    });
 
 type StripSequence<T> = T extends { sequence: number }
   ? Omit<T, 'sequence'>
@@ -1042,6 +1361,7 @@ interface ProtocolRequest<TProtocol extends string = string> {
   model: Readonly<ModelDefinition<TProtocol>>;
   context: Readonly<PreparedContext>;
   compatibility: Readonly<ProtocolCompatibility<TProtocol>>;
+  reasoningLevelMap?: ReasoningLevelMap;
   options: Readonly<ResolvedStreamOptions<TProtocol>>;
   transport: RequestTransport;
   resources: ResourceLoader;
@@ -1050,7 +1370,9 @@ interface ProtocolRequest<TProtocol extends string = string> {
 }
 ```
 
-Provider 不自行实现通用流协议。`ProtocolBinding` 明确绑定 adapter、完整 operation URL、headers、默认参数和兼容 profile，一个 Provider 可按 `model.protocol` 路由到多个 adapter；表格中的 base endpoint 必须由 resolver 与协议 route 确定性拼成最终 URL，adapter 不再追加 path/query。`ResolvedRequestAuth` 只存在于 Runtime 的认证装配阶段，永远不传给 adapter；endpoint resolver 只能接收认证层产生的非秘密、带类型 `endpointHints`（GitHub Copilot 的账号 endpoint 即走此通道），并用当前 binding 的 endpoint policy 校验 origin/audience，不能读取原始 credential 或任意 token metadata。
+Provider 不自行实现通用流协议。`ProtocolBinding` 明确绑定 adapter、完整 operation URL、headers、默认参数和逐模型 profile，一个 Provider 可按 `model.protocol` 路由到多个 adapter；表格中的 base endpoint 必须由 resolver 与协议 route 确定性拼成最终 URL，adapter 不再追加 path/query。`ResolvedRequestAuth` 只存在于 Runtime 的认证装配阶段，永远不传给 adapter；endpoint resolver 只能接收认证层产生的非秘密、带类型 `endpointHints`（GitHub Copilot 的账号 endpoint 即走此通道），并用当前 binding 的 endpoint policy 校验 origin/audience，不能读取原始 credential 或任意 token metadata。
+
+每个模型最终必须解析到一个完整 `ModelProtocolProfile`：`defaultProfile` 与 `profiles` 构成 profile registry，record key 必须等于内部 `profile.id` 且全局唯一，default 不能在 profiles 中重复。静态/explicit 条目携带受信 `protocolProfileId`，动态条目由 `resolveDiscoveredModelProfile()` 基于已验证模型字段和 `providerState` 选择；resolver 不接收 raw credential、auth header 或 scope。未命中 profile、重复 ID、未知 key、profile schema 失败均使目录 materialization 失败。missing reasoning key 表示使用协议默认映射，`null` 表示明确不支持；若 `ModelCapabilities.thinkingLevels` 宣称支持但映射为 null，注册失败。Runtime 把 profile 的 compatibility、reasoning map 和 protocol defaults 作为 catalog digest/handle identity 的一部分；任何不兼容映射变化必须递增 `catalogCompatibilityVersion`。这样同一 Together/OpenCode/OpenRouter binding 可安全表达 Kimi、DeepSeek、GPT-OSS、MiniMax 等不同模型的 wire 行为。
 
 Runtime 在 endpoint policy 通过后生成唯一的内部 `FinalRequestTarget`，并消耗掉认证 query/header。query key 区分大小写：auth query 与 resolver URL 已有同名 key 一律 fail closed，adapter 不得追加、删除或覆盖 query。header name 按 ASCII 大小写不敏感规范化为小写，先合入 protocol/provider binding headers，再处理 `forbiddenHeaders`，最后合入 auth headers；同一层 casing 重复或 auth 与已有同名 header 都直接报配置错误，不通过 secret reveal 比较“是否相等”。auth 产生的 header 以及 `authorization`、`proxy-authorization`、`x-api-key`、`api-key`、`cf-aig-authorization` 都是 protected，adapter/transport hook 不得覆盖或删除。`forbiddenHeaders` 会在认证合并前移除 binding/ambient 值并锁定禁止后续加入，Cloudflare Gateway 用它禁止 `authorization` 与 `x-api-key`。Transport 只可按受控策略补充 trace/user-agent 等非 protected header。
 
@@ -1058,7 +1380,7 @@ Runtime 在 endpoint policy 通过后生成唯一的内部 `FinalRequestTarget`�
 
 `BoundSigningCapability` 是不可调用的 opaque token，只能由 Transport 在 NetworkPolicy 通过后使用；创建时已绑定 auth fingerprint、允许 origin、service/region/audience 和过期时间。Adapter 不能借 AWS/Google ambient credential 签任意 URL，也不能扩展 capability 的受众。
 
-公共 `AiResponseStream` 只由 Runtime 创建和拥有。Adapter 的 `run()` 只能向 attempt-local `ProtocolEventSink` 写文本/reasoning/tool 增量并返回 `ProtocolTerminal`，不能产生公共 `response_start`、`response_end` 或 `response_error`。Runtime 负责 block 状态机、聚合、Usage/Cost、唯一终态与错误映射；adapter reject/throw 会被 Runtime 转成结构化失败。
+公共 `AiResponseStream` 只由 Runtime 创建和拥有。Adapter 的 `run()` 只能向 attempt-local `ProtocolEventSink` 写文本/reasoning/tool 增量并返回判别式 `ProtocolTerminal`，不能产生公共 `response_start`、`response_end` 或 `response_error`。预期的 Provider payload failure、远端 cancelled 和成功 diagnostics 必须通过 terminal 表达；throw/reject 只保留给 bug、transport exception 和 abort，由 Runtime 规范化。Runtime 负责 block 状态机、聚合、Usage/Cost、唯一终态与错误映射。
 
 自定义兼容服务通过工厂创建，无需修改核心注册表：
 
@@ -1070,6 +1392,8 @@ createOpenAiCompatibleProvider({
   models: [],
 });
 ```
+
+<a id="call-flow"></a>
 
 ## 统一调用流
 
@@ -1091,7 +1415,7 @@ ai.stream()
 
 Runtime 在调用开始时获取一份不可变 Provider、Model 和 Context 快照。流执行期间的目录刷新或 Provider 重注册不得改变已发起请求的语义。
 
-Runtime 在 logical call 开始时只发一个 `response_start`。认证、adapter 懒加载或 attempt 在首个内容块公开前失败时，可以在 retry policy 内创建新的内部 sink/attempt，丢弃前一 attempt 的未公开 metadata；首个 text/reasoning/tool start 一旦进入公共 stream 就锁定该 attempt，之后禁止隐式重试。只有最终 attempt 的 terminal 被折叠为公共终态，因此重试不会泄漏重复 start/end。
+Runtime 在 logical call 开始时只发一个 `response_start`。认证、adapter 懒加载或 attempt 在首个内容块公开前失败时，只有同时满足 retry policy、transport phase 与 binding `RetrySafety` 才能创建新的内部 sink/attempt，丢弃前一 attempt 的未公开 metadata；首个 text/reasoning/tool start 一旦进入公共 stream 就锁定该 attempt，之后禁止隐式重试。只有最终 attempt 的 terminal 被折叠为公共终态，因此重试不会泄漏重复 start/end。
 
 ## 流协议
 
@@ -1238,7 +1562,7 @@ declare class AiControlPlaneError extends Error {
 
 `invalid_request` 表示调用方可修正的 schema/options/context 问题，`unsupported_capability` 表示目标模型/协议不支持所请求功能；两者固定 `retryable: false`，未来 Agent 不应通过盲目重试同一模型处理。上游 payload/事件不合约仍属于 `protocol` 或 `invalid_response`。
 
-图片 operation 的错误分类固定：override + `asyncOperation: true`/resumable model 缺 verifier 是调用 `images.stream()` 时可确定的同步 `AiConfigurationError`；direct model 不要求 verifier，也永远拿不到 operation sink。没有持久 codec 并不妨碍进程内 operation，只让 `serializeOperation()`/外部 serialized value 的 `parseOperation()` reject `OPERATION_NOT_PERSISTABLE`；环境变量、内存 store、process-local ambient/verifier 等 auth identity 在 serialize 时 reject `OPERATION_AUTH_NOT_PERSISTABLE`，process-local scope authority 则 reject `OPERATION_SCOPE_NOT_PERSISTABLE`。token envelope/版本/完整性/schema/过期或 binding 不匹配为非重试 `AiControlPlaneError`，其内部 category 为 `invalid_request`；恢复 override 缺失或不匹配为非重试 `auth`；codec/verifier/scope-fingerprint key 暂不可用仍 fail closed，并按 typed result 保留 retryable，绝不在未校验身份时轮询 Provider operation。
+图片 operation 的错误分类固定：override + `asyncOperation: true`/resumable model 缺 verifier 是调用 `images.stream()` 时可确定的同步 `AiConfigurationError`；direct model 不要求 verifier，也永远拿不到 operation sink。没有持久 codec 并不妨碍进程内 operation，只让 `serializeOperation()` 以及随后对 external ref 的 `resume()` reject `OPERATION_NOT_PERSISTABLE`；`parseOperation()` 仍只做长度/外形包装。环境变量、内存 store、process-local ambient/verifier 等 auth identity 在 serialize 时 reject `OPERATION_AUTH_NOT_PERSISTABLE`，process-local scope authority 则 reject `OPERATION_SCOPE_NOT_PERSISTABLE`。token 外形错误在 parse 报 `OPERATION_TOKEN_INVALID`；codec 完整性、claims schema、过期或 binding 不匹配只在 resume preflight 成为非重试 `AiControlPlaneError`，其内部 category 为 `invalid_request`。恢复 override 缺失或不匹配为非重试 `auth`；codec/verifier/scope-fingerprint key 暂不可用仍 fail closed，并按 typed result 保留 retryable，绝不在未校验身份时轮询 Provider operation。
 
 原始 Provider 错误仅保留经限长、脱敏和结构化后的诊断信息。API Key、OAuth token、Cookie、Authorization header 和完整敏感 prompt 不得进入错误、日志或 telemetry。
 
@@ -1246,26 +1570,28 @@ declare class AiControlPlaneError extends Error {
 
 `code` 是机器分支依据，`message` 只供人阅读且不承诺稳定。第一版至少冻结下表；实现可以在同一语义下增加更细 diagnostics，但不能复用已有 code 表示另一件事，也不能要求调用方解析 message/HTTP body。
 
-| 阶段                  | 稳定 code                                                                                                                                                                                                                                                                                                                                                                                     | 固定语义                                                                                     |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 配置/同步调用         | `RUNTIME_DISPOSED`, `PROVIDER_ALREADY_REGISTERED`, `PROVIDER_INVALID`, `PROTOCOL_BINDING_INVALID`, `PROTOCOL_REPLAY_CODEC_CONFLICT`, `MODEL_HANDLE_INVALID`, `MODEL_HANDLE_STALE`, `REQUEST_OPTIONS_INVALID`, `OPERATION_CREDENTIAL_VERIFIER_REQUIRED`                                                                                                                                        | `AiConfigurationError`；未启动任何异步 producer/Provider 请求                                |
-| scope/auth            | `CREDENTIAL_SCOPE_MISMATCH`, `AUTH_UNCONFIGURED`, `AUTH_METHOD_UNSUPPORTED`, `AUTH_BINDING_MISMATCH`, `AMBIENT_AUTH_FORBIDDEN`, `CREDENTIAL_OVERRIDE_FORBIDDEN`, `CREDENTIAL_STORE_CORRUPT`, `CREDENTIAL_CODEC_KEY_UNAVAILABLE`, `REFRESH_LEASE_LOST`, `REAUTH_REQUIRED`                                                                                                                      | category `auth`；store corruption/key unavailable 不得降级为未登录                           |
-| catalog/model         | `MODEL_NOT_FOUND`, `MODEL_NOT_VISIBLE`, `MODEL_IDENTITY_CHANGED`, `CATALOG_UNAVAILABLE`, `CATALOG_STORE_CORRUPT`, `CATALOG_NETWORK_DISABLED`                                                                                                                                                                                                                                                  | control-plane reject 或流失败；不可见与不存在可对外统一 message，code 仅给已授权宿主         |
-| transport/provider    | `NETWORK_POLICY_DENIED`, `REDIRECT_FORBIDDEN`, `NETWORK_ERROR`, `REQUEST_TIMEOUT`, `RATE_LIMITED`, `PAYLOAD_TOO_LARGE`, `PROVIDER_ERROR`                                                                                                                                                                                                                                                      | category 分别为 network/timeout/rate_limit/provider；retryable 由明确状态与 attempt 阶段决定 |
-| protocol/capability   | `PROTOCOL_VIOLATION`, `INVALID_RESPONSE`, `UNSUPPORTED_CAPABILITY`, `CONTEXT_INVALID`, `TOOL_CALL_INVALID`                                                                                                                                                                                                                                                                                    | Provider 返回不合约、模型不支持或请求上下文无效；后两类永不盲目重试                          |
-| stream observer       | `STREAM_ALREADY_OBSERVED`, `STREAM_OBSERVATION_CLOSED`                                                                                                                                                                                                                                                                                                                                        | iterator 使用错误；不改变 producer 已有终态                                                  |
-| image operation       | `OPERATION_NOT_PERSISTABLE`, `OPERATION_AUTH_NOT_PERSISTABLE`, `OPERATION_SCOPE_NOT_PERSISTABLE`, `OPERATION_TOKEN_INVALID`, `OPERATION_EXPIRED`, `OPERATION_BINDING_MISMATCH`, `OPERATION_CREDENTIAL_REQUIRED`, `OPERATION_CREDENTIAL_MISMATCH`, `OPERATION_CODEC_KEY_UNAVAILABLE`, `OPERATION_CREDENTIAL_KEY_UNAVAILABLE`, `OPERATION_SCOPE_KEY_UNAVAILABLE`, `OPERATION_MODEL_UNAVAILABLE` | serialize/parse/resume 的精确 preflight 失败；在安全校验前不发 operation poll                |
-| cancellation/internal | `CANCELLED`, `INTERNAL_ERROR`                                                                                                                                                                                                                                                                                                                                                                 | cancelled 可预期；未知异常统一脱敏为 internal、非重试，并保留仅限安全诊断的 correlation ID   |
+| 阶段                  | 稳定 code                                                                                                                                                                                                                                                                                                                                                                                                                | 固定语义                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| 配置/同步调用         | `RUNTIME_DISPOSED`, `PROVIDER_ALREADY_REGISTERED`, `PROVIDER_INVALID`, `PROTOCOL_BINDING_INVALID`, `PROTOCOL_REPLAY_CODEC_CONFLICT`, `MODEL_HANDLE_INVALID`, `MODEL_HANDLE_STALE`, `REQUEST_OPTIONS_INVALID`, `RUNTIME_POLICY_INVALID`, `OPERATION_CREDENTIAL_VERIFIER_REQUIRED`                                                                                                                                         | `AiConfigurationError`；未启动任何异步 producer/Provider 请求                                |
+| scope/auth            | `CREDENTIAL_SCOPE_MISMATCH`, `AUTH_UNCONFIGURED`, `AUTH_METHOD_UNSUPPORTED`, `AUTH_BINDING_MISMATCH`, `AMBIENT_AUTH_FORBIDDEN`, `CREDENTIAL_OVERRIDE_FORBIDDEN`, `CREDENTIAL_STORE_CORRUPT`, `CREDENTIAL_CODEC_KEY_UNAVAILABLE`, `REFRESH_LEASE_LOST`, `REAUTH_REQUIRED`                                                                                                                                                 | category `auth`；store corruption/key unavailable 不得降级为未登录                           |
+| catalog/model         | `MODEL_NOT_FOUND`, `MODEL_NOT_VISIBLE`, `MODEL_IDENTITY_CHANGED`, `CATALOG_UNAVAILABLE`, `CATALOG_STORE_CORRUPT`, `CATALOG_NETWORK_DISABLED`                                                                                                                                                                                                                                                                             | control-plane reject 或流失败；不可见与不存在可对外统一 message，code 仅给已授权宿主         |
+| transport/provider    | `NETWORK_POLICY_DENIED`, `REDIRECT_FORBIDDEN`, `NETWORK_ERROR`, `REQUEST_TIMEOUT`, `RATE_LIMITED`, `PAYLOAD_TOO_LARGE`, `PROVIDER_ERROR`                                                                                                                                                                                                                                                                                 | category 分别为 network/timeout/rate_limit/provider；retryable 由明确状态与 attempt 阶段决定 |
+| protocol/capability   | `PROTOCOL_VIOLATION`, `INVALID_RESPONSE`, `UNSUPPORTED_CAPABILITY`, `CONTEXT_INVALID`, `CONTEXT_OVERFLOW`, `TOOL_CALL_INVALID`, `REQUEST_CUSTOMIZATION_FORBIDDEN`                                                                                                                                                                                                                                                        | Provider 返回不合约、模型不支持或请求上下文无效；后四类永不盲目重试                          |
+| stream observer       | `STREAM_ALREADY_OBSERVED`, `STREAM_OBSERVATION_CLOSED`                                                                                                                                                                                                                                                                                                                                                                   | iterator 使用错误；不改变 producer 已有终态                                                  |
+| image operation       | `OPERATION_NOT_AVAILABLE`, `OPERATION_NOT_PERSISTABLE`, `OPERATION_AUTH_NOT_PERSISTABLE`, `OPERATION_SCOPE_NOT_PERSISTABLE`, `OPERATION_TOKEN_INVALID`, `OPERATION_EXPIRED`, `OPERATION_BINDING_MISMATCH`, `OPERATION_CREDENTIAL_REQUIRED`, `OPERATION_CREDENTIAL_MISMATCH`, `OPERATION_CODEC_KEY_UNAVAILABLE`, `OPERATION_CREDENTIAL_KEY_UNAVAILABLE`, `OPERATION_SCOPE_KEY_UNAVAILABLE`, `OPERATION_MODEL_UNAVAILABLE` | detach/serialize/parse/resume 的精确 preflight 失败；在安全校验前不发 operation poll         |
+| cancellation/internal | `CANCELLED`, `INTERNAL_ERROR`                                                                                                                                                                                                                                                                                                                                                                                            | cancelled 可预期；未知异常统一脱敏为 internal、非重试，并保留仅限安全诊断的 correlation ID   |
 
 Provider HTTP code/message 只能进入受限 `diagnostics`，公共 code 由统一映射表产生：401/403 通常映射 auth，429 映射 rate limit，受支持的 5xx 映射 provider/network；但 Provider 明确的 payload schema 优先于仅看状态码。相同错误无论出现在 Promise control plane、文本流还是图片流，code/category/retryable 都保持一致，只改变承载方式。`INTERNAL_ERROR` 不包含 stack、原始 cause、request body 或 secret；开发模式如需 stack，只能交给进程内受信 sink，不能进入公共响应。
 
 ## 取消、超时与重试
 
 - 同一 `AbortSignal` 贯穿认证、目录刷新、transport、SSE/WebSocket 解析和 Provider hook。
-- 请求尚未产生可见输出时，允许对连接重置、429 和明确的临时 5xx 进行有界重试。
+- “尚未产生可见输出”只是必要条件，不是充分条件；还必须满足 binding 的 `RetrySafety` 与 transport failure phase。
 - 已经输出文本、reasoning 或 tool call 后不进行隐式重试，防止重复内容和重复工具调用。
 - 重试遵循 `Retry-After` 与可配置最大延迟；服务端要求的延迟超过上限时立即以可重试错误终止，让上层向用户显示。
 - 取消是协作式的，但 adapter 必须把 signal 传给底层 SDK 或 transport，不得只在上层更改状态。
+
+`not_dispatched` 可按 retry policy 重试；`response_received` 只有明确 429/受支持临时状态且 binding 是 `idempotent` 或 `idempotency-key` 才重试；`dispatch_unknown` 只有这两种安全模式才重试。`before-dispatch-only` 在 request bytes 可能离开进程后绝不隐式重试，即使还没有输出。`idempotency-key` 由 Runtime 以 request ID + keyVersion 派生，同一逻辑请求所有 attempt 相同，并作为 protected header 在 payload 确定后加入；Provider 未官方承诺该 key 时不得声明此模式。异步图片 task create 默认 `before-dispatch-only`，poll GET 为 `idempotent`，cancel 最多一次且不重试 uncertain dispatch。
 
 ## 认证与 OAuth
 
@@ -1314,13 +1640,22 @@ interface CredentialCodec {
     plaintext: Uint8Array,
     aad: Uint8Array,
     signal?: AbortSignal,
-  ): Promise<SealedCredentialEnvelope>;
-  unseal(
+  ): Promise<CredentialSealResult>;
+  open(
     envelope: SealedCredentialEnvelope,
     aad: Uint8Array,
     signal?: AbortSignal,
-  ): Promise<Uint8Array>;
+  ): Promise<CredentialOpenResult>;
 }
+
+type CredentialSealResult =
+  | Readonly<{ status: 'sealed'; envelope: SealedCredentialEnvelope }>
+  | Readonly<{ status: 'key_unavailable'; retryable: boolean }>;
+
+type CredentialOpenResult =
+  | Readonly<{ status: 'opened'; plaintext: Uint8Array }>
+  | Readonly<{ status: 'invalid' }>
+  | Readonly<{ status: 'key_unavailable'; retryable: boolean }>;
 
 type Credential =
   | {
@@ -1342,19 +1677,37 @@ type Credential =
       config: Readonly<Record<string, string | SecretValue>>;
     };
 
+type AuthPrompt = { signal?: AbortSignal } & (
+  | { type: 'text'; message: string; placeholder?: string }
+  | { type: 'secret'; message: string; placeholder?: string }
+  | {
+      type: 'select';
+      message: string;
+      options: readonly {
+        id: string;
+        label: string;
+        description?: string;
+      }[];
+    }
+  | { type: 'manual_code'; message: string; placeholder?: string }
+);
+
+type AuthEvent =
+  | { type: 'info' | 'progress'; message: string }
+  | { type: 'auth_url'; url: string; instructions?: string }
+  | {
+      type: 'device_code';
+      userCode: string;
+      verificationUri: string;
+      intervalSeconds?: number;
+      expiresAt?: number;
+    };
+
 interface AuthInteraction {
-  openBrowser(url: URL): Promise<'opened' | 'unavailable'>;
-  showDeviceCode(input: {
-    verificationUri: URL;
-    userCode: string;
-    expiresAt: number;
-  }): Promise<void> | void;
-  prompt(input: {
-    message: string;
-    secret?: boolean;
-    signal: AbortSignal;
-  }): Promise<string>;
-  notify?(message: string): Promise<void> | void;
+  signal?: AbortSignal;
+  openBrowser?(url: URL): Promise<'opened' | 'unavailable'>;
+  prompt(prompt: AuthPrompt): Promise<string>;
+  notify(event: AuthEvent): Promise<void> | void;
 }
 
 interface AuthHttpRequest {
@@ -1434,6 +1787,7 @@ interface SecretAuthResolution {
   catalogAuth: CatalogAuthView;
   providerAccountLabel?: string;
   hardExpiresAt?: number;
+  bindingFacts?: AuthBindingFacts;
 }
 
 interface SecretAuth {
@@ -1451,6 +1805,7 @@ interface AmbientAuthResolution {
   credentialIdentityLifetime: CredentialIdentityLifetime;
   catalogAuth: CatalogAuthView;
   providerAccountLabel?: string;
+  bindingFacts?: AuthBindingFacts;
 }
 
 interface AmbientAuth {
@@ -1468,7 +1823,33 @@ interface AmbientAuth {
   }): Promise<AmbientAuthResolution | undefined>;
 }
 
+interface AuthBindingFacts {
+  allowedOrigins?: readonly string[];
+  issuer?: string;
+  audience?: string;
+}
+
+interface AuthOriginPolicy {
+  descriptor: DerivedOriginPolicyDescriptor;
+  resolve(
+    input: Readonly<{
+      provider: ProviderSnapshot;
+      descriptor: AuthBindingDescriptor;
+      facts?: AuthBindingFacts;
+      endpointHints?: EndpointHints;
+      catalogAuth: CatalogAuthView;
+      signal: AbortSignal;
+    }>,
+  ): Promise<AuthBindingFacts> | AuthBindingFacts;
+}
+
+interface AuthBindingPolicy {
+  descriptor: AuthBindingDescriptor;
+  derivedOriginPolicy?: AuthOriginPolicy;
+}
+
 interface ProviderAuth {
+  binding: AuthBindingPolicy;
   secrets?: SecretAuth;
   oauth?: OAuthFlow;
   ambient?: AmbientAuth;
@@ -1478,6 +1859,7 @@ interface OAuthCredentialResult {
   credential: OAuthCredential;
   catalogAuth: CatalogAuthView;
   providerAccountLabel?: string;
+  bindingFacts?: AuthBindingFacts;
 }
 
 interface OAuthFlow {
@@ -1497,6 +1879,7 @@ interface OAuthFlow {
 }
 
 interface AuthFlowContext {
+  provider: Readonly<ProviderSnapshot>;
   signal: AbortSignal;
   transport: AuthHttpTransport;
   networkPolicy: AuthNetworkPolicy;
@@ -1520,6 +1903,14 @@ interface CredentialOverridePolicy {
   ): Promise<boolean> | boolean;
 }
 ```
+
+`AuthPrompt.select` 必须有 2–20 个唯一非空 option ID，`prompt()` 返回所选 ID；`manual_code` 用于 loopback callback 与手动粘贴竞态，callback 先完成时 Runtime abort 该 prompt 的独立 signal。OpenAI Codex 与 Radius 的 browser/device 选择必须使用 `select`，不能靠调用方解析自由文本。`notify()` 是结构化、可国际化的 UI 事件；secret、完整 callback URL query 和 token 不得放入 message。
+
+CredentialCodec 的判别结果是稳定错误映射的唯一来源：`key_unavailable` → `CREDENTIAL_CODEC_KEY_UNAVAILABLE` 并保留 retryable，`invalid` → 非重试 `CREDENTIAL_STORE_CORRUPT`；codec throw 仅表示 driver bug/abort，由 Runtime 规范化为 internal/cancelled。sealer 禁止解析 exception message、KMS 文案或 key ID 来决定分支。
+
+注册时必须验证 `AuthBindingPolicy`：descriptor 有 `derivedOriginPolicy` 时 callback 必须存在且 descriptor 的 id/version/configuration 完全相等；没有 descriptor 时禁止偷偷提供 callback。Runtime 规范化静态 origins 与解析结果，拒绝 HTTP（明确 local development policy 除外）、userinfo、fragment、非 origin path 及重复项，再计算 `AuthBinding.fingerprint = SHA-256(canonical(['@duoduo/ai/auth-binding',1,providerKind,providerInstanceId,sortedOrigins,issuer??null,audience??null,authPolicyFingerprint]))`。Provider callback 只能从已经过 schema 的公开 facts/endpoint hints 派生，不能拿 raw credential；函数行为变化必须提升 descriptor version。
+
+静态 Provider 使用 descriptor origins；Copilot token hint 与 Radius discovery 通过 `bindingFacts + derivedOriginPolicy` 得到 credential-specific binding。refresh 只允许在同 issuer/audience 下更新经 policy 验证的 origin 集，并须生成新的 credential instance、catalog identity 与 session cleanup；issuer 或 audience 变化直接进入 `REAUTH_REQUIRED`，绝不能把旧 refresh token 发给新 issuer。Radius gateway 配置变化和 Copilot hostname 派生分别有合法/非法/NetworkPolicy 拒绝 fixture。
 
 `ambient_config` 只保存 project、region、profile 或受控 credential-file reference 等配置，不把 SDK 临时 access token 复制进 store；`auth.login(..., 'ambient_config')` 只在 Provider 实现 `AmbientAuth.configure()` 时可用，否则明确返回 unsupported。Provider 通过 `SecretCredentialSource` 声明环境变量名及 scheme，Runtime 通过显式 `EnvironmentSource` 读取；浏览器默认空实现，Node preset 才封装 `process.env`，Provider 模块导入时绝不读取环境。`defaultStoredScheme` 用于普通 API-key login，其他声明过的 scheme 可由 `secretScheme`/request override 显式选择，未声明 scheme 在联网前拒绝。
 
@@ -1758,6 +2149,20 @@ type CredentialScopeFingerprintVerification =
   | Readonly<{ status: 'match' }>
   | Readonly<{ status: 'mismatch' }>
   | Readonly<{ status: 'key_unavailable'; retryable: boolean }>;
+
+declare const localScopeHandleBrand: unique symbol;
+interface LocalScopeHandle {
+  readonly [localScopeHandleBrand]: true;
+}
+
+declare function createLocalScopeAuthority(options: {
+  tenantId: string;
+  subjectId: string;
+  credentialSlotId?: string;
+}): Readonly<{
+  scope: LocalScopeHandle;
+  authority: CredentialScopeAuthority<LocalScopeHandle>;
+}>;
 ```
 
 `CredentialScopeKey` 是 store 内部 key，不是授权凭证。公共 Runtime 泛型化为 `AiRuntime<TScopeHandle>`，只接受宿主选择的 opaque handle；每次操作都经注入的 `CredentialScopeAuthority.resolve()` 完成 action-level 鉴权并绑定预期 Provider。推理只需 `use`，status 需 `inspect_auth`，login/logout/revoke 需 `manage_auth`，目录、session 与 operation 各用对应 action；“能使用共享 key”不等于“能替换或删除 key”。服务端必须让 handle 携带已认证 principal/context，禁止把 HTTP 请求里的 tenant/subject/slot 字段直接当 handle；CLI 才使用明确的单用户 `LocalScopeAuthority`。`CredentialStore.identityLifetime` 与 authority 的 `fingerprintLifetime` 是可验证部署能力：内存实现必须声明 `process-local`；只有共享持久 store/clock 与跨实例 keyring 才能声明 `cross-runtime`。Runtime 不根据类名、文件路径或“看起来用了 KMS”猜持久性。
@@ -1822,11 +2227,13 @@ Google Gemini 使用 API Key；Google Vertex 使用 API Key 或 Google ADC，由
 
 ```ts
 interface CatalogShardManifest {
+  schemaVersion: 1;
   providerKind: string;
   sources: readonly CatalogShardSource[];
   transformVersion: number;
   filterId: string;
   curatedOverrideFile: string;
+  curatedOverrideDigest: string;
 }
 
 interface CatalogShardSource {
@@ -1837,10 +2244,27 @@ interface CatalogShardSource {
     | { kind: 'runtime'; discoveryId: string };
   retrievedAt: string;
   sourceDigest: string;
+  pin: Readonly<{
+    snapshotFile: string;
+    etag?: string;
+    lastModified?: string;
+  }>;
+}
+
+interface CatalogShardArtifact {
+  schemaVersion: 1;
+  providerKind: string;
+  generatedAt: string;
+  manifestDigest: string;
+  curatedOverrideDigest: string;
+  outputDigest: string;
+  models: readonly JsonValue[];
 }
 ```
 
-`sources` 非空且按 transform 的读取顺序排列；每个输入独立记录规范化前原始内容的 digest。单来源 shard 也使用长度为一的数组。`nvidia` manifest 必须同时记录 pinned models.dev 与官方 `/models` 两项，交集算法及排序属于版本化 transform，任何一项缺失都不能生成 shard。curated override 另有自身内容 digest，最终产物记录 manifest digest 与 output digest，因而多来源生成仍可重复、可审计。
+`sources` 非空且按 transform 的读取顺序排列；每个输入独立记录规范化前原始内容的 digest 和仓库内只读 snapshot locator，HTTP validator 仅作审计而不是 pin。单来源 shard 也使用长度为一的数组。`nvidia` manifest 必须同时记录 pinned models.dev 与官方 `/models` 两项，交集算法及排序属于版本化 transform，任何一项缺失都不能生成 shard。curated override 另有自身内容 digest，最终产物记录 manifest digest 与 output digest，因而多来源生成仍可重复、可审计。
+
+每个 Provider 的布局固定为 `src/providers/<kind>/catalog/{manifest.json,sources/*,overrides.json,catalog.generated.json}`。所有文件使用 UTF-8、LF、末尾单换行和 lexicographic key/model ordering；semantic `outputDigest` 计算时排除 `generatedAt`，包含 schema、Provider、完整模型/profile 数据、manifest 与 override digest。generator 先在临时目录写 artifact，重新读取并严格验证所有 digest 后才原子替换；package runtime 只读取 committed artifact，不读取 manifest source。manifest/artifact TypeScript interface、JSON Schema 和 fixture 必须由同一 schema module 生成，避免正文与产物漂移。
 
 第一版 source routing 固定如下：
 
@@ -1966,7 +2390,7 @@ interface CatalogStore {
 }
 ```
 
-`CatalogStore.payload` 是 capability owner 编码的版本化 `JsonValue`，store 不导入聊天或图片模型类型；`catalog`/`images` 各自在读写边界做严格 codec 校验，避免 `catalog ↔ images` 类型环。带 `discover()` 的 source 必须同时提供 discovery endpoint resolver（header resolver 可选），Runtime 先用同一 protected query/header/NetworkPolicy 算法绑定 `RequestTransport`，再调用 discover；缺少成对 resolver 在 Provider 注册时失败。`ModelDiscoveryContext` 只暴露最小无秘密 `CatalogAuthView`，不把 Credential 或 `ResolvedRequestAuth` 交给远端 source。`cacheMaxAgeMs` 由受信 source 返回并受 Runtime 上下限约束。
+`CatalogStore.payload` 是 capability owner 编码的版本化 `JsonValue`，store 不导入聊天或图片模型类型；`catalog`/`images` 各自在读写边界做严格 codec 校验，避免 `catalog ↔ images` 类型环。带 `discover()` 的 source 必须同时提供 discovery endpoint resolver（header resolver 可选），Runtime 先用同一 protected query/header/NetworkPolicy 算法绑定 `RequestTransport`，再调用 discover；缺少成对 resolver 在 Provider 注册时失败。`ModelDiscoveryContext` 只暴露最小无秘密 `CatalogAuthView`，不把 Credential 或 `ResolvedRequestAuth` 交给远端 source。`cacheMaxAgeMs` 由受信 source 返回并受 Runtime 上下限约束。远端 `DiscoveredModel` 不携带 compatibility/reasoning/profile 逃生口；受信 binding resolver 在 schema 验证后为它选择已注册 profile。
 
 每个 chat/images binding 声明稳定的 `catalogCompatibilityVersion`。Runtime 以确定性 canonical encoding 计算 `providerCatalogBindingFingerprint = SHA-256(['@duoduo/ai/catalog-binding', 1, providerKind, providerInstanceId, capability, providerConfigFingerprint, catalogCompatibilityVersion])`。它不含随机 `registrationGeneration`，因此多个进程和重启后的 Runtime 能命中同一持久缓存；目录 payload schema、discovery routing/state 解释或安全过滤规则发生不兼容变化时必须递增 compatibility version。Runtime-local generation 仍留在 model handle 与 session 身份中，防止旧对象在同一进程被重注册实例复用。恢复持久 cache 后仍须重新验证 envelope、payload schema、digest、auth/visibility 与当前 binding，稳定 key 不等于跳过校验。
 
@@ -1988,7 +2412,7 @@ Runtime 支持：
 3. 包内经审查的 curated override。
 4. 宿主显式 user override。
 
-远端 raw 响应不得直接决定 `providerInstanceId`、protocol binding、endpoint、认证、header 或其他安全敏感字段；受信任的 `ModelSource` 代码必须把 protocol 映射到已注册 binding，并在返回前校验任何 routing state。Radius 的 `config.baseUrl` 是唯一基线例外路径：它先经过 gateway origin、AuthBinding 与 NetworkPolicy 校验，作为非秘密 `providerState` 缓存，恢复时再次校验，endpoint resolver 才可使用。User override 只能修改显示名、能力、limits、pricing 和非敏感 metadata。要新增静态目录外模型，必须通过 Provider 工厂的 `additionalModels` 提供，且 protocol 必须属于该 Provider 已注册 binding，再经过完整 schema 验证。
+远端 raw 响应不得直接决定 `providerInstanceId`、protocol binding/profile、endpoint、认证、header 或其他安全敏感字段；受信任的 `ModelSource` 代码必须把 protocol 映射到已注册 binding，并由 binding resolver 选择 profile，在返回前校验任何 routing state。Radius 的 `config.baseUrl` 是唯一基线例外路径：它先经过 gateway origin、AuthBinding 与 NetworkPolicy 校验，作为非秘密 `providerState` 缓存，恢复时再次校验，endpoint resolver 才可使用。User override 只能修改显示名、能力、limits、pricing 和非敏感 metadata，不能修改 protocol/profile/reasoning map。要新增静态目录外模型，必须通过 Provider 工厂的 `additionalModels` 提供，且 protocol/profile 必须属于该 Provider 已注册 binding，再经过完整 schema 验证。
 
 第一版明确冻结以下策略，避免把不存在的远端 API 写成承诺：
 
@@ -2066,6 +2490,23 @@ interface BoundTransportRequest {
 }
 
 interface TransportResponse extends HttpByteResponse {}
+
+type TransportFailurePhase =
+  'not_dispatched' | 'response_received' | 'dispatch_unknown';
+
+declare const transportDriverFailureBrand: unique symbol;
+
+interface TransportDriverFailure {
+  readonly [transportDriverFailureBrand]: true;
+  phase: TransportFailurePhase;
+  code: 'network' | 'timeout' | 'aborted' | 'invalid_response';
+  status?: number;
+  retryAfterMs?: number;
+}
+
+declare function createTransportDriverFailure(
+  input: Omit<TransportDriverFailure, typeof transportDriverFailureBrand>,
+): TransportDriverFailure;
 
 interface TransportSocket {
   readonly incoming: AsyncIterable<string | Uint8Array>;
@@ -2163,7 +2604,7 @@ interface TransportObserver {
 }
 ```
 
-`TransportDriver` 是宿主可替换且明确受信任的裸网络驱动，只接收 transport 模块已 materialize 的字符串 header/URL；ProtocolAdapter 从不直接拿 driver。所有 HTTP driver 必须使用 `redirect: 'manual'` 并原样返回 3xx，自动 follow 属 contract violation；模型 request facade 默认拒绝 redirect，Auth wrapper 仅可按显式 same-origin policy 逐跳重新授权且 token POST 永远拒绝。Runtime 创建的 `RequestTransport` 已绑定不可变 `FinalRequestTarget`，先执行 `NetworkPolicy`，再在 transport 内部唯一允许的 seam reveal `SecretValue`、注入 protected query、消费 `BoundSigningCapability`，最后把 materialized request 交给 driver。签名后的 URL/header 再做一次 origin/protected-field invariant 校验。第三方 driver 能看到线上必需的明文凭据，属于可信计算基，不得记录或转发；它没有 API 可重新 reveal 其他 secret 或签任意 target。
+`TransportDriver` 是宿主可替换且明确受信任的裸网络驱动，只接收 transport 模块已 materialize 的字符串 header/URL；ProtocolAdapter 从不直接拿 driver。driver 对预期网络失败必须 reject package-branded `TransportDriverFailure`，准确报告 bytes 是否可能发出；普通 Error 一律按 `dispatch_unknown`、非重试 internal 处理，Runtime 不解析错误文案。所有 HTTP driver 必须使用 `redirect: 'manual'` 并原样返回 3xx，自动 follow 属 contract violation；模型 request facade 默认拒绝 redirect，Auth wrapper 仅可按显式 same-origin policy 逐跳重新授权且 token POST 永远拒绝。Runtime 创建的 `RequestTransport` 已绑定不可变 `FinalRequestTarget`，先执行 `NetworkPolicy`，再在 transport 内部唯一允许的 seam reveal `SecretValue`、注入 protected query、消费 `BoundSigningCapability`，最后把 materialized request 交给 driver。签名后的 URL/header 再做一次 origin/protected-field invariant 校验。第三方 driver 能看到线上必需的明文凭据，属于可信计算基，不得记录或转发；它没有 API 可重新 reveal 其他 secret 或签任意 target。
 
 Runtime 还从同一 driver/policy 构造无认证的 `ResourceLoader` 并注入协议请求，专门处理必须下载后上传的 URL 图片；它逐跳以 `purpose: 'media'` 授权 manual redirect，绝不继承模型/auth header，校验最终媒体类型、deadline 与 byte limit 后才返回 bytes。没有通过 policy 的私网、HTTP、跨域 redirect 或超限资源在上传前失败。URL 可被上游直接引用时 adapter 不下载，避免无意义 SSRF 面。
 
@@ -2181,6 +2622,8 @@ Runtime 还从同一 driver/policy 构造无认证的 `ResourceLoader` 并注入
 - URL 图片默认原样交给支持 URL 的 Provider，不由核心下载；协议确需上传时必须通过受 `NetworkPolicy`、媒体类型、大小和超时限制的资源加载端口，防止 SSRF。
 
 核心与大多数兼容协议优先使用原生 transport，避免为每个薄 Provider 安装完整 SDK。AWS Bedrock、Google ADC 或其他需要签名/特殊 transport 的能力可使用官方 SDK，但必须放在按需延迟加载边界后。
+
+<a id="security-model"></a>
 
 ## 安全与威胁模型
 
@@ -2267,6 +2710,8 @@ interface SessionHandle {
 - 统一 stop reason、取消、错误与诊断。
 
 OpenAI-compatible 方言差异不放入全局巨型 flags 对象。默认行为收敛在 protocol；只有被至少两个真实 Provider 复用的差异才提升为有类型 compatibility profile，单一 Provider 的差异保留在其装配模块。
+
+<a id="text-protocol-matrix"></a>
 
 ### 文本协议 wire 与类型矩阵
 
@@ -2575,6 +3020,8 @@ Responses/Codex/Azure 各导出绑定自身 protocol ID 的 `ProtocolReplayCodec
 
 `codecId` 使用 package-scoped 稳定字符串，`codecVersion` 是 payload schema version，共享 data 类型不等于共享 identity。`current` 的版本必须等于 `currentVersion`，供 adapter encode 和 Runtime decode；`legacyDecoders` 只读旧 payload，不得用于新 metadata，版本必须唯一且小于 current。decoder 的 protocol/codec/scope 必须与 set 完全一致，所有 parse/decode 都执行限长严格 schema。上述 opaque/encrypted/signature 字段默认 `same-model`，不得进入 diagnostics；Mistral 和第一版 DashScope/Ark 没有已证实的 opaque replay 就只保留普通可读 content，不创建空 metadata。任何协议新增不兼容 replay shape 都要递增 current version、保留支持窗口内的旧 decoder，并提供旧 fixture 读取、duplicate-key 冲突与未知 codec/version 安全剥离测试；不能通过当前 ModelRef 或目录状态猜 codec。
 
+<a id="provider-coverage"></a>
+
 ## Provider 覆盖
 
 ### PI AI 基线
@@ -2621,6 +3068,25 @@ zai-coding-cn
 ```
 
 `faux` 作为 testing provider，不进入生产 `providers/all`。
+
+“功能范围对齐 PI AI”按下面的 parity ledger 验收，不按文件名相似度验收：
+
+| PI 能力面                                     | `@duoduo/ai` 冻结承载                                          | 有意差异                                                               |
+| --------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Model、thinking map、compat、cost             | ModelDefinition + binding-owned per-model profile + Usage/Cost | 不暴露可变全局 model object；profile 进入 catalog identity             |
+| stream/complete、tool/reasoning/replay        | Runtime stream state machine、ProtocolAdapter、replay codec    | adapter 不创建公共终态，不执行工具                                     |
+| API key、ambient、5 个 OAuth                  | ProviderAuth、AuthBindingPolicy、CredentialStore               | scope-aware sealed store；不采用 PI plaintext auth file                |
+| static/available/dynamic models               | inventory + scope-aware ModelsApi + Radius discovery           | “库存”和“当前账号可用”明确分 API                                       |
+| OpenRouter Images                             | ordered image content/output、response ID、token/cache cost    | 复用更严格的图片 handle 与 transport 边界                              |
+| headers/onPayload/onResponse/transformHeaders | `trustedRequest` + TrustedRequestPolicy                        | protected auth/signing 字段不可覆盖；response headers 默认不暴露 value |
+| tool validation/JSON repair/overflow helpers  | core 纯函数与 `CONTEXT_OVERFLOW`                               | repair 后仍须 schema validation；silent detector 必须版本化            |
+| faux provider/testing helpers                 | `@duoduo/ai/testing` scripted FIFO/controller/contract suites  | runner-neutral、无生产全局注册                                         |
+| CLI                                           | Node binary + injectable `runCli()`                            | 使用 sealed store/key source，不复制 `auth.json` 明文格式              |
+| legacy global API/compat aliases              | 不提供                                                         | 明确非目标；由新的 Runtime/Provider 注册边界替代                       |
+
+任何 PI pinned commit 中属于上表前九项的行为，如果 manifest/source audit 找到而本文没有承载位置，视为 spec bug，必须先扩展 typed contract 再实现；不能塞进 `providerMetadata`、`Record<string, unknown>` 或未记录 hook。反之，PI 的 legacy aliases、导入副作用和 plaintext credential 不是要复刻的行为。
+
+实现仓库必须提供 dev-only `scripts/parity/extract-pi.ts`，输入只接受显式 `--pi-root` 且验证 HEAD 等于固定 commit，输出 checked-in `src/providers/_generated/pi-parity.generated.json`。每条记录至少包含 `{ providerKind, modelId, protocolId, protocolProfileId, compatibility, reasoningLevelMap, capabilities, limits, pricing, sourceFile }`；对象 key/model 按字典序，未知函数/枚举/兼容字段直接失败，不用 `eval`，sourceFile 必须落在 `packages/ai/src/{models.generated.ts,providers,api,auth,utils}`。相同输入连跑两次 digest 必须相同。运行时/构建只消费已经转换成各 Provider shard/profile 的 committed 产物，不 import 这个 parity 文件；当 `vendor/pi` 不存在时 `parity:check` 验证 committed source commit/digest，当存在时还重跑并 diff。这样逐模型 flags 有确定迁移路径，同时不把 vendor 变成依赖。
 
 ### 规范 Provider 矩阵
 
@@ -2688,6 +3154,7 @@ interface AdditionalModelInput<TProtocol extends string> {
   id: string;
   name: string;
   protocol: TProtocol;
+  protocolProfileId: string;
   capabilities: ModelCapabilities;
   limits: ModelLimits;
   requestDefaults?: Readonly<CommonStreamRequestDefaults>;
@@ -2731,7 +3198,7 @@ interface BedrockProviderOptions {
 }
 ```
 
-`AdditionalModelInput` 不含 `providerInstanceId` 和任何安全字段；调用方不能注入 endpoint/auth/compatibility/providerState。API key、bearer 与 AWS/ADC credential 本身不属于 factory options，仍由 auth scheme/store/environment/ambient resolver 提供。`baseUrl` 是显式非秘密配置，但必须进入 config/auth binding fingerprint 并经过 NetworkPolicy。
+`AdditionalModelInput` 不含 `providerInstanceId` 和任何安全字段；调用方不能注入 endpoint/auth/compatibility/reasoning map/providerState，只能从该 binding 已注册且公开允许选择的 profile ID 中选一个，未知 ID 在注册时失败。API key、bearer 与 AWS/ADC credential 本身不属于 factory options，仍由 auth scheme/store/environment/ambient resolver 提供。`baseUrl` 是显式非秘密配置，但必须进入 config/auth policy fingerprint 并经过 NetworkPolicy。
 
 ### 额外一等 Provider
 
@@ -2763,6 +3230,19 @@ interface QwenAdditionalModelInput extends AdditionalModelInput<QwenProtocolPref
   nativeRouteId?: 'text-generation' | 'multimodal-generation';
 }
 
+interface QwenAdditionalImageModelInput {
+  id: string;
+  upstreamModelId: string;
+  name: string;
+  protocol: 'dashscope-images' | 'dashscope-image-tasks';
+  protocolProfileId: string;
+  capabilities: ImageModelCapabilities;
+  limits: ImageModelLimits;
+  inputDefaults: Readonly<{ count: number; size: ImageSize }>;
+  pricing?: ImageModelPricing;
+  imageRouteId: 'wan-multimodal-sync' | 'wan-image-task';
+}
+
 interface QwenProviderOptions {
   id?: ProviderInstanceId;
   region: QwenRegion;
@@ -2771,6 +3251,7 @@ interface QwenProviderOptions {
   baseUrl?: URL;
   protocolPreference?: QwenProtocolPreference;
   additionalModels?: readonly QwenAdditionalModelInput[];
+  additionalImageModels?: readonly QwenAdditionalImageModelInput[];
   modelOverrides?: Readonly<Record<string, ModelOverrideInput>>;
 }
 ```
@@ -2790,7 +3271,7 @@ Qwen pay-as-you-go resolver 不用模糊 region 字符串：
 | `ap-northeast-1` | 无 shared default                    | `{workspaceId}.ap-northeast-1.maas.aliyuncs.com` |
 | `eu-central-1`   | 无 shared default                    | `{workspaceId}.eu-central-1.maas.aliyuncs.com`   |
 
-工厂要求显式 region；选择 workspace mode 时 `workspaceId` 必填并进入 hostname，不支持该模式的区域在注册时立即报配置错误。OpenAI Chat/Responses 使用 `/compatible-mode/v1`，Anthropic 使用 `/apps/anthropic`，DashScope native 与图片以 `/api/v1` 为 base。Qwen catalog 的每个原生模型必须携带不可由调用方覆盖的 `nativeRoute`：文本生成是 `/services/aigc/text-generation/generation`，文本理解图片/音视频等多模态生成是 `/services/aigc/multimodal-generation/generation`；不在 curated route 表中的原生模型不能注册。当前 Wan 2.6 图片 `imageRoute` 为 `/services/aigc/multimodal-generation/generation`，旧图片模型 route 也只能由 curated `imageRoute` 选择。最终 URL 由 base 与 route 各拼接一次，并由 fixture 固定。workspace 不再重复放 header/body，API Key 必须与 region/billing plan 一致并进入 AuthBinding。Token/Coding Plan 因官方限制不能用于后端自动化，不混入默认 `qwen` Provider；未来如支持必须是独立 kind/policy。
+工厂要求显式 region；选择 workspace mode 时 `workspaceId` 必填并进入 hostname，不支持该模式的区域在注册时立即报配置错误。OpenAI Chat/Responses 使用 `/compatible-mode/v1`，Anthropic 使用 `/apps/anthropic`，DashScope native 与图片以 `/api/v1` 为 base。Qwen catalog 的每个原生模型必须携带不可由调用方覆盖的 curated route ID：文本生成映射 `/services/aigc/text-generation/generation`，文本理解图片/音视频等多模态生成映射 `/services/aigc/multimodal-generation/generation`；图片任务 route 独立映射 `/services/aigc/image-generation/generation`。不在 curated route 表中的原生模型不能注册。Wan 2.6 的 direct/task 双 public ref 与精确 route 由“内建图片矩阵”冻结；旧图片模型也只能由 curated route 选择。最终 URL 由 base 与 route 各拼接一次，并由 fixture 固定。workspace 不再重复放 header/body，API Key 必须与 region/billing plan 一致并进入 AuthBinding。Token/Coding Plan 因官方限制不能用于后端自动化，不混入默认 `qwen` Provider；未来如支持必须是独立 kind/policy。
 
 正式文档参考：
 
@@ -2828,17 +3309,32 @@ interface DoubaoExplicitModelInput extends Omit<
     | Readonly<{ type: 'endpoint'; endpointId: string }>;
 }
 
+interface DoubaoExplicitImageModelInput {
+  id: string;
+  name: string;
+  protocol: 'ark-images';
+  protocolProfileId: string;
+  capabilities: ImageModelCapabilities;
+  limits: ImageModelLimits;
+  inputDefaults: Readonly<{ count: number; size: ImageSize }>;
+  pricing?: ImageModelPricing;
+  upstream:
+    | Readonly<{ type: 'model'; modelId: string }>
+    | Readonly<{ type: 'endpoint'; endpointId: string }>;
+}
+
 interface DoubaoProviderOptions {
   id?: ProviderInstanceId;
   region?: 'cn-beijing';
   baseUrl?: URL;
   compatibilityMode?: 'responses' | 'chat-completions';
   additionalModels?: readonly DoubaoExplicitModelInput[];
+  imageModels?: readonly DoubaoExplicitImageModelInput[];
   modelOverrides?: Readonly<Record<string, ModelOverrideInput>>;
 }
 ```
 
-public `id` 是本包目录 ID，`upstream` 判别联合决定请求 body 的 `model` 值；Endpoint ID 永不进入 host/path/header。非北京区域只有显式 base URL 扩展路径，第一版 union 不假装认识未经验证的 region 名；未来官方区域加入时扩展闭合联合和 resolver fixture。
+public `id` 是本包目录 ID，文本和图片的 `upstream` 判别联合决定 definition 的 `upstreamModelId` 与请求 body 的 `model` 值；Endpoint ID 永不进入 host/path/header。`imageModels` 是 Seedream/自定义 Ark Model ID 或 Endpoint ID 的显式图片入口，不从文本 `additionalModels` 猜测图片能力。非北京区域只有显式 base URL 扩展路径，第一版 union 不假装认识未经验证的 region 名；未来官方区域加入时扩展闭合联合和 resolver fixture。
 
 默认文本/多模态目录使用 `openai-responses` 加固定的 Ark compatibility profile。只有显式 `compatibilityMode: 'chat-completions'` 的实例把兼容模型映射到 `openai-chat-completions`；官方 fixture 证实且通用 Responses 无法无损表达的 Ark thinking 与响应事件固定路由到 `ark-responses`。第一版只承诺 common function tools，不把方舟内置工具或独立上下文缓存 API 伪装成已经统一；协议选择在目录快照创建时完成，不在请求中根据 options 猜测。
 
@@ -2860,6 +3356,8 @@ public `id` 是本包目录 ID，`upstream` 判别联合决定请求 body 的 `m
 - Qwen → `qwen`
 - 豆包 → `doubao`
 
+<a id="extension-template"></a>
+
 ## 扩展开发模板
 
 新增能力时先复用已有 protocol：如果上游只是 OpenAI Chat/Responses 或 Anthropic Messages 的 endpoint/auth/少量兼容差异，应新增 Provider binding，不复制 adapter。只有 wire request、stream event 或 replay 状态无法由现有 typed compatibility 表达，并且这种差异有稳定 schema 时才新增 protocol。
@@ -2880,6 +3378,7 @@ interface AcmeAdditionalModel {
   id: string;
   name: string;
   protocol: 'openai-chat-completions';
+  protocolProfileId: 'default';
   capabilities: ModelCapabilities;
   limits: ModelLimits;
   pricing?: ModelPricing;
@@ -2894,6 +3393,11 @@ export function acmeProvider(options: AcmeProviderOptions = {}): Provider {
     id: options.id ?? 'acme',
     kind: 'acme',
     name: 'Acme',
+    identity: defineProviderIdentity({
+      version: 1,
+      configuration: canonicalAcmeConfiguration(options),
+    }),
+    contractManifest: acmeContractManifest,
     auth: createAcmeAuth(),
     chat: {
       catalogCompatibilityVersion: '1',
@@ -2908,7 +3412,7 @@ export function acmeProvider(options: AcmeProviderOptions = {}): Provider {
 
 1. 定义 factory config schema、默认实例 ID、所有 endpoint/region/workspace 分支；canonical config fingerprint 必须覆盖每个影响路由、认证、目录或模型语义的字段。
 2. 定义 `SecretAuth`/OAuth/ambient scheme 与 `AuthBinding`；每个环境变量只是声明的 `SecretCredentialSource`，不在模块内读取。
-3. 选择已有 protocol binding；resolver 返回完整 URL、非秘密 header 与 compatibility，所有自定义 origin 经过 NetworkPolicy/AuthBinding。
+3. 选择已有 protocol binding；定义完整 default/model profiles，resolver 返回完整 URL 与非秘密 header，所有自定义 origin 经过 NetworkPolicy/AuthBinding。
 4. 提供非空静态 manifest 或成对的 discovery endpoint + `discover()`；远端字段不能决定 auth/protocol/endpoint。
 5. `additionalModels` 只新增，`modelOverrides` 只修改白名单字段；重复 ID、未知 protocol、非法 limits/pricing 在注册时失败。
 6. 导出 ref helper、factory options、Provider 工厂；不导出内部 SDK client、secret converter 或目录 raw JSON。
@@ -2997,6 +3501,8 @@ operation state schema 只允许恢复 wire 所需的非秘密字段；ID/path s
 
 任何 Provider/Protocol 合并前必须同时满足：独立 subpath import；根入口无新增副作用；公共类型只经 export map；fixture 不含真实 secret；contract suite 全过；Provider/模型/协议/环境变量矩阵已生成；catalog manifest 有来源与 digest；NetworkPolicy 叶子、错误映射、AbortSignal、usage/cost、日志脱敏和 tree-shaking 测试齐全。只添加工厂名称、模型 JSON 或 happy-path fetch 不算接入完成。
 
+<a id="images"></a>
+
 ## 图片生成
 
 图片生成位于 `@duoduo/ai/images`，因为它与对话模型共享 Provider 认证、目录、传输、Usage、Cost 和错误语义，但拥有不同的输入与输出。Agent 只决定为什么生成、何时生成以及使用哪个模型；AI package 负责如何调用厂商。
@@ -3021,9 +3527,11 @@ interface ImageModelHandle<TProtocol extends string = string> {
 
 interface ImageModelDefinition<TProtocol extends string = string> {
   id: string;
+  upstreamModelId: string;
   name: string;
   providerInstanceId: ProviderInstanceId;
   protocol: TProtocol;
+  protocolProfileId: string;
   capabilities: ImageModelCapabilities;
   limits: ImageModelLimits;
   inputDefaults: Readonly<{ count: number; size: ImageSize }>;
@@ -3041,6 +3549,7 @@ interface ImageModelCapabilities {
   asyncOperation: boolean;
   seed: boolean;
   outputFormats: readonly ('url' | 'base64')[];
+  output: readonly ('text' | 'image')[];
   sizes: readonly ImageSize[];
 }
 
@@ -3055,6 +3564,8 @@ interface ImageModelPricing {
   currency: 'USD';
   perImage?: number;
   perMegapixel?: number;
+  tokenRates?: TokenRates;
+  serviceTierMultipliers?: Readonly<Record<string, number>>;
 }
 
 interface ImageUsage {
@@ -3062,6 +3573,12 @@ interface ImageUsage {
   outputMegapixels?: number;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cacheWriteTokensByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
+  serviceTier?: string;
   providerReportedCost?: { currency: string; amount: number };
 }
 
@@ -3069,27 +3586,52 @@ interface ImageCost {
   currency: 'USD';
   images?: number;
   megapixels?: number;
-  inputTokens?: number;
-  outputTokens?: number;
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheWriteByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
   total?: number;
   source: 'computed' | 'provider' | 'mixed';
 }
 
+declare function calculateImageCost(
+  model: Readonly<ImageModelDefinition>,
+  usage: Readonly<ImageUsage>,
+): ImageCost | undefined;
+
+interface ImagePromptTextPart {
+  type: 'text';
+  text: string;
+}
+
+interface ImagePromptImagePart {
+  type: 'image';
+  image: ImageContent;
+}
+
+type ImagePromptPart = ImagePromptTextPart | ImagePromptImagePart;
+
 interface ImageGenerationInput {
-  prompt: string;
-  references?: readonly ImageContent[];
+  content: readonly ImagePromptPart[];
   count?: number;
   size?: ImageSize;
   seed?: number;
 }
 
 interface ResolvedImageGenerationInput {
-  prompt: string;
-  references: readonly ImageContent[];
+  content: readonly ImagePromptPart[];
   count: number;
   size: ImageSize;
   seed?: number;
 }
+
+declare function imagePrompt(
+  prompt: string,
+  references?: readonly ImageContent[],
+): readonly ImagePromptPart[];
 
 export interface ImageProtocolOptionsMap {}
 export interface ImageProtocolCompatibilityMap {}
@@ -3129,6 +3671,7 @@ interface ImageGenerationOptions<
   signal?: AbortSignal;
   credentialOverride?: RequestCredentialOverride;
   metadata?: Readonly<Record<string, JsonValue>>;
+  trustedRequest?: TrustedRequestCustomization;
 }
 
 interface ResolvedImageGenerationOptions<TProtocol extends string = string> {
@@ -3168,6 +3711,10 @@ interface GeneratedImage {
   metadata?: Readonly<Record<string, JsonValue>>;
 }
 
+type ImageGenerationOutput =
+  | Readonly<{ type: 'text'; text: string }>
+  | Readonly<{ type: 'image'; image: GeneratedImage }>;
+
 declare const imageOperationRefBrand: unique symbol;
 declare const serializedImageOperationRefBrand: unique symbol;
 
@@ -3186,6 +3733,9 @@ interface ImageOperationClaimsBase {
   providerInstanceId: ProviderInstanceId;
   protocol: string;
   modelId: string;
+  upstreamModelId: string;
+  protocolProfileId: string;
+  modelProtocolProfileFingerprint: string;
   providerOperationBindingFingerprint: string;
   providerConfigFingerprint: string;
   authBindingFingerprint: string;
@@ -3296,8 +3846,9 @@ declare function createOperationCredentialVerifier(
 interface ImageGenerationResultBase {
   requestId: string;
   model: Readonly<ImageModelDefinition>;
-  outputs: readonly GeneratedImage[];
+  outputs: readonly ImageGenerationOutput[];
   operation?: ImageOperationRef;
+  responseId?: string;
   usage?: ImageUsage;
   cost?: ImageCost;
   diagnostics?: readonly AiDiagnostic[];
@@ -3320,6 +3871,12 @@ type ImageGenerationResult =
       status: 'cancelled';
       partial: boolean;
       error: AiError & { category: 'cancelled' };
+    })
+  | (ImageGenerationResultBase & {
+      status: 'detached';
+      partial: boolean;
+      operation: ImageOperationRef;
+      error?: never;
     });
 ```
 
@@ -3329,9 +3886,9 @@ type ImageGenerationResult =
 
 driver 必须如实声明 keyring identity lifetime。`process-local` driver 可以保护当前 Runtime 的 operation proof，但其 ref 不得序列化；声明 `cross-runtime` 时 keyring 必须跨实例持久一致：`create()` 用当前 active key，`verify()` 按 proof 中的 `keyId` 选择对应验证 key，使用 constant-time compare，并在该 key 最后一次签发后至少保留 `maxTtlMs + 2 × allowedClockSkewMs`。轮换只改变新 proof 的 key，不使未过期 operation 失效；`mismatch` 与 `key_unavailable` 通过判别结果明确区分，后者携带 retryable，未知/撤销/暂不可用 key 不得退回进程内指纹或尝试所有 key。package wrapper 保留 driver lifetime，只向外映射统一 mismatch，不暴露 type、scheme、secret 哪一项不符。proof 只允许封入 `ImageOperationClaims` 的受保护 payload，不进入 public ref、日志、telemetry、catalog、session 或 Provider metadata。
 
-模型能力明确表达文生图、单/多参考图、可用尺寸/宽高比、最大结果数、seed、流式 preview 和异步 operation；不支持的字段在请求前返回 capability error，不静默忽略。Runtime 把 `count` 默认成模型的 `inputDefaults.count`，把 size 解析为显式值或 `inputDefaults.size`，验证 references/size/count/seed 后才产生 `ResolvedImageGenerationInput`。请求选项按 image protocol contract defaults → Provider binding → `ImageModelDefinition` 的 common defaults 与 binding 中该 model ID 的 protocol defaults → Runtime `imageDefaults`/匹配当前协议的 `imageProtocolDefaults` → per-call 合并为 `ResolvedImageGenerationOptions<TProtocol>`，再统一验证 timeout/retry/output format/poll interval/protocol schema；adapter 不再补默认值。各图片协议通过 `declare module '@duoduo/ai/images'` 扩展 options/compatibility map，并提供与聊天相同的 parser/validator/分层 merge contract。图片的 `credentialOverride` 与聊天走同一 authority/policy，默认同样关闭持久目录缓存和 session 复用。URL 输出携带已知过期时间，AI package 不假设临时 URL 已被业务持久化。
+模型能力明确表达文生图、单/多参考图、可用尺寸/宽高比、最大结果数、seed、流式 preview、输出 modality 和异步 operation；不支持的字段在请求前返回 capability error，不静默忽略。canonical input 是非空、有序的 text/image part，Runtime 保留原顺序并按模型限制统计图片；`imagePrompt()` 只是生成“文本在前、引用图随后”的便利纯函数。当前 Qwen/Ark profile 至少要求一个非空文本并只接受它们明确支持的排列，OpenRouter 则保留任意合法交错顺序。Runtime 把 `count` 默认成模型的 `inputDefaults.count`，把 size 解析为显式值或 `inputDefaults.size`，验证 content/size/count/seed 后才产生 `ResolvedImageGenerationInput`。请求选项按 image protocol contract defaults → Provider binding → `ImageModelDefinition` 的 common defaults与选中 image profile defaults → Runtime `imageDefaults`/匹配当前协议的 `imageProtocolDefaults` → per-call 合并为 `ResolvedImageGenerationOptions<TProtocol>`，再统一验证 timeout/retry/output format/poll interval/protocol schema；adapter 不再补默认值。各图片协议通过 `declare module '@duoduo/ai/images'` 扩展 options/compatibility map，并提供与聊天相同的 parser/validator/分层 merge contract。图片的 `credentialOverride`、`trustedRequest` 与聊天走同一 authority/policy。URL 输出携带已知过期时间，AI package 不假设临时 URL 已被业务持久化。
 
-图片结果保留请求时 model/price 快照、时间、usage、`ImageCost` 与 diagnostics；成本未知仍用 `undefined`，不填 0。Provider-reported cost 与本地按张数/像素计算的价格使用与文本 `Cost` 相同的 provider/computed/mixed 来源规则。
+图片结果保留请求时 model/price 快照、Provider `responseId`、有序 text/image outputs、时间、usage、`ImageCost` 与 diagnostics；成本未知仍用 `undefined`，不填 0。token/cache/service-tier 价格和非 USD 行为与文本成本规则相同，再与按张数/像素价格相加；Provider-reported USD cost 使用相同的 provider/computed/mixed 来源规则。
 
 ### 图片 Provider 与协议装配
 
@@ -3433,11 +3990,22 @@ interface ImageProtocolBindingBase<TProtocol extends string = string> {
   ):
     | Promise<Readonly<Record<string, string>>>
     | Readonly<Record<string, string>>;
-  compatibility?: Readonly<ImageProtocolCompatibility<TProtocol>>;
   requestDefaults?: Readonly<ImageRequestDefaults<TProtocol>>;
-  modelProtocolDefaults?: Readonly<
-    Record<string, ImageProtocolOptions<TProtocol>>
-  >;
+  defaultProfile: Readonly<ImageModelProtocolProfile<TProtocol>>;
+  profiles?: Readonly<Record<string, ImageModelProtocolProfile<TProtocol>>>;
+  resolveDiscoveredModelProfile?(
+    context: Readonly<{
+      model: ImageModelDefinition<TProtocol>;
+      providerState?: JsonValue;
+    }>,
+  ): string | Promise<string>;
+  retrySafety: RetrySafety;
+}
+
+interface ImageModelProtocolProfile<TProtocol extends string = string> {
+  id: string;
+  compatibility: Readonly<ImageProtocolCompatibility<TProtocol>>;
+  protocolDefaults?: Readonly<ImageProtocolOptions<TProtocol>>;
 }
 
 interface DirectImageProtocolBinding<
@@ -3531,14 +4099,29 @@ type ImageProtocolProgressEvent =
       progress?: number;
     }
   | {
-      type: 'generation_preview' | 'generation_output';
+      type: 'generation_preview';
       outputIndex: number;
       image: GeneratedImage;
+    }
+  | {
+      type: 'generation_output';
+      outputIndex: number;
+      output: ImageGenerationOutput;
     };
 
-interface ImageProtocolTerminal {
+interface ImageProtocolTerminalBase {
   usage?: ImageUsage;
+  responseId?: string;
+  diagnostics?: readonly AiDiagnostic[];
 }
+
+type ImageProtocolTerminal =
+  | (ImageProtocolTerminalBase & { status: 'completed' })
+  | (ImageProtocolTerminalBase & { status: 'failed'; error: AiError })
+  | (ImageProtocolTerminalBase & {
+      status: 'cancelled';
+      error: AiError & { category: 'cancelled' };
+    });
 
 interface ImageProtocolRequest<TProtocol extends string = string> {
   provider: Readonly<ProviderSnapshot>;
@@ -3573,13 +4156,15 @@ interface ImageCancelRequest<TProtocol extends string = string> {
 }
 ```
 
-`ImageProtocolRequest` 与聊天请求一样只接收不可变 Provider/model 快照、已验证并补齐默认值的 input/options、compatibility，以及绑定 create target 的 `RequestTransport` 和 signal。任务 ID 出现前不能安全构造 poll/cancel URL，因此 resumable adapter 先调用 `setOperation()`，再从 sink 请求 action-bound `operationTransport()`；Runtime 用受信 binding 的 operation resolver、当前 auth 与 NetworkPolicy 创建新的 protected target，adapter 仍不能拼接 endpoint/auth。跨进程 `resume` 在全部 preflight 后直接接收绑定 poll target 的 `pollTransport`，仅当 binding 声明 cancel 时才有 `cancelTransport`。这些请求都不接触 scope key、`ResolvedRequestAuth`、endpoint auth material 或持久凭据。`images` 模块定义接口与编排，Provider 工厂从外侧注入 binding，因此不存在 `images → providers` 的依赖环。
+`ImageProtocolRequest` 与聊天请求一样只接收不可变 Provider/model 快照、已验证并补齐默认值的 input/options、选中 profile compatibility，以及绑定 create target 的 `RequestTransport` 和 signal。图片 profile 的选择、校验、digest 与动态 resolver 规则和文本 `ModelProtocolProfile` 相同。任务 ID 出现前不能安全构造 poll/cancel URL，因此 resumable adapter 先调用 `setOperation()`，再从 sink 请求 action-bound `operationTransport()`；Runtime 用受信 binding 的 operation resolver、当前 auth 与 NetworkPolicy 创建新的 protected target，adapter 仍不能拼接 endpoint/auth。跨进程 `resume` 在全部 preflight 后直接接收绑定 poll target 的 `pollTransport`，仅当 binding 声明 cancel 时才有 `cancelTransport`。这些请求都不接触 scope key、`ResolvedRequestAuth`、endpoint auth material 或持久凭据。`images` 模块定义接口与编排，Provider 工厂从外侧注入 binding，因此不存在 `images → providers` 的依赖环。
 
-`operationMode` 是注册不变量：模型 `asyncOperation` 必须与 binding mode 双向等价，false 只能指向 `direct`，true 只能指向 `resumable`；同一 protocol 若同时提供同步与任务 API，必须使用两个明确 ID/binding，不能由 adapter 在付费请求后临时升级 mode。`resumable` binding 的 actions 必须包含且只包含一次 `poll`，可选一次 `cancel`，并必须加载同 mode、同 protocol ID且实现必选 `resume()`/`parseOperationState()` 的 adapter；声明 cancel 时 adapter 的 `cancel()` 也必选。Runtime 在启动 adapter/Provider 请求前验证。`direct` adapter 根本拿不到 `setOperation()`；resumable sink 的 `setOperation()` 最多成功一次，校验非空/限长 operation ID、经 adapter schema round-trip 的限长 `operationState` 与可选 Provider expiry，封装 ref 后由 Runtime 自行发布带 operation 的 progress event，adapter 不接触 public ref。state 只能保存恢复协议所需的非凭据字段，不得含 endpoint、header、token 或 raw scope；open 后在 operation poll 前再次用当前 adapter 解析。`operationTransport()` 在 set 之前、未声明 action 或终态之后调用都失败。这样不可能生成一个没有恢复实现或把认证路由偷偷塞进 token 的任务句柄。
+`operationMode` 是注册不变量：模型 `asyncOperation` 必须与 binding mode 双向等价，false 只能指向 `direct`，true 只能指向 `resumable`；同一上游模型若同时提供同步与任务 API，目录必须给出两个 public model ID、同一 `upstreamModelId` 和两个明确 binding，不能由 adapter 在付费请求后临时升级 mode。`resumable` binding 的 actions 必须包含且只包含一次 `poll`，可选一次 `cancel`，并必须加载同 mode、同 protocol ID且实现必选 `resume()`/`parseOperationState()` 的 adapter；声明 cancel 时 adapter 的 `cancel()` 也必选。Runtime 在启动 adapter/Provider 请求前验证。`direct` adapter根本拿不到 `setOperation()`；resumable adapter 一旦远端 create 成功，必须在任何 poll/output/成功 terminal 前恰好一次 `setOperation()`，校验非空/限长 operation ID、经 adapter schema round-trip 的限长 `operationState` 与可选 Provider expiry，封装 ref 后由 Runtime 自行发布带 operation 的 progress event，adapter 不接触 public ref。create 返回成功却未 set、重复 set 或先 poll 均是 protocol violation。state 只能保存恢复协议所需的非凭据字段，不得含 endpoint、header、token 或 raw scope；open 后在 operation poll 前再次用当前 adapter 解析。`operationTransport()` 在 set 之前、未声明 action或终态之后调用都失败。这样不可能生成一个没有恢复实现或把认证路由偷偷塞进 token 的任务句柄。
 
-`operationCompatibilityVersion` 只存在于 resumable binding，是对持久任务恢复格式的显式版本；即使 protocol ID 不变，只要 operation ID 解释、poll/cancel route、响应 schema 或恢复所需 compatibility 发生不兼容变化就必须递增。Runtime 以稳定 canonical encoding 计算 `providerOperationBindingFingerprint = SHA-256(['@duoduo/ai/image-operation-binding', 1, providerKind, providerInstanceId, providerConfigFingerprint, protocol, operationCompatibilityVersion])`。它只包含非秘密配置，可在不同进程确定性重算；Runtime-local `registrationGeneration`、包构建时间和随机数不得参与。resume 必须在启动 operation poll 前等值校验该 fingerprint，从而允许兼容重启，也拒绝错误实例、配置或不兼容 adapter。
+`operationCompatibilityVersion` 只存在于 resumable binding，是对持久任务恢复格式的显式版本；即使 protocol ID 不变，只要 operation ID 解释、poll/cancel route、响应 schema 或恢复所需 compatibility 发生不兼容变化就必须递增。Runtime 先对选中 image profile 计算 `modelProtocolProfileFingerprint`，再以稳定 canonical encoding 计算 `providerOperationBindingFingerprint = SHA-256(['@duoduo/ai/image-operation-binding',1,providerKind,providerInstanceId,providerConfigFingerprint,protocol,operationCompatibilityVersion,modelId,upstreamModelId,modelProtocolProfileFingerprint])`。它只包含非秘密配置，可在不同进程确定性重算；Runtime-local `registrationGeneration`、包构建时间和随机数不得参与。resume 必须在启动 operation poll 前等值校验 public model ID、upstream model ID、profile 与该 fingerprint，从而允许兼容重启，也拒绝错误实例、配置、目录映射或不兼容 adapter。
 
 和聊天相同，公共 `ImageGenerationStream` 只由 Runtime 拥有；adapter 仅通过 attempt-local sink 报告 operation/progress/output 并返回 terminal。Runtime 负责封装 operation token、唯一 start/end/error、partial outputs、重试边界和结果聚合。
+
+<a id="image-operation"></a>
 
 ### 图片流与任务恢复
 
@@ -3598,10 +4183,16 @@ type ImageGenerationEvent =
       operation?: ImageOperationRef;
     }
   | {
-      type: 'generation_preview' | 'generation_output';
+      type: 'generation_preview';
       sequence: number;
       outputIndex: number;
       image: GeneratedImage;
+    }
+  | {
+      type: 'generation_output';
+      sequence: number;
+      outputIndex: number;
+      output: ImageGenerationOutput;
     }
   | {
       type: 'generation_end';
@@ -3611,12 +4202,21 @@ type ImageGenerationEvent =
   | {
       type: 'generation_error';
       sequence: number;
-      result: Exclude<ImageGenerationResult, { status: 'completed' }>;
+      result: Extract<
+        ImageGenerationResult,
+        { status: 'failed' | 'cancelled' }
+      >;
+    }
+  | {
+      type: 'generation_detached';
+      sequence: number;
+      result: Extract<ImageGenerationResult, { status: 'detached' }>;
     };
 
 interface ImageGenerationStream extends AsyncIterable<ImageGenerationEvent> {
   result(): Promise<ImageGenerationResult>;
   abort(reason?: string): void;
+  detach(): Promise<ImageOperationRef>;
 }
 ```
 
@@ -3634,6 +4234,8 @@ interface ImageGenerationStream extends AsyncIterable<ImageGenerationEvent> {
 
 `abort()` 总是立即取消本地 create/poll 等待并产出 cancelled 终态；若已经 set operation 且 binding 声明 cancel，Runtime 以独立有界 signal、当前重新校验的 claims 与 cancel-bound transport 最多调用一次 adapter `cancel()`。远端成功才记 `REMOTE_OPERATION_CANCELLED` diagnostic；不支持、超时或失败不能把本地 cancelled 改写为成功，也不能无限拖延终态。没有远端 cancel 契约时文档和结果都只声称“停止本地等待”。
 
+`detach()` 是明确的 handoff：只在 resumable stream 已发布 operation ref 且尚无终态时成功；过早调用 reject `OPERATION_NOT_AVAILABLE` 且不改变 stream。成功后立即停止本地 poll、释放 request/session lease、绝不调用远端 cancel，并以唯一 `generation_detached` / `status: 'detached'` 终态结束；已产生 outputs 保留且决定 `partial`。它返回同一个 ref，调用方可先 `serializeOperation()` 再交给另一进程恢复。detach/abort/远端 terminal 竞态只允许一个 winner，loser 观察既有终态，不产生第二次 poll/cancel。
+
 公共入口为：
 
 ```ts
@@ -3647,6 +4249,15 @@ ai.images.resume(operationRef, options);
 await ai.images.serializeOperation(operationRef);
 await ai.images.parseOperation(serializedOperationRef);
 ```
+
+operation 方法职责与错误边界固定如下，后续章节不得覆盖：
+
+| 方法                      | 做什么                                                                                             | 不做什么                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `serializeOperation(ref)` | 校验进程内 ref、identity lifetime 与 scope persistence，调用 codec seal                            | 不联网、不重新解析 credential、不接受裸 string；key unavailable 使用 typed code |
+| `parseOperation(string)`  | 只做长度、base64url/envelope 外形和 branded wrapper；明显畸形为 `OPERATION_TOKEN_INVALID`          | 不 open codec、不检查 claims/TTL/scope，不发 poll                               |
+| `resume(ref, options)`    | codec open、claims/TTL/authority/scope/auth/config/profile/model 全部 preflight 后创建 poll stream | 任一 preflight 未完成前不调用 adapter/operation transport                       |
+| `detach()`                | 停止本地 poll并保留远端任务                                                                        | 不 seal、不 cancel 远端、不把 direct 调用伪装成 operation                       |
 
 ```ts
 interface ImageModelListFilter {
@@ -3668,7 +4279,21 @@ interface ImageModelListResult {
   reports: readonly ImageModelRefreshReport[];
 }
 
+interface ImageInventoryModelEntry<TProtocol extends string = string> {
+  definition: Readonly<ImageModelDefinition<TProtocol>>;
+  source: 'static' | 'explicit';
+  availability: 'unknown';
+}
+
 interface ImagesApi<TScopeHandle> {
+  readonly inventory: {
+    find<TProtocol extends string>(
+      ref: ImageModelRef<TProtocol>,
+    ): Promise<ImageInventoryModelEntry<TProtocol> | undefined>;
+    list(
+      filter?: ImageModelListFilter,
+    ): Promise<readonly ImageInventoryModelEntry[]>;
+  };
   readonly models: {
     find<TProtocol extends string>(
       ref: ImageModelRef<TProtocol>,
@@ -3716,6 +4341,8 @@ interface ImagesApi<TScopeHandle> {
 
 图片目录使用 `CatalogCacheKey.capability = 'images'`，与聊天目录类型和缓存空间分开，但共享同一 Provider auth、scope authority 与 auth identity。
 
+<a id="image-matrix"></a>
+
 ### 内建图片矩阵
 
 | Provider     | 图片 protocol                               | 认证 / endpoint                                  | operation mode 与最小 fixture                             |
@@ -3724,7 +4351,7 @@ interface ImagesApi<TScopeHandle> {
 | `qwen`       | `dashscope-images`, `dashscope-image-tasks` | 复用 Qwen region/workspace resolver              | 前者 direct；后者 resumable，覆盖 create/poll/cancel/过期 |
 | `doubao`     | `ark-images`                                | 复用 `ARK_API_KEY` 与 Ark resolver               | direct；Seedream 文生图、参考图、多结果、错误             |
 
-四个图片 protocol subpath 第一版不开放任意透传字段；count/size/seed/references/output format/timeout/retry 已由 common 类型覆盖。差异全部进入受信 compatibility：
+四个图片 protocol subpath 第一版不开放任意透传字段；ordered content/count/size/seed/output format/timeout/retry 已由 common 类型覆盖。差异全部进入受信 compatibility：
 
 ```ts
 type NoImageProtocolFields = Readonly<Record<string, never>>;
@@ -3770,13 +4397,13 @@ declare module '@duoduo/ai/images' {
 }
 ```
 
-`openrouter-images` 固定 `POST {baseUrl}/chat/completions`、`stream: false` 与 image modality，参考图转 data URL，只接受首个 choice 中经 schema 验证的多个 data-URL image；它是 direct binding，不创建 operation。`ark-images` 第一版固定 Ark `/api/v3/images/generations` direct API；当前已验证资料没有独立任务 poll/cancel 契约，因此不得为了“统一”伪造 operation。未来官方异步 API 必须作为新 compatibility/operation version 加入，不悄悄改变旧 binding。
+`openrouter-images` 固定 `POST {baseUrl}/chat/completions`、`stream: false` 与由模型 `output` 能力决定的 modalities；它按 canonical input 原顺序序列化交错 text/image part，URL/base64 引用经过 ResourceLoader/大小策略后成为合法 content part。响应保留首个 choice 中经 schema 验证的有序 text 与多个 data-URL image，同时提取 Provider response ID、input/output/cache token usage，并用 token/cache rate 计算成本；只返回文本、只返回图片或两者混合都由模型 output capability 校验。它是 direct binding，不创建 operation。`ark-images` 第一版固定 Ark `/api/v3/images/generations` direct API；当前已验证资料没有独立任务 poll/cancel 契约，因此不得为了“统一”伪造 operation。未来官方异步 API 必须作为新 compatibility/operation version 加入，不悄悄改变旧 binding。
 
-Qwen curated model metadata 逐模型决定精确 `imageRoute` 和固定 protocol：官方同步调用进入 direct `dashscope-images`，官方异步任务进入 resumable `dashscope-image-tasks`；调用方不能覆盖，也不能只按 Wan 大版本猜 route。即使两者 create path 相同，也不能合并 binding，因为 verifier/operation 不变量必须在联网前确定。初始 Wan 2.6 fixture 固定 `/api/v1/services/aigc/multimodal-generation/generation`；旧模型可使用经官方 snapshot 记录的 `/services/aigc/text2image/image-synthesis`，Wan 2.7 等后续模型必须以各自 reference/digest 进入 curated 表。异步 create 由受信 resolver 加 `X-DashScope-Async: enable`，成功响应只提取限长 `task_id`/`task_status`；poll 固定 `GET {regionalBase}/api/v1/tasks/{taskId}`，cancel 固定 `POST .../tasks/{taskId}/cancel` 且仅 PENDING 可能成功。状态映射为 PENDING/RUNNING → progress，SUCCEEDED → outputs，FAILED/UNKNOWN → failed，CANCELED → cancelled；completed task 与 result URL 的官方保留期通常为 24 小时，因此 adapter 将该 provider expiry 传给 Runtime，再由全局 operation policy 取较小值。task ID 只能作为单个 percent-encoded path segment，不能带 slash/query/fragment。
+Qwen curated model metadata 逐模型决定精确 `imageRoute` 和固定 protocol：官方同步调用进入 direct `dashscope-images`，官方异步任务进入 resumable `dashscope-image-tasks`；调用方不能覆盖，也不能只按 Wan 大版本猜 route。同一官方 `wan2.6-image` 首版暴露两个稳定 public ref：`wan2.6-image`（direct）与 `wan2.6-image@task`（resumable），两者 `upstreamModelId` 都是 `wan2.6-image`，catalog/handle/operation identity 仍按不同 public ID 与 protocol 区分。direct fixture 固定 `POST {regionalBase}/api/v1/services/aigc/multimodal-generation/generation`；task create fixture 固定 `POST {regionalBase}/api/v1/services/aigc/image-generation/generation` 并由受信 resolver加 `X-DashScope-Async: enable`。只有官方 manifest 明确验证两种模式的模型才生成双 ref；旧模型可使用经官方 snapshot 记录的 `/api/v1/services/aigc/text2image/image-synthesis`，后续模型必须以各自 reference/digest 进入 curated 表。成功 task 响应只提取限长 `task_id`/`task_status`；poll 固定 `GET {regionalBase}/api/v1/tasks/{taskId}`，cancel 固定 `POST .../tasks/{taskId}/cancel` 且仅 PENDING 可能成功。状态映射为 PENDING/RUNNING → progress，SUCCEEDED → outputs，FAILED/UNKNOWN → failed，CANCELED → cancelled；completed task 与 result URL 的官方保留期通常为 24 小时，因此 adapter 将该 provider expiry 传给 Runtime，再由全局 operation policy 取较小值。task ID 只能作为单个 percent-encoded path segment，不能带 slash/query/fragment。
 
 Qwen task 端口以官方 [异步任务管理 API](https://www.alibabacloud.com/help/en/model-studio/manage-asynchronous-tasks) 与 [Wan 图片 API](https://www.alibabacloud.com/help/en/model-studio/wan-image-generation-api-reference) 为准；豆包只承诺当前官方 [Ark 图片生成 API](https://api.volcengine.com/api-docs/view?action=ImageGenerations&serviceCode=ark&version=2024-01-01) 可验证的 direct 语义。
 
-每个图片 binding 都必须有请求序列化、其真实 operation mode、partial output、usage、本地取消和终态 fixture；只有声明 remote cancel 的 binding 才测试远端取消。内建范围对齐 PI 的 OpenRouter Images，并增加 Qwen/Alibaba Model Studio 与豆包/Volcengine Ark Seedream。豆包图片接口参考：
+每个图片 binding 都必须有请求序列化、其真实 operation mode、partial output、usage、本地取消和终态 fixture；只有声明 remote cancel 的 binding 才测试远端取消。OpenRouter fixture 额外锁定交错输入、text+image output、response ID、cache usage 与 token cost；Qwen fixture 锁定两个 public ID 发送同一 upstream model 但使用不同 route/mode；豆包 fixture同时覆盖显式 Model ID 与 Endpoint ID。内建范围对齐 PI 的 OpenRouter Images，并增加 Qwen/Alibaba Model Studio 与豆包/Volcengine Ark Seedream。豆包图片接口参考：
 
 - <https://api.volcengine.com/api-docs/view?action=ImageGenerations&serviceCode=ark&version=2024-01-01>
 
@@ -3823,7 +4450,10 @@ interface AiTelemetryUsageSnapshot {
   reasoningTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  cacheWriteStandardTokens?: number;
+  cacheWriteOneHourTokens?: number;
   totalTokens?: number;
+  serviceTier?: string;
   generatedImages?: number;
   outputMegapixels?: number;
 }
@@ -3851,7 +4481,7 @@ type AiTelemetryEvent =
     })
   | (AiTelemetryEventBase & {
       type: 'request_finished';
-      status: ResponseStatus;
+      status: ResponseStatus | 'detached';
       durationMs: number;
       usage?: AiTelemetryUsageSnapshot;
       cost?: AiTelemetryCostSnapshot;
@@ -3891,7 +4521,7 @@ interface AiTelemetrySink {
 
 ```text
 duoduo-ai providers
-duoduo-ai models [provider]
+duoduo-ai models [provider] [--available]
 duoduo-ai models refresh [provider]
 duoduo-ai auth status [provider]
 duoduo-ai auth login <provider> --method <api_key|oauth|ambient_config>
@@ -3899,7 +4529,79 @@ duoduo-ai auth logout <provider> [--revoke-remote]
 duoduo-ai diagnose <provider> <model>
 ```
 
-CLI 通过公共 runtime/auth API 和注入的 CredentialStore 实现，不创建第二套 `auth.json`。本地单用户模式使用明确的 `subjectId = 'local-cli'`，`--account` 选择 credential slot；嵌入服务时由宿主提供 subject 映射。诊断命令默认只检查注册、认证、目录和网络配置；付费模型请求必须通过显式参数开启。
+CLI 既提供可注入 library runner，也提供可独立跨进程使用的 Node binary，二者走同一 assembly，不创建第二套 `auth.json`：
+
+```ts
+interface NodeCliPaths {
+  stateDirectory: string;
+  configFile: string;
+  credentialDirectory: string;
+  catalogDirectory: string;
+}
+
+interface CredentialMasterKeySource {
+  readonly identityLifetime: 'cross-runtime';
+  active(
+    signal?: AbortSignal,
+  ): Promise<
+    | { status: 'available'; keyId: string; key: SecretValue }
+    | { status: 'unavailable'; retryable: boolean }
+  >;
+  byId(
+    keyId: string,
+    signal?: AbortSignal,
+  ): Promise<
+    | { status: 'available'; key: SecretValue }
+    | { status: 'unavailable'; retryable: boolean }
+  >;
+}
+
+interface NodeCliDependencies {
+  runtime: AiRuntime<LocalScopeHandle>;
+  interaction: AuthInteraction;
+  stdout: { write(text: string): void };
+  stderr: { write(text: string): void };
+}
+
+interface CreateNodeCliOptions {
+  paths?: Partial<NodeCliPaths>;
+  masterKeySource?: CredentialMasterKeySource;
+  environment?: EnvironmentSource;
+  clock?: Clock;
+}
+
+declare function resolveNodeCliPaths(
+  environment?: EnvironmentSource,
+): NodeCliPaths;
+declare function createAeadCredentialCodec(options: {
+  keySource: CredentialMasterKeySource;
+  algorithm?: 'AES-256-GCM';
+}): CredentialCodec;
+declare function createFileCredentialStore(options: {
+  directory: string;
+  codec: CredentialCodec;
+  storeNamespace: string;
+}): CredentialStore;
+declare function createFileCatalogStore(options: {
+  directory: string;
+  clock?: Clock;
+}): CatalogStore;
+declare function createNodeCliDependencies(
+  options?: CreateNodeCliOptions,
+): Promise<NodeCliDependencies>;
+declare function runCli(
+  argv: readonly string[],
+  dependencies: NodeCliDependencies,
+): Promise<number>;
+```
+
+默认 state directory：macOS 为 `~/Library/Application Support/duoduo-ai`，Linux 为 `${XDG_STATE_HOME:-~/.local/state}/duoduo-ai`，Windows 为 `%LOCALAPPDATA%\duoduo-ai`；`DUODUO_AI_HOME` 可显式覆盖。`config.json` 只保存 Provider 非秘密配置、默认 region/account 与 allowlist；credential record 必须使用正文的 sealer/codec，catalog 使用独立公开元数据 store。目录 0700、文件 0600（Windows 使用等价当前用户 ACL），拒绝 symlink、错误 owner 和越界相对路径。
+
+默认 master-key 顺序为：系统 credential vault 中名为 `duoduo-ai/master-key` 的随机 256-bit key → headless 环境显式 `DUODUO_AI_MASTER_KEY`（base64url 32 bytes）→ 交互式 passphrase 经 Argon2id + 每机 salt 派生。环境 key 永不写盘；passphrase 永不缓存到文件；平台 vault 不可用且命令非交互/无 env key 时，凭据相关命令以 `CREDENTIAL_CODEC_KEY_UNAVAILABLE` 失败，绝不创建 plaintext store 或把 key 与 ciphertext 同目录保存。keyring 轮换保留未迁移 record 的旧 key ID，成功打开后在同一 store 锁/CAS 内 reseal 到 active key。
+
+独立 binary 的 assembly 固定为：解析路径/非秘密 config → 建立 key source 与 file stores → `builtinProviders()` 显式注册 38 个 Provider → 从 Provider auth descriptors/contract manifests 构造默认拒绝的 NetworkPolicy allowlist → 建立 `LocalScopeAuthority` 和 local ambient/override policy → 调用 `runCli()` → finally dispose。`subjectId='local-cli'`，`--account` 选择 credential slot。`models` 默认走无认证 inventory 并标记 availability unknown，`--available` 才走 scope-aware models API；`models refresh` 要求可解析 credential。诊断默认只检查注册、认证、目录和网络配置；付费请求必须同时传 `--allow-paid` 与显式预算。嵌入服务只调用 `runCli()` 并提供自己的 scope/dependencies，不能复用 local subject 映射。
+
+<a id="public-exports"></a>
 
 ## 公共导出
 
@@ -3926,20 +4628,182 @@ CLI 通过公共 runtime/auth API 和注入的 CredentialStore 实现，不创�
 
 根入口只导出 core types、stream contract、runtime 工厂、`secret(value)` 安全构造器和纯函数；任何 reveal API 都不公开。`images` 导出图片领域类型、`ImageOperationCodec`/`OperationCredentialDigestDriver` 端口与 package-owned `createOperationCredentialVerifier()`，但不导出能直接 materialize `SecretValue` 的函数。裸 `providers`/`protocols` subpath 导出各自的基础端口、declaration-merging map 与通用工厂，wildcard 才是具体实现；`transport` 导出 Web-platform driver/NetworkPolicy 端口，`transport/node` 才导出 proxy、Node WebSocket/SDK driver。Provider catalog、SDK、OAuth flow、Node filesystem、代理和 CLI 不得从根入口被静态拉入。
 
+根入口的 value exports 精确为：`createAi`、`secret`、`toAssistantMessage`、`parseToolArguments`、`validateToolArguments`、`validateToolCall`、`isContextOverflowError`、`calculateCost`、`calculateImageCost`、`estimateContextTokens`、`parseRetryAfter` 与 `computeRetryDelay`；其余为 core/Runtime 类型。所有 helper 都是确定性纯函数，接收显式 model snapshot/options，不读 Provider registry、环境或时钟；retry jitter 接收显式随机样本。通用可写 EventStream、secret reveal、raw JSON repair、Provider error detector 不从根导出，分别由 Runtime、auth wrapper 和 protocol contract 拥有。
+
+每个 Provider subpath 必须导出同名 `...ProviderOptions`，即使第一版只有 `id/baseUrl` 两项；下表冻结 factory 与 typed ref helper 的准确名称：
+
+| `providers/*`            | Factory                        | Chat ref helper（有图片时另导出 `...ImageModelRef`） |
+| ------------------------ | ------------------------------ | ---------------------------------------------------- |
+| `amazon-bedrock`         | `amazonBedrockProvider`        | `amazonBedrockModelRef`                              |
+| `ant-ling`               | `antLingProvider`              | `antLingModelRef`                                    |
+| `anthropic`              | `anthropicProvider`            | `anthropicModelRef`                                  |
+| `azure-openai-responses` | `azureOpenAiResponsesProvider` | `azureOpenAiResponsesModelRef`                       |
+| `cerebras`               | `cerebrasProvider`             | `cerebrasModelRef`                                   |
+| `cloudflare-ai-gateway`  | `cloudflareAiGatewayProvider`  | `cloudflareAiGatewayModelRef`                        |
+| `cloudflare-workers-ai`  | `cloudflareWorkersAiProvider`  | `cloudflareWorkersAiModelRef`                        |
+| `deepseek`               | `deepseekProvider`             | `deepseekModelRef`                                   |
+| `fireworks`              | `fireworksProvider`            | `fireworksModelRef`                                  |
+| `github-copilot`         | `githubCopilotProvider`        | `githubCopilotModelRef`                              |
+| `google`                 | `googleProvider`               | `googleModelRef`                                     |
+| `google-vertex`          | `googleVertexProvider`         | `googleVertexModelRef`                               |
+| `groq`                   | `groqProvider`                 | `groqModelRef`                                       |
+| `huggingface`            | `huggingfaceProvider`          | `huggingfaceModelRef`                                |
+| `kimi-coding`            | `kimiCodingProvider`           | `kimiCodingModelRef`                                 |
+| `minimax`                | `minimaxProvider`              | `minimaxModelRef`                                    |
+| `minimax-cn`             | `minimaxCnProvider`            | `minimaxCnModelRef`                                  |
+| `mistral`                | `mistralProvider`              | `mistralModelRef`                                    |
+| `moonshotai`             | `moonshotAiProvider`           | `moonshotAiModelRef`                                 |
+| `moonshotai-cn`          | `moonshotAiCnProvider`         | `moonshotAiCnModelRef`                               |
+| `nvidia`                 | `nvidiaProvider`               | `nvidiaModelRef`                                     |
+| `openai`                 | `openAiProvider`               | `openAiModelRef`                                     |
+| `openai-codex`           | `openAiCodexProvider`          | `openAiCodexModelRef`                                |
+| `opencode`               | `openCodeProvider`             | `openCodeModelRef`                                   |
+| `opencode-go`            | `openCodeGoProvider`           | `openCodeGoModelRef`                                 |
+| `openrouter`             | `openRouterProvider`           | `openRouterModelRef` / `openRouterImageModelRef`     |
+| `radius`                 | `radiusProvider`               | `radiusModelRef`                                     |
+| `together`               | `togetherProvider`             | `togetherModelRef`                                   |
+| `vercel-ai-gateway`      | `vercelAiGatewayProvider`      | `vercelAiGatewayModelRef`                            |
+| `xai`                    | `xAiProvider`                  | `xAiModelRef`                                        |
+| `xiaomi`                 | `xiaomiProvider`               | `xiaomiModelRef`                                     |
+| `xiaomi-token-plan-ams`  | `xiaomiTokenPlanAmsProvider`   | `xiaomiTokenPlanAmsModelRef`                         |
+| `xiaomi-token-plan-cn`   | `xiaomiTokenPlanCnProvider`    | `xiaomiTokenPlanCnModelRef`                          |
+| `xiaomi-token-plan-sgp`  | `xiaomiTokenPlanSgpProvider`   | `xiaomiTokenPlanSgpModelRef`                         |
+| `zai`                    | `zaiProvider`                  | `zaiModelRef`                                        |
+| `zai-coding-cn`          | `zaiCodingCnProvider`          | `zaiCodingCnModelRef`                                |
+| `qwen`                   | `qwenProvider`                 | `qwenModelRef` / `qwenImageModelRef`                 |
+| `doubao`                 | `doubaoProvider`               | `doubaoModelRef` / `doubaoImageModelRef`             |
+
+options type 与 factory 的精确映射（也是各 subpath 的命名导出）为：
+
+```text
+amazonBedrockProvider: AmazonBedrockProviderOptions
+antLingProvider: AntLingProviderOptions
+anthropicProvider: AnthropicProviderOptions
+azureOpenAiResponsesProvider: AzureOpenAiProviderOptions
+cerebrasProvider: CerebrasProviderOptions
+cloudflareAiGatewayProvider: CloudflareAiGatewayProviderOptions
+cloudflareWorkersAiProvider: CloudflareWorkersAiProviderOptions
+deepseekProvider: DeepseekProviderOptions
+fireworksProvider: FireworksProviderOptions
+githubCopilotProvider: GitHubCopilotProviderOptions
+googleProvider: GoogleProviderOptions
+googleVertexProvider: GoogleVertexProviderOptions
+groqProvider: GroqProviderOptions
+huggingfaceProvider: HuggingfaceProviderOptions
+kimiCodingProvider: KimiCodingProviderOptions
+minimaxProvider: MinimaxProviderOptions
+minimaxCnProvider: MinimaxCnProviderOptions
+mistralProvider: MistralProviderOptions
+moonshotAiProvider: MoonshotAiProviderOptions
+moonshotAiCnProvider: MoonshotAiCnProviderOptions
+nvidiaProvider: NvidiaProviderOptions
+openAiProvider: OpenAiProviderOptions
+openAiCodexProvider: OpenAiCodexProviderOptions
+openCodeProvider: OpenCodeProviderOptions
+openCodeGoProvider: OpenCodeGoProviderOptions
+openRouterProvider: OpenRouterProviderOptions
+radiusProvider: RadiusProviderOptions
+togetherProvider: TogetherProviderOptions
+vercelAiGatewayProvider: VercelAiGatewayProviderOptions
+xAiProvider: XAiProviderOptions
+xiaomiProvider: XiaomiProviderOptions
+xiaomiTokenPlanAmsProvider: XiaomiTokenPlanAmsProviderOptions
+xiaomiTokenPlanCnProvider: XiaomiTokenPlanCnProviderOptions
+xiaomiTokenPlanSgpProvider: XiaomiTokenPlanSgpProviderOptions
+zaiProvider: ZaiProviderOptions
+zaiCodingCnProvider: ZaiCodingCnProviderOptions
+qwenProvider: QwenProviderOptions
+doubaoProvider: DoubaoProviderOptions
+```
+
+所有 ref helper 签名为 `(modelId: string, providerInstanceId?: string) => ModelRef<...>` 或图片等价类型，默认 instance ID 为 kind；它们不查目录、不返回 handle。`providers/all` 只导出 `builtinProviders(options?)`、`builtinProviderKinds`、`getBuiltinInventory(providerKind)`，每次调用返回新对象，不保留全局 registry。
+
+具体 protocol subpath 的准确 symbol inventory：
+
+| Protocol subpath          | Contract                        | Adapter factory                      | 持久 codec（适用时）                           |
+| ------------------------- | ------------------------------- | ------------------------------------ | ---------------------------------------------- |
+| `openai-responses`        | `openAiResponsesContract`       | `createOpenAiResponsesAdapter`       | `openAiResponsesReplayCodecs`                  |
+| `openai-chat-completions` | `openAiChatCompletionsContract` | `createOpenAiChatCompletionsAdapter` | `openAiChatCompletionsReplayCodecs`            |
+| `openai-codex-responses`  | `openAiCodexResponsesContract`  | `createOpenAiCodexResponsesAdapter`  | `openAiCodexResponsesReplayCodecs`             |
+| `azure-openai-responses`  | `azureOpenAiResponsesContract`  | `createAzureOpenAiResponsesAdapter`  | `azureOpenAiResponsesReplayCodecs`             |
+| `anthropic-messages`      | `anthropicMessagesContract`     | `createAnthropicMessagesAdapter`     | `anthropicMessagesReplayCodecs`                |
+| `google-generative-ai`    | `googleGenerativeAiContract`    | `createGoogleGenerativeAiAdapter`    | `googleGenerativeAiReplayCodecs`               |
+| `google-vertex`           | `googleVertexContract`          | `createGoogleVertexAdapter`          | `googleVertexReplayCodecs`                     |
+| `bedrock-converse-stream` | `bedrockConverseStreamContract` | `createBedrockConverseStreamAdapter` | `bedrockConverseStreamReplayCodecs`            |
+| `mistral-conversations`   | `mistralConversationsContract`  | `createMistralConversationsAdapter`  | `mistralConversationsReplayCodecs`             |
+| `pi-messages`             | `piMessagesContract`            | `createPiMessagesAdapter`            | `piMessagesReplayCodecs`                       |
+| `dashscope`               | `dashScopeContract`             | `createDashScopeAdapter`             | `dashScopeReplayCodecs`                        |
+| `ark-responses`           | `arkResponsesContract`          | `createArkResponsesAdapter`          | `arkResponsesReplayCodecs`                     |
+| `openrouter-images`       | `openRouterImagesContract`      | `createOpenRouterImagesAdapter`      | —                                              |
+| `dashscope-images`        | `dashScopeImagesContract`       | `createDashScopeImagesAdapter`       | —                                              |
+| `dashscope-image-tasks`   | `dashScopeImageTasksContract`   | `createDashScopeImageTasksAdapter`   | operation state codec 由 adapter contract 提供 |
+| `ark-images`              | `arkImagesContract`             | `createArkImagesAdapter`             | —                                              |
+
+Adapter factory 只构造无请求状态对象；SDK-backed factory 可返回 Promise 并延迟 import。没有 opaque replay 的 protocol 仍可导出空的只读 `...ReplayCodecs`，但 binding 不注册空 codec set。基础工厂和 Node 端口签名冻结为：
+
+```ts
+interface ApiKeyAuthOptions {
+  binding: AuthBindingPolicy;
+  environmentVariable: string;
+  scheme: string;
+  placement:
+    | { type: 'header'; name: string; prefix?: string }
+    | { type: 'query'; name: string };
+}
+
+declare function apiKeyAuth(options: ApiKeyAuthOptions): ProviderAuth;
+declare function defineProviderIdentity(
+  descriptor: ProviderIdentityDescriptor,
+): ProviderIdentityDescriptor;
+
+interface OpenAiCompatibleProviderOptions<
+  TProtocol extends 'openai-chat-completions' | 'openai-responses',
+> {
+  id: ProviderInstanceId;
+  name: string;
+  baseUrl: URL;
+  protocol: TProtocol;
+  auth: ProviderAuth;
+  catalogCompatibilityVersion: string;
+  contractManifest: ProviderContractManifest;
+  defaultProfile: ModelProtocolProfile<TProtocol>;
+  profiles?: readonly ModelProtocolProfile<TProtocol>[];
+  models: readonly AdditionalModelInput<TProtocol>[];
+  headers?: Readonly<Record<string, string>>;
+}
+
+declare function createOpenAiCompatibleProvider<
+  TProtocol extends 'openai-chat-completions' | 'openai-responses',
+>(options: OpenAiCompatibleProviderOptions<TProtocol>): Provider;
+
+declare function createProxyFetchTransportDriver(options: {
+  proxyUrl: URL;
+  noProxy?: readonly string[];
+}): TransportDriver;
+declare function createNodeWebSocketTransportDriver(options?: {
+  connectTimeoutMs?: number;
+  proxyUrl?: URL;
+}): TransportDriver;
+```
+
+`apiKeyAuth()` 的 placement 自动成为 protected field，binding origin 仍必须显式给出；query key 永不出现在 diagnostics。通用 OpenAI factory 把 base URL、headers、模型/profile 与 compatibility version 全部放入 canonical configuration identity，拒绝 secret-shaped header、未知 profile、空模型和未覆盖该 origin 的 auth binding。file store/CLI runner 的签名见 CLI 章节；测试实现不得从生产 Provider subpath 导出。
+
+<a id="testing"></a>
+
 ## 测试设计
 
 ### 测试分层
 
-- `core`：判别联合、model/ref/handle 不变式、deferred tool 状态、ReplayScope/source、FinishReason、Usage/Cost 和错误脱敏。
+- `core`：判别联合、model/ref/handle 不变式、deferred tool 状态、tool argument 解析/schema 校验、ReplayScope/source、FinishReason、1h cache/service-tier Usage/Cost 和错误脱敏。
 - `stream`：Runtime-owned sink 与 attempt-local retry、块交错/配对及 block replay、唯一终态、partial response、iterator 先注册与 result-first 永久 drain、late observer 拒绝、提前 return、取消、背压和 detached task 失败。
-- `transport`：FinalRequestTarget 的 protected query/header 冲突、secret materialize/signing seam、重定向再授权、SSE 分片、UTF-8 边界、WebSocket、超时、重试、`Retry-After`、代理和 abort。
+- `transport`：FinalRequestTarget 的 protected query/header 冲突、trusted request mutation 重校验、secret materialize/signing seam、重定向再授权、SSE 分片、UTF-8 边界、WebSocket、dispatch phase、idempotency、`Retry-After`、代理和 abort。
 - `context`：跨 Provider reasoning/replay 剥离、图片降级、tool ID 映射、deferred eager/strict 策略、孤立 tool result 与失败 turn 过滤。
 - `auth`：API Key 优先级、环境 key 的 process-local keyed identity/轮换/状态归一、ambient lifetime 声明、action-level scope authority、scope fingerprint active/old key 生成与跨实例验证、五个 OAuth flow、AbortSignal、跨进程 refresh lease 的 takeover/lost-lease/heartbeat/hard deadline、带 deadline 的 waiter、token rotation 后 commit 前崩溃、revision/sealed tombstone 防 ABA、完整 PersistedCredentialRecord/AAD/header-payload 自校验、auth-binding origin、ambient/override policy、文件权限/锁/路径、logout/revoke、审计与错误脱敏。
 - `catalog`：manifest/schema/digest、多来源交集、字段级合并、scope-aware handle 身份与跨租户隔离、稳定 catalog binding fingerprint 跨 Runtime 命中及不兼容 version miss、environment/process-local identity 禁止持久 cache、Radius providerState 校验/动态刷新、store-authoritative ticket/TTL/stale writer、versioned payload codec、部分 list report、刷新失败、Credential 过滤与安全字段不可覆盖。
 - `session`：并发 acquisition、credential replacement 后不复用、在途 cleanup、TTL、重复 cleanup、部分 dispose 失败和 runtime dispose。
-- `protocols`：typed options/compatibility parser 与分层 merge、payload 转换、事件录制 fixture、partial tool JSON、reasoning/replay codec 显式 binding 注册、重复 tuple 冲突、旧版本只读与未知 codec/version 安全剥离、usage、terminal error 和 abort。
+- `protocols`：typed options/compatibility/parser 与逐模型 profile/reasoning map、分层 merge、payload 转换、事件录制 fixture、partial tool JSON、context overflow、replay codec 显式 binding 注册、重复 tuple 冲突、旧版本只读与未知 codec/version 安全剥离、typed terminal 和 abort。
 - `providers`：规范矩阵每个 binding 的请求/流 fixture，加每个认证、endpoint、catalog 与兼容 profile 分支断言。
-- `images`：scope-aware 动静态目录/handle、resolved input/generation/resume options、model async flag 与 direct/resumable binding 双向一致、create/poll/cancel protected target、Runtime-owned sink、文生图、参考图、多结果、Usage/ImageCost/diagnostics、显式 operation serialize/parse、environment/process-local auth 的 serialize 拒绝、async resume preflight、partial output、错误和取消；claims union、必填 TTL/skew、token 篡改、scope/credential/auth/config/model/catalog/operation-binding 不匹配必须 fail closed。override operation 还覆盖缺 verifier 时不启动 adapter/Provider request、同 secret 跨 Runtime 恢复、错误 type/scheme/secret、proof 篡改、active key 创建、旧 key 轮换验证、未知/撤销 key、constant-time compare facade 与 driver 不记录 canonical bytes。
+- `images`：scope-aware 动静态目录/handle、ordered multimodal input、text/image output、response ID/token cost、model async flag 与 direct/resumable binding 双向一致、create/poll/cancel protected target、detach handoff、显式 operation serialize/parse/resume 边界、partial/typed terminal；claims union、TTL/skew、token 篡改及 scope/credential/auth/config/profile/model/operation-binding 不匹配全部 fail closed。override operation 还覆盖 verifier preflight、同 secret 跨 Runtime、proof/key rotation与 constant-time compare。
 - `cli`：命令解析、非互动输出、敏感值隐藏和付费请求开关。
 - `consumer fixture`：只从公共 export map 编译一个未来 Agent 风格调用方，禁止深度导入 `src/`。
 
@@ -3953,6 +4817,109 @@ CLI 通过公共 runtime/auth API 和注入的 CredentialStore 实现，不创�
 - 可注入 fixture transport
 - 流事件序列断言
 - Provider/Protocol contract suite factory
+
+上述名称不是占位符，公共 seam 冻结如下：
+
+```ts
+interface ScriptedProtocolChunk {
+  afterMs?: number;
+  event: ProtocolContentEvent;
+}
+
+interface FauxResponseScript {
+  chunks: readonly ScriptedProtocolChunk[];
+  terminal: ProtocolTerminal;
+}
+
+interface FauxCallRecord {
+  callIndex: number;
+  modelId: string;
+  context: Readonly<AiContext>;
+  options: Readonly<ResolvedStreamOptions>;
+  startedAt: number;
+  aborted: boolean;
+}
+
+interface FauxController {
+  setResponses(scripts: readonly FauxResponseScript[]): void;
+  appendResponse(script: FauxResponseScript): void;
+  pendingCount(): number;
+  callCount(): number;
+  calls(): readonly FauxCallRecord[];
+  reset(): void;
+}
+
+interface FauxProviderFixture {
+  provider: Provider;
+  controller: FauxController;
+  modelRef: ModelRef<'faux'>;
+}
+
+interface FixtureTransportResponse {
+  status: number;
+  headers?: Readonly<Record<string, string>>;
+  bodyChunks: readonly Uint8Array[];
+  chunkDelayMs?: number;
+  failure?: TransportDriverFailure;
+}
+
+interface RedactedFixtureRequest {
+  method: string;
+  origin: string;
+  pathname: string;
+  headerNames: readonly string[];
+  bodyDigest?: string;
+}
+
+declare function createFauxProvider(options?: {
+  id?: string;
+  models?: readonly AdditionalModelInput<'faux'>[];
+  initialResponses?: readonly FauxResponseScript[];
+}): FauxProviderFixture;
+
+declare function fauxTextResponse(
+  text: string,
+  options?: { paceMs?: number; usage?: Usage; cost?: Cost },
+): FauxResponseScript;
+declare function fauxToolResponse(input: {
+  id: string;
+  name: string;
+  rawArguments: string;
+  paceMs?: number;
+  usage?: Usage;
+}): FauxResponseScript;
+declare function fauxFailure(input: {
+  error: AiError;
+  afterChunks?: readonly ScriptedProtocolChunk[];
+}): FauxResponseScript;
+
+interface FixtureTransport extends TransportDriver {
+  enqueue(response: FixtureTransportResponse): void;
+  requests(): readonly RedactedFixtureRequest[];
+  pendingCount(): number;
+}
+
+interface ContractTestCase {
+  id: string;
+  run(): Promise<void>;
+}
+
+declare function createProtocolContractSuite(input: {
+  protocol: string;
+  createAdapter(): Promise<ProtocolAdapter> | ProtocolAdapter;
+  fixtures: readonly string[];
+}): readonly ContractTestCase[];
+
+declare function createProviderContractSuite(input: {
+  createProvider(): Provider;
+  manifest: ProviderContractManifest;
+  fixtureTransport: FixtureTransport;
+}): readonly ContractTestCase[];
+```
+
+response script 在 request producer 启动时按 FIFO 原子保留；并发请求各拿一个，队列为空返回确定的 `FAUX_RESPONSE_QUEUE_EMPTY` 测试错误。`setResponses()` 只替换尚未保留的队列，不影响 in-flight script；`appendResponse()` 追加；`reset()` 要求无 in-flight，否则失败。`afterMs` 使用 injected fake clock，0 表示同一 microtask，abort 取消未发布 chunk 并产生 cancelled terminal。controller 记录调用次数、顺序与经过冻结/脱敏的 context/options，不记录 credential；返回数组不可修改。usage/cache/service-tier/cost 直接由 script terminal 模拟，因此可以确定性覆盖 Anthropic 1h cache、paced chunks、partial failure、result-first drain 和 retry attempt。所有 response factory 都只构造 script，不创建全局 registry。
+
+contract suite factory 返回 runner-neutral cases，不静态依赖 Vitest；package 自己用 `it.each` 执行，第三方 Provider 可接入任意测试框架。Protocol suite 固定默认值/profile/reasoning map、tool schema、overflow、terminal、transport phase、abort 与 replay；Provider suite 从 manifest 自动展开每个 auth/endpoint/profile/fixture ID，并在有声明无 fixture、fixture 未被消费或 source locator 缺失时失败。
 
 默认 `pnpm test` 只运行确定性测试，不读取用户真实凭证或访问付费 API。`test/live` 需显式命令和对应环境变量，并将预算上限与使用的模型记录在文档中。
 
@@ -4023,6 +4990,8 @@ package 使用 SemVer。首次声明稳定前可以发布 `0.x`，但 workspace 
 
 新增 Provider/protocol/image operation mode 使用 minor，并更新 Provider/协议矩阵、public exports、live allowlist 与 contract fixtures。`providers/all` 的集合增加属于 minor；单 Provider subpath 的依赖体积回归和意外 SDK eager import 视为发布阻断。第一版明确没有 PI legacy compatibility 层，未来也不为保留错误设计添加隐藏全局注册表。
 
+<a id="implementation-gates"></a>
+
 ## 实现顺序
 
 实现可在内部分片，但本阶段的交付终点是完整 `@duoduo/ai`，不把只有少量 Provider 的中间状态宣称为完成。每个 gate 必须在进入下一阶段前通过 package 范围的 format check、lint、typecheck、test、build 和 `git diff --check`。
@@ -4034,16 +5003,46 @@ package 使用 SemVer。首次声明稳定前可以发布 `0.x`，但 workspace 
 5. **Extended Provider gate**：在基线已包含 MiniMax 双区的前提下，实现 Qwen 四种文本 binding、豆包 Responses/Ark、Qwen direct/resumable 图片和 Seedream direct 图片；所有协议选择、区域 endpoint、原生/create/poll/cancel route 和 explicit model 行为由 fixture 固定。
 6. **Productization gate**：实现 CLI、目录生成器、公共文档、live-test harness 与只使用公共 exports 的 consumer compile fixture；完成全仓验证，但不修改 `agent` workspace。
 
+<a id="gate-evidence"></a>
+
+## Gate 追踪与验收证据
+
+实现状态必须记录在 `packages/ai/IMPLEMENTATION-STATUS.md`，每个 gate 只有 `not-started | in-progress | passed` 三种状态；只有表中产物存在且命令在当前 commit 成功才可标 `passed`。当前文档完成时六项均为 `not-started`。
+
+| Gate              | 必读章节                                         | 必须存在的产物                                                                             | 最小专项证据                                                                    |
+| ----------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Foundation        | 核心领域协议、流协议、错误协议、测试契约         | core/stream/testing public types、Faux controller、consumer type fixture                   | `pnpm --filter @duoduo/ai test -- --run core stream testing`                    |
+| Runtime           | Runtime API、认证、目录、传输、session、安全模型 | registry、scope/store/codec、catalog、transport/session implementations 与 threat fixtures | `pnpm --filter @duoduo/ai test -- --run runtime auth catalog transport session` |
+| Protocol          | ProtocolAdapter、wire matrix、replay、context    | 12 个文本 adapter subpath、profile registry、manifest/recorded fixtures                    | `pnpm --filter @duoduo/ai test -- --run protocols context`                      |
+| Baseline Provider | PI 基线、Provider 矩阵、OAuth、OpenRouter Images | 36 个 PI Provider、5 个 OAuth、Radius discovery、OpenRouter Images；manifest coverage 100% | `pnpm --filter @duoduo/ai test -- --run providers baseline-parity`              |
+| Extended Provider | Qwen、MiniMax、豆包、图片任务恢复                | Qwen/豆包 subpath、双区 MiniMax、Wan direct/task 与 Seedream fixtures                      | `pnpm --filter @duoduo/ai test -- --run providers extended images`              |
+| Productization    | CLI、公共导出、live 规范、版本发布               | bin、file stores、catalog generator、API report、public-only consumer、live harness        | `pnpm --filter @duoduo/ai test -- --run cli exports catalog-generator consumer` |
+
+每个 gate 还必须运行统一证据集：
+
+```text
+pnpm --filter @duoduo/ai format:check
+pnpm --filter @duoduo/ai lint
+pnpm --filter @duoduo/ai typecheck
+pnpm --filter @duoduo/ai test
+pnpm --filter @duoduo/ai build
+pnpm --filter @duoduo/ai api:check
+pnpm --filter @duoduo/ai manifest:check
+git diff --check
+```
+
+`api:check` 对 export map 与本文 symbol inventory；`manifest:check` 对 Provider 矩阵、profile/auth/endpoint branches、fixture IDs 和 pinned sources。每次结果写入 status 文件的 commit、UTC 时间、Node/pnpm 版本和命令 exit code，不粘贴 secret 或完整模型输出。最终 Productization 还须在临时移走 `vendor/pi` 的环境中重跑 build/test，证明 vendor 仅用于开发期 parity 审计。
+
 ## 验收标准
 
 1. `@duoduo/ai` 以单 workspace package 存在，且内部模块符合本文档的依赖方向。
 2. 根入口无 Provider 注册、环境变量读取、OAuth 加载或目录聚合副作用。
 3. 规范矩阵中的 36 个 PI 文本 Provider 全部有一等导入，Qwen 和豆包也有一等导入，MiniMax 同时覆盖国际与中国区。
 4. 所有 Provider 可独立注册，`providers/all` 可一次注册完整集合。
-5. 每个 Provider × protocol binding 至少有请求和流 fixture；所有 protocol 通过 typed defaults/compatibility、流、错误、取消、reasoning/replay、tool call 和 usage 契约测试。
+5. 每个 Provider × protocol binding manifest 覆盖所有 auth/endpoint/profile 分支并至少有请求、流和错误 fixture；逐模型 compatibility/reasoning map、typed terminal、context overflow、tool validation、replay 与 usage/cost 全部通过契约测试。
 6. Anthropic、OpenAI Codex、GitHub Copilot、xAI、Radius OAuth，以及 action-level scope authority、完整 sealed record、lease fencing/CAS token 刷新、登录和退出具有确定性测试；Google/AWS ambient auth 不伪装为 OAuth。
 7. 单/多来源静态目录 manifest 与 digest、Radius 动态刷新/providerState、scope-bound handle、完整缓存身份/租户隔离、跨 Runtime 稳定 catalog binding key、environment/process-local identity 不落持久 cache、store-authoritative ticket/TTL、字段级 override、stale write、失败保留和安全字段保护具有确定性测试。
-8. OpenRouter Images、Qwen 图片能力和豆包 Seedream 通过独立图片模型/binding/Runtime-owned stream 提供统一调用；model async flag 与 direct/resumable binding 双向一致，只有真实任务 API 使用 opaque operation。结果含 model/time/usage/cost/diagnostics，并拒绝篡改或跨 scope/credential/config/operation-binding 恢复。Qwen override 异步任务能用同一持久 scope/verifier/codec keyring 跨 Runtime 恢复，必填 TTL 允许旧 key 有界退役；environment/process-local auth 只能生成进程内 operation，错误或缺失凭据与不可用 key 均在任何 operation poll 前 fail closed。
+8. OpenRouter Images 保留 ordered text/image input、text+image output、response ID 和 token/cache cost；Qwen `wan2.6-image` direct 与 `wan2.6-image@task` 发送同一 upstream model 但使用各自官方 route；豆包支持显式图片 Model/Endpoint ID。任务流支持安全 detach、serialize/parse/resume、remote cancel 分离，并拒绝篡改或跨 scope/credential/config/profile/operation-binding 恢复。
 9. 默认测试不访问真实 Provider，live tests 需显式开启。
 10. 在 `vendor/pi` 不存在的环境中，包仍能独立安装、类型检查、测试和构建。
 11. `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`git diff --check` 全部通过。
@@ -4051,6 +5050,8 @@ package 使用 SemVer。首次声明稳定前可以发布 `0.x`，但 workspace 
 13. session cleanup/runtime dispose 释放全部协议资源，且在并发与失败路径保持幂等。
 14. consumer compile fixture 覆盖所有公共端口/typed module augmentation 且只使用公共 export map；本阶段没有为了演示而修改 Agent loop。
 15. Adapter 无法取得 raw credential、secret reveal、endpoint/auth query/header 或任意 signing 权限；只有绑定 target 的 transport seam 可为发送 materialize credential，package-owned auth/record/operation wrappers 可在各自窄用途内 materialize。外部 `TransportDriver` 与 `OperationCredentialDigestDriver` 是明确记录在威胁模型中的可信计算基，前者只能发送已绑定请求，后者只能处理带 domain separation 的 canonical credential bytes，二者都不得保留或记录秘密。
+16. 独立 CLI 使用 sealed file store 和跨进程 key source；登录后新进程可读取同一 credential，key 不可用时 fail closed，inventory 可在未登录时列出但不能伪装成 available handle。
+17. Runtime resource policy、transport dispatch phase/retry safety、credential/image codec 判别结果和 trusted request customization 都有边界、失败与 secret-leak fixture。
 
 ## 开放问题
 
