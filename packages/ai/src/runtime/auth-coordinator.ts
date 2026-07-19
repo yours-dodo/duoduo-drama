@@ -1,7 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
-import { AiRuntimeError } from '../core/errors.js';
-import type { ProviderSnapshot } from '../core/models.js';
 import type { RequestCredentialOverride } from '../auth/api-key.js';
 import type {
   ActiveCredentialRecord,
@@ -16,12 +14,24 @@ import type {
   AuthLogoutResult,
   AuthStatus,
 } from '../auth/login.js';
+import type {
+  AuthFlowContext,
+  AuthRuntimeOptions,
+  OAuthCredential,
+  OAuthFlow,
+} from '../auth/oauth.js';
 import type { CredentialScopeAuthority } from '../auth/scope-authority.js';
-import type { ChatTransportBinding } from './registry.js';
+import { AiRuntimeError } from '../core/errors.js';
+import type { ProviderSnapshot } from '../core/models.js';
+import type { ChatTransportBinding, ProviderAuth } from './registry.js';
+
+const REFRESH_LEASE_DURATION_MS = 30_000;
+const REFRESH_FAILURE_BACKOFF_MS = 1_000;
 
 export interface ProviderAuthDescription {
   readonly snapshot: ProviderSnapshot;
   readonly transport?: ChatTransportBinding;
+  readonly auth?: ProviderAuth;
 }
 
 export interface StoredRequestAuth {
@@ -46,6 +56,7 @@ export interface AuthCoordinator<TScopeHandle> {
 export function createAuthCoordinator<TScopeHandle>(options: {
   readonly store: CredentialStore;
   readonly scopeAuthority: CredentialScopeAuthority<TScopeHandle>;
+  readonly auth?: AuthRuntimeOptions;
   readonly onCredentialReplaced?: (
     credentialInstanceId: string,
   ) => Promise<void> | void;
@@ -53,6 +64,11 @@ export function createAuthCoordinator<TScopeHandle>(options: {
     providerInstanceId: string,
   ) => ProviderAuthDescription | undefined;
 }): AuthCoordinator<TScopeHandle> {
+  const refreshLeaseOwnerId = randomUUID();
+  const defaultRandom = Object.freeze({
+    bytes: (length: number) => randomBytes(length),
+  });
+
   const resolveScope = async (
     providerInstanceId: string,
     handle: TScopeHandle,
@@ -97,6 +113,28 @@ export function createAuthCoordinator<TScopeHandle>(options: {
     };
   };
 
+  const makeFlowContext = (
+    provider: ProviderAuthDescription,
+    signal?: AbortSignal,
+  ): AuthFlowContext => {
+    if (!options.auth)
+      throw new AiRuntimeError(
+        'AUTH_TRANSPORT_UNAVAILABLE',
+        'auth',
+        'OAuth auth transport and network policy are not configured',
+      );
+    return Object.freeze({
+      provider: provider.snapshot,
+      signal: signal ?? new AbortController().signal,
+      transport: options.auth.transport,
+      networkPolicy: options.auth.networkPolicy,
+      clock: Object.freeze({
+        now: (clockSignal?: AbortSignal) => options.store.now(clockSignal),
+      }),
+      random: options.auth.random ?? defaultRandom,
+    });
+  };
+
   const apiValue: AuthApi<TScopeHandle> = {
     status: async (providerInstanceId, handle, callOptions) => {
       requireProvider(options.getProvider(providerInstanceId));
@@ -116,12 +154,6 @@ export function createAuthCoordinator<TScopeHandle>(options: {
       callOptions,
     ) => {
       const provider = requireProvider(options.getProvider(providerInstanceId));
-      if (method !== 'api_key')
-        throw new AiRuntimeError(
-          'AUTH_METHOD_UNSUPPORTED',
-          'auth',
-          `auth method is not supported: ${method}`,
-        );
       const binding = makeAuthBinding(provider);
       const scope = await resolveScope(
         providerInstanceId,
@@ -129,29 +161,46 @@ export function createAuthCoordinator<TScopeHandle>(options: {
         'manage_auth',
         callOptions?.signal,
       );
-      const key = await promptApiKey(interaction, providerInstanceId);
+      const signal = callOptions?.signal ?? interaction.signal;
+      const nextCredential =
+        method === 'api_key'
+          ? {
+              credential: {
+                type: 'api_key' as const,
+                secret: await promptApiKey(interaction, providerInstanceId),
+                scheme:
+                  callOptions?.secretScheme ??
+                  provider.transport?.credential?.defaultScheme ??
+                  'Bearer',
+              },
+              catalogAuth: { catalogVisibilityFingerprint: 'default' },
+            }
+          : method === 'oauth'
+            ? await requireOAuthFlow(provider).login(
+                interaction,
+                makeFlowContext(provider, signal),
+              )
+            : undefined;
+      if (!nextCredential)
+        throw new AiRuntimeError(
+          'AUTH_METHOD_UNSUPPORTED',
+          'auth',
+          `auth method is not supported: ${method}`,
+        );
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        const current = await options.store.read(scope, callOptions?.signal);
-        const next = {
-          state: 'active' as const,
-          credential: {
-            type: 'api_key' as const,
-            secret: key,
-            scheme:
-              callOptions?.secretScheme ??
-              provider.transport?.credential?.defaultScheme ??
-              'Bearer',
-          },
-          credentialInstanceId: randomUUID(),
-          catalogAuth: { catalogVisibilityFingerprint: 'default' },
-          authBinding: binding,
-          authState: { status: 'ready' as const },
-        };
+        const current = await options.store.read(scope, signal);
         const result = await options.store.compareAndSet(
           scope,
           current.revision,
-          next,
-          callOptions?.signal,
+          {
+            state: 'active',
+            credential: nextCredential.credential,
+            credentialInstanceId: randomUUID(),
+            catalogAuth: nextCredential.catalogAuth,
+            authBinding: binding,
+            authState: { status: 'ready' },
+          },
+          signal,
         );
         if (result.status === 'applied') {
           if (current.state === 'active')
@@ -167,7 +216,7 @@ export function createAuthCoordinator<TScopeHandle>(options: {
       );
     },
     logout: async (providerInstanceId, handle, callOptions) => {
-      requireProvider(options.getProvider(providerInstanceId));
+      const provider = requireProvider(options.getProvider(providerInstanceId));
       const scope = await resolveScope(
         providerInstanceId,
         handle,
@@ -184,9 +233,31 @@ export function createAuthCoordinator<TScopeHandle>(options: {
           { state: 'empty' },
           callOptions?.signal,
         );
-        if (result.status === 'applied') {
-          await options.onCredentialReplaced?.(current.credentialInstanceId);
-          return logoutResult('removed', callOptions?.revokeRemote);
+        if (result.status !== 'applied') continue;
+        await options.onCredentialReplaced?.(current.credentialInstanceId);
+        if (!callOptions?.revokeRemote) return logoutResult('removed', false);
+        if (
+          current.credential.type !== 'oauth' ||
+          !provider.auth?.oauth?.revoke
+        )
+          return logoutResult('removed', true);
+        try {
+          await provider.auth.oauth.revoke(
+            current.credential,
+            makeFlowContext(provider, callOptions.signal),
+          );
+          return Object.freeze({ local: 'removed', remote: 'revoked' });
+        } catch {
+          return Object.freeze({
+            local: 'removed',
+            remote: 'failed',
+            diagnostics: Object.freeze([
+              Object.freeze({
+                code: 'REMOTE_REVOKE_FAILED',
+                message: 'remote credential revocation failed',
+              }),
+            ]),
+          });
         }
       }
       throw new AiRuntimeError(
@@ -209,26 +280,19 @@ export function createAuthCoordinator<TScopeHandle>(options: {
         'use',
         signal,
       );
-      const record = await options.store.read(scope, signal);
-      const active = requireReadyRecord(record);
-      if (active.authBinding.fingerprint !== binding.fingerprint)
-        throw new AiRuntimeError(
-          'CREDENTIAL_AUTH_BINDING_MISMATCH',
-          'auth',
-          'stored credential is not valid for the current provider configuration',
+      let active = requireReadyRecord(await options.store.read(scope, signal));
+      assertAuthBinding(active, binding);
+      if (active.credential.type === 'oauth')
+        active = await resolveOAuthCredential(
+          provider,
+          scope,
+          active,
+          binding,
+          signal,
         );
-      if (active.credential.type !== 'api_key')
-        throw new AiRuntimeError(
-          'CREDENTIAL_TYPE_UNSUPPORTED',
-          'auth',
-          'stored credential type cannot authorize this request',
-        );
+      const override = requestOverride(provider, active);
       return Object.freeze({
-        override: Object.freeze({
-          type: 'api_key' as const,
-          secret: active.credential.secret,
-          scheme: active.credential.scheme,
-        }),
+        override,
         scope,
         credentialInstanceId: active.credentialInstanceId,
         authBindingFingerprint: active.authBinding.fingerprint,
@@ -258,6 +322,125 @@ export function createAuthCoordinator<TScopeHandle>(options: {
     },
   };
   return Object.freeze(coordinator);
+
+  async function resolveOAuthCredential(
+    provider: ProviderAuthDescription,
+    scope: CredentialScopeKey,
+    initial: ActiveCredentialRecord,
+    binding: AuthBinding,
+    signal?: AbortSignal,
+  ): Promise<ActiveCredentialRecord> {
+    const flow = requireOAuthFlow(provider);
+    let current: CredentialRecord = initial;
+    for (;;) {
+      const active = requireReadyRecord(current);
+      assertAuthBinding(active, binding);
+      if (active.credential.type !== 'oauth') return active;
+      const now = await options.store.now(signal);
+      if (active.credential.expiresAt > now + flow.refreshSkewMs) return active;
+      const acquired = await options.store.acquireRefreshLease(
+        scope,
+        active.revision,
+        {
+          ownerId: refreshLeaseOwnerId,
+          maxDurationMs: REFRESH_LEASE_DURATION_MS,
+        },
+        signal,
+      );
+      if (acquired.status === 'acquired') {
+        if (acquired.record.credential.type !== 'oauth') {
+          current = acquired.record;
+          continue;
+        }
+        current = await refreshAsLeaseOwner(
+          provider,
+          scope,
+          flow,
+          acquired.record.credential,
+          acquired.lease,
+          signal,
+        );
+        continue;
+      }
+      if (
+        acquired.reason === 'revision_changed' ||
+        acquired.reason === 'not_oauth' ||
+        acquired.reason === 'reauth_required'
+      ) {
+        current = acquired.current;
+        continue;
+      }
+      if (acquired.reason !== 'lease_held') {
+        current = acquired.current;
+        continue;
+      }
+      current = options.store.waitForChange
+        ? await options.store.waitForChange(
+            scope,
+            acquired.current.revision,
+            { notAfter: acquired.retryAt },
+            signal,
+          )
+        : await waitAndRead(scope, acquired.retryAt, signal);
+    }
+  }
+
+  async function refreshAsLeaseOwner(
+    provider: ProviderAuthDescription,
+    scope: CredentialScopeKey,
+    flow: OAuthFlow,
+    credential: OAuthCredential,
+    lease: Parameters<CredentialStore['finishRefresh']>[1],
+    signal?: AbortSignal,
+  ): Promise<CredentialRecord> {
+    try {
+      const refreshed = await flow.refresh(
+        credential,
+        makeFlowContext(provider, signal),
+      );
+      const finished = await options.store.finishRefresh(
+        scope,
+        lease,
+        {
+          credential: refreshed.credential,
+          catalogAuth: refreshed.catalogAuth,
+          authState: { status: 'ready' },
+        },
+        signal,
+      );
+      return finished.status === 'applied' ? finished.record : finished.current;
+    } catch (error) {
+      const aborted = signal?.aborted === true || isAbortError(error);
+      const finished = await options.store.finishRefresh(
+        scope,
+        lease,
+        {
+          authState: aborted
+            ? { status: 'ready' }
+            : {
+                status: 'backoff',
+                retryAt:
+                  (await options.store.now(signal)) +
+                  REFRESH_FAILURE_BACKOFF_MS,
+                errorCode: errorCode(error, 'OAUTH_REFRESH_FAILED'),
+              },
+        },
+        signal,
+      );
+      if (finished.status === 'lost') return finished.current;
+      throw error;
+    }
+  }
+
+  async function waitAndRead(
+    scope: CredentialScopeKey,
+    notAfter: number,
+    signal?: AbortSignal,
+  ): Promise<CredentialRecord> {
+    const now = await options.store.now(signal);
+    await sleep(Math.max(0, Math.min(25, notAfter - now)), signal);
+    return options.store.read(scope, signal);
+  }
 }
 
 export function makeAuthBinding(
@@ -271,8 +454,10 @@ export function makeAuthBinding(
     provider.snapshot.kind,
     provider.snapshot.id,
     provider.snapshot.configFingerprint,
+    provider.snapshot.authPolicyFingerprint,
     provider.transport?.credential?.headerName.toLowerCase() ?? null,
     provider.transport?.credential?.defaultScheme ?? null,
+    provider.transport?.credential?.variants ?? null,
     allowedOrigins,
   ]);
   return Object.freeze({
@@ -287,12 +472,11 @@ async function promptApiKey(
   interaction: AuthInteraction,
   providerInstanceId: string,
 ) {
-  const value = await interaction.promptSecret({
+  return interaction.promptSecret({
     providerInstanceId,
     method: 'api_key',
     label: 'API key',
   });
-  return value;
 }
 
 function requireProvider(
@@ -313,6 +497,16 @@ function requireProvider(
   return provider;
 }
 
+function requireOAuthFlow(provider: ProviderAuthDescription): OAuthFlow {
+  if (!provider.auth?.oauth)
+    throw new AiRuntimeError(
+      'AUTH_METHOD_UNSUPPORTED',
+      'auth',
+      'auth method is not supported: oauth',
+    );
+  return provider.auth.oauth;
+}
+
 function requireReadyRecord(record: CredentialRecord): ActiveCredentialRecord {
   if (record.state === 'empty')
     throw new AiRuntimeError(
@@ -330,6 +524,39 @@ function requireReadyRecord(record: CredentialRecord): ActiveCredentialRecord {
   return record;
 }
 
+function assertAuthBinding(
+  active: ActiveCredentialRecord,
+  binding: AuthBinding,
+): void {
+  if (active.authBinding.fingerprint !== binding.fingerprint)
+    throw new AiRuntimeError(
+      'CREDENTIAL_AUTH_BINDING_MISMATCH',
+      'auth',
+      'stored credential is not valid for the current provider configuration',
+    );
+}
+
+function requestOverride(
+  provider: ProviderAuthDescription,
+  active: ActiveCredentialRecord,
+): RequestCredentialOverride {
+  if (active.credential.type === 'api_key')
+    return Object.freeze({
+      type: 'api_key',
+      secret: active.credential.secret,
+      scheme: active.credential.scheme,
+    });
+  if (active.credential.type === 'oauth')
+    return Object.freeze(
+      requireOAuthFlow(provider).toRequestAuth(active.credential),
+    );
+  throw new AiRuntimeError(
+    'CREDENTIAL_TYPE_UNSUPPORTED',
+    'auth',
+    'stored credential type cannot authorize this request',
+  );
+}
+
 function logoutResult(
   local: AuthLogoutResult['local'],
   revokeRemote?: boolean,
@@ -337,5 +564,37 @@ function logoutResult(
   return Object.freeze({
     local,
     remote: revokeRemote ? 'unsupported' : 'not_requested',
+  });
+}
+
+function errorCode(error: unknown, fallback: string): string {
+  return typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+    ? error.code
+    : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'AbortError' || error.name === 'TimeoutError')
+  );
+}
+
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted)
+    throw signal.reason ?? new DOMException('Aborted', 'AbortError');
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true },
+    );
   });
 }

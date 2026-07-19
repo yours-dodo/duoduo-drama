@@ -40,6 +40,9 @@ export interface TokenRates {
   readonly reasoning?: number;
   readonly cacheRead?: number;
   readonly cacheWrite?: number;
+  readonly cacheWriteByRetention?: Readonly<
+    Partial<Record<'standard' | 'one_hour', number>>
+  >;
 }
 
 export interface ModelPricing {

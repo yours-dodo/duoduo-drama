@@ -6,6 +6,7 @@ import { credentialScheme } from '../auth/api-key.js';
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
 import type { CredentialStore } from '../auth/credential-store.js';
 import type { AuthApi } from '../auth/login.js';
+import type { AuthRuntimeOptions } from '../auth/oauth.js';
 import type { CredentialScopeAuthority } from '../auth/scope-authority.js';
 import { revealSecret } from '../auth/secret-value.js';
 import { validateContext } from '../core/context.js';
@@ -166,6 +167,7 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly credentialOverridePolicy?: CredentialOverridePolicy<TScopeHandle>;
   readonly credentialStore?: CredentialStore;
   readonly scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
+  readonly auth?: AuthRuntimeOptions;
 }
 
 interface BlockState {
@@ -201,6 +203,7 @@ export function createAi<TScopeHandle = unknown>(
       ? createAuthCoordinator({
           store: options.credentialStore,
           scopeAuthority: options.scopeAuthority,
+          auth: options.auth,
           onCredentialReplaced: (credentialInstanceId) =>
             sessionManager.cleanupCredential(credentialInstanceId),
           getProvider: (providerInstanceId) => {
@@ -209,6 +212,7 @@ export function createAi<TScopeHandle = unknown>(
               ? {
                   snapshot: entry.snapshot,
                   transport: entry.provider.chat?.transport,
+                  auth: entry.provider.auth,
                 }
               : undefined;
           },
@@ -255,6 +259,7 @@ export function createAi<TScopeHandle = unknown>(
       if (!definition || !entry) return undefined;
       const resolvedAuth = await resolveModelAuth({
         chat: entry.provider.chat,
+        auth: entry.provider.auth,
         provider: entry.snapshot,
         scope,
         override: readOptions?.credentialOverride,
@@ -312,6 +317,7 @@ export function createAi<TScopeHandle = unknown>(
         if (!entry) continue;
         const resolvedAuth = await resolveModelAuth({
           chat: entry.provider.chat,
+          auth: entry.provider.auth,
           provider: snapshot,
           scope,
           override: readOptions?.credentialOverride,
@@ -551,6 +557,7 @@ function resolveOptions<TProtocol extends string>(
 
 async function resolveModelAuth<TScopeHandle>(input: {
   chat: Provider['chat'];
+  auth: Provider['auth'];
   provider: ProviderSnapshot;
   scope: TScopeHandle;
   override?: RequestCredentialOverride;
@@ -572,7 +579,11 @@ async function resolveModelAuth<TScopeHandle>(input: {
       credentialFingerprint: await authorizeCredentialOverride(input),
     };
   const storedAuth = await input.coordinator.resolveStoredAuth(
-    { snapshot: input.provider, transport: input.chat.transport },
+    {
+      snapshot: input.provider,
+      transport: input.chat.transport,
+      auth: input.auth,
+    },
     input.scope,
     input.signal,
   );
@@ -746,7 +757,10 @@ function resolveRequestTransport(input: {
     string | import('../transport/request-transport.js').SecretHeaderValue
   > = { ...(binding.headers ?? {}) };
   if (binding.credential && override) {
-    const headerName = binding.credential.headerName.toLowerCase();
+    const requestedScheme = override.scheme ?? credentialScheme(override);
+    const credentialBinding =
+      binding.credential.variants?.[requestedScheme] ?? binding.credential;
+    const headerName = credentialBinding.headerName.toLowerCase();
     if (Object.keys(headers).some((name) => name.toLowerCase() === headerName))
       return new AiRuntimeError(
         'PROTECTED_HEADER_CONFLICT',
@@ -755,9 +769,7 @@ function resolveRequestTransport(input: {
       );
     headers[headerName] = createSecretHeaderValue(
       override.secret,
-      override.scheme ??
-        binding.credential.defaultScheme ??
-        credentialScheme(override),
+      credentialBinding.defaultScheme ?? requestedScheme,
     );
   }
   return bindRequestTransport({

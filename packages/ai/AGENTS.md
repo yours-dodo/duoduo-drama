@@ -11,8 +11,11 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/session` exposes provider-neutral session handles, leases, and lifecycle management.
 - `@duoduo/ai/protocols/openai-responses` owns OpenAI Responses wire parsing and protocol types.
 - `@duoduo/ai/protocols/azure-openai-responses` binds Azure OpenAI Responses to the shared Responses parser without copying it.
+- `@duoduo/ai/protocols/anthropic-messages` owns Anthropic Messages request mapping, SSE parsing, replay signatures, thinking, tools, and cache usage.
 - `@duoduo/ai/providers/openai` owns the explicit OpenAI provider factory and must not read environment variables or credentials implicitly.
 - `@duoduo/ai/providers/azure-openai-responses` owns explicit Azure endpoint, deployment, API-version, and environment resolution.
+- `@duoduo/ai/providers/anthropic` owns the explicit Anthropic provider factory and API-key/OAuth transport bindings.
+- `@duoduo/ai/auth/oauth/anthropic` exposes the explicit Anthropic OAuth flow; provider-neutral OAuth ports remain exported from `@duoduo/ai`.
 - `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
 
 Adapters receive only a request-scoped, already-bound `RequestTransport`; they must not choose or mutate the final URL or protected authentication headers. Provider-specific wire details stay outside provider-neutral core modules.
@@ -29,6 +32,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run transport openai-responses openai`
 - `pnpm --filter @duoduo/ai test -- --run auth catalog runtime`
 - `pnpm --filter @duoduo/ai test -- --run transport session azure-openai-responses`
+- `pnpm --filter @duoduo/ai test -- --run anthropic-messages anthropic oauth`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
 - `pnpm --filter @duoduo/ai build`

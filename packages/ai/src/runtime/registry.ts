@@ -10,6 +10,7 @@ import type {
 } from '../core/models.js';
 import type { RetrySafety } from '../transport/dispatcher.js';
 import type { TransportLimits } from '../transport/types.js';
+import type { OAuthFlow } from '../auth/oauth.js';
 
 export interface ProtocolEventSink {
   publish(event: ProtocolContentEvent): Promise<void>;
@@ -21,6 +22,15 @@ export interface ChatTransportBinding {
   readonly credential?: Readonly<{
     readonly headerName: string;
     readonly defaultScheme?: string;
+    readonly variants?: Readonly<
+      Record<
+        string,
+        Readonly<{
+          readonly headerName: string;
+          readonly defaultScheme?: string;
+        }>
+      >
+    >;
   }>;
   readonly limits?: Partial<TransportLimits>;
   readonly retrySafety?: RetrySafety;
@@ -36,11 +46,17 @@ export interface ChatProvider<TProtocol extends string = string> {
   ): Promise<ProtocolTerminal>;
 }
 
+export interface ProviderAuth {
+  readonly policyFingerprint?: string;
+  readonly oauth?: OAuthFlow;
+}
+
 export interface Provider {
   readonly id: ProviderInstanceId;
   readonly kind: string;
   readonly name: string;
   readonly identity?: Readonly<Record<string, string>>;
+  readonly auth?: ProviderAuth;
   readonly chat?: ChatProvider;
 }
 
@@ -67,7 +83,7 @@ export class ProviderRegistry implements ProvidersApi {
       name: provider.name,
       registrationGeneration: `generation-${++this.generation}`,
       configFingerprint: JSON.stringify(provider.identity ?? {}),
-      authPolicyFingerprint: 'none',
+      authPolicyFingerprint: provider.auth?.policyFingerprint ?? 'none',
     });
     this.providers.set(provider.id, { provider, snapshot });
   }

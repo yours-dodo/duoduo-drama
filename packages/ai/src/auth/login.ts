@@ -1,7 +1,11 @@
 import type { AiDiagnostic } from '../core/events.js';
+import type { AuthEvent, AuthPrompt } from './oauth.js';
 import type { SecretValue } from './secret-value.js';
 
 export interface AuthInteraction {
+  readonly signal?: AbortSignal;
+  openBrowser?(url: URL): Promise<'opened' | 'unavailable'>;
+  prompt?(prompt: AuthPrompt): Promise<string>;
   promptSecret(
     request: Readonly<{
       providerInstanceId: string;
@@ -10,7 +14,7 @@ export interface AuthInteraction {
     }>,
   ): Promise<SecretValue>;
   notify?(
-    message: Readonly<{ level: 'info' | 'warning'; text: string }>,
+    message: AuthEvent | Readonly<{ level: 'info' | 'warning'; text: string }>,
   ): Promise<void> | void;
 }
 

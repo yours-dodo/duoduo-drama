@@ -8,7 +8,9 @@
     "faux-chat.ts",
     "openai-responses.ts",
     "stored-auth.ts",
-    "azure-openai-responses.ts"
+    "azure-openai-responses.ts",
+    "anthropic-messages.ts",
+    "anthropic-oauth.ts"
   ],
   "references": []
 }

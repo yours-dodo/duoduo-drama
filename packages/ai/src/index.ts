@@ -51,6 +51,21 @@ export { secret } from './auth/secret-value.js';
 export type { SecretValue } from './auth/secret-value.js';
 export type { RequestCredentialOverride } from './auth/api-key.js';
 export type { CredentialOverridePolicy } from './auth/override-policy.js';
+export type {
+  AuthClock,
+  AuthEvent,
+  AuthFlowContext,
+  AuthHttpRequest,
+  AuthHttpResponse,
+  AuthHttpTransport,
+  AuthNetworkPolicy,
+  AuthPrompt,
+  AuthRuntimeOptions,
+  OAuthCredential,
+  OAuthCredentialResult,
+  OAuthFlow,
+  SecureRandom,
+} from './auth/oauth.js';
 export { createAi } from './runtime/create-ai.js';
 export type {
   AiRuntime,
