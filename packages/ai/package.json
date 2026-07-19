@@ -1,0 +1,33 @@
+{
+  "name": "@duoduo/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src",
+    "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
+    "manifest:check": "node -e \"if (!/\\| S01 Faux chat tracer\\s+\\|\\s+passed\\s+\\|/.test(require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md', 'utf8'))) process.exit(1)\"",
+    "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
+    "lint": "eslint src test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
