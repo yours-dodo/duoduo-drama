@@ -6,13 +6,15 @@ import { calculateCost, type Usage } from '../../core/usage.js';
 import type { ProtocolEventSink } from '../../runtime/registry.js';
 import { parseServerSentEvents } from './sse.js';
 
+export type ResponsesProtocol = 'openai-responses' | 'azure-openai-responses';
+
 interface OpenAiEvent {
   readonly type: string;
   readonly [key: string]: unknown;
 }
 
-export async function runOpenAiResponses(
-  request: ChatRequest<'openai-responses'>,
+export async function runOpenAiResponses<TProtocol extends ResponsesProtocol>(
+  request: ChatRequest<TProtocol>,
   sink: ProtocolEventSink,
 ): Promise<ProtocolTerminal> {
   if (!request.transport)
@@ -281,7 +283,7 @@ export async function runOpenAiResponses(
           replay: {
             version: 1,
             scope: 'same-provider',
-            protocolId: 'openai-responses',
+            protocolId: request.model.protocol,
             codecId: 'openai-response-id',
             codecVersion: 1,
             data: { responseId },
@@ -291,8 +293,8 @@ export async function runOpenAiResponses(
   };
 }
 
-function makeRequestBody(
-  request: ChatRequest<'openai-responses'>,
+function makeRequestBody<TProtocol extends ResponsesProtocol>(
+  request: ChatRequest<TProtocol>,
 ): Record<string, unknown> {
   return {
     model: request.model.upstreamModelId,

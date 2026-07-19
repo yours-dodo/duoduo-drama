@@ -10,6 +10,7 @@ export interface TransportLimits {
 
 export interface BoundTransportRequest {
   readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  readonly headers?: Readonly<Record<string, string>>;
   readonly body?: TransportBody;
   readonly responseMode: TransportResponseMode;
   readonly signal: AbortSignal;

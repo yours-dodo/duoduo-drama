@@ -46,6 +46,9 @@ export interface AuthCoordinator<TScopeHandle> {
 export function createAuthCoordinator<TScopeHandle>(options: {
   readonly store: CredentialStore;
   readonly scopeAuthority: CredentialScopeAuthority<TScopeHandle>;
+  readonly onCredentialReplaced?: (
+    credentialInstanceId: string,
+  ) => Promise<void> | void;
   readonly getProvider: (
     providerInstanceId: string,
   ) => ProviderAuthDescription | undefined;
@@ -150,7 +153,11 @@ export function createAuthCoordinator<TScopeHandle>(options: {
           next,
           callOptions?.signal,
         );
-        if (result.status === 'applied') return statusFor(result.record);
+        if (result.status === 'applied') {
+          if (current.state === 'active')
+            await options.onCredentialReplaced?.(current.credentialInstanceId);
+          return statusFor(result.record);
+        }
       }
       throw new AiRuntimeError(
         'CREDENTIAL_STORE_CONFLICT',
@@ -177,8 +184,10 @@ export function createAuthCoordinator<TScopeHandle>(options: {
           { state: 'empty' },
           callOptions?.signal,
         );
-        if (result.status === 'applied')
+        if (result.status === 'applied') {
+          await options.onCredentialReplaced?.(current.credentialInstanceId);
           return logoutResult('removed', callOptions?.revokeRemote);
+        }
       }
       throw new AiRuntimeError(
         'CREDENTIAL_STORE_CONFLICT',

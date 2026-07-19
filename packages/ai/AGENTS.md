@@ -7,13 +7,19 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai` exposes provider-neutral runtime, auth, model, stream, and response types.
 - `@duoduo/ai/auth/node` exposes Node-only credential persistence, key-source, and local scope-authority factories. Keep these implementations out of provider-neutral modules.
 - `@duoduo/ai/transport` exposes transport contracts and network policy helpers, but not test drivers.
+- `@duoduo/ai/transport/node` exposes Node-only proxy fetch and WebSocket connectors.
+- `@duoduo/ai/session` exposes provider-neutral session handles, leases, and lifecycle management.
 - `@duoduo/ai/protocols/openai-responses` owns OpenAI Responses wire parsing and protocol types.
+- `@duoduo/ai/protocols/azure-openai-responses` binds Azure OpenAI Responses to the shared Responses parser without copying it.
 - `@duoduo/ai/providers/openai` owns the explicit OpenAI provider factory and must not read environment variables or credentials implicitly.
+- `@duoduo/ai/providers/azure-openai-responses` owns explicit Azure endpoint, deployment, API-version, and environment resolution.
 - `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
 
 Adapters receive only a request-scoped, already-bound `RequestTransport`; they must not choose or mutate the final URL or protected authentication headers. Provider-specific wire details stay outside provider-neutral core modules.
 
 Stored authentication must flow through an explicit `CredentialStore` and `CredentialScopeAuthority`. Catalog identities are persistent only when both the credential store and scope fingerprint declare `cross-runtime` lifetime; process-local or ambient identities must never read or write a persistent `CatalogStore`.
+
+Session identity must include the authorized scope identity independently from credential material. Credential replacement and logout fence matching sessions immediately, while resource disposal waits for active leases to drain. Requests without a `sessionId` use request-local resources and affinity only.
 
 ## Commands
 
@@ -22,6 +28,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run core stream testing`
 - `pnpm --filter @duoduo/ai test -- --run transport openai-responses openai`
 - `pnpm --filter @duoduo/ai test -- --run auth catalog runtime`
+- `pnpm --filter @duoduo/ai test -- --run transport session azure-openai-responses`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
 - `pnpm --filter @duoduo/ai build`

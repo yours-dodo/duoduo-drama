@@ -8,6 +8,7 @@ import type {
   ProviderInstanceId,
   ProviderSnapshot,
 } from '../core/models.js';
+import type { RetrySafety } from '../transport/dispatcher.js';
 import type { TransportLimits } from '../transport/types.js';
 
 export interface ProtocolEventSink {
@@ -22,6 +23,8 @@ export interface ChatTransportBinding {
     readonly defaultScheme?: string;
   }>;
   readonly limits?: Partial<TransportLimits>;
+  readonly retrySafety?: RetrySafety;
+  readonly redirect?: 'error' | 'same-origin';
 }
 
 export interface ChatProvider<TProtocol extends string = string> {

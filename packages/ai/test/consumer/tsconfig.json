@@ -4,6 +4,11 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["faux-chat.ts", "openai-responses.ts", "stored-auth.ts"],
+  "include": [
+    "faux-chat.ts",
+    "openai-responses.ts",
+    "stored-auth.ts",
+    "azure-openai-responses.ts"
+  ],
   "references": []
 }

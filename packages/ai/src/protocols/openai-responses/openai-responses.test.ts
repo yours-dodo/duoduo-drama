@@ -169,7 +169,7 @@ describe('OpenAI Responses tracer', () => {
         method: 'POST',
         origin: 'https://api.openai.com',
         pathname: '/v1/responses',
-        headerNames: ['authorization', 'content-type'],
+        headerNames: ['authorization', 'content-type', 'idempotency-key'],
         bodyDigest: expect.any(String),
       },
     ]);

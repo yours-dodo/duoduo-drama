@@ -1,9 +1,161 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAi, secret } from '../index.js';
-import { createFinalRequestTarget } from './request-transport.js';
+import {
+  bindRequestTransport,
+  createFinalRequestTarget,
+} from './request-transport.js';
 import { createOpenAiProvider } from '../providers/openai/index.js';
 import { createFixtureTransportDriver } from '../testing.js';
+
+describe('bound request transport resource limits', () => {
+  it('rejects an oversized static request before dispatch', async () => {
+    let dispatched = false;
+    const transport = bindRequestTransport({
+      target: createFinalRequestTarget({
+        endpoint: new URL('https://api.example.com/v1/chat'),
+        headers: {},
+        limits: { maxRequestBytes: 3 },
+      }),
+      driver: {
+        send: async () => {
+          dispatched = true;
+          return {
+            status: 200,
+            headers: {},
+            body: { async *[Symbol.asyncIterator]() {} },
+          };
+        },
+      },
+      networkPolicy: { authorize: async () => undefined },
+    });
+
+    await expect(
+      transport.send({
+        method: 'POST',
+        body: 'four',
+        responseMode: 'bytes',
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSPORT_REQUEST_TOO_LARGE' });
+    expect(dispatched).toBe(false);
+  });
+
+  it('enforces the final response byte limit while streaming', async () => {
+    const transport = bindRequestTransport({
+      target: createFinalRequestTarget({
+        endpoint: new URL('https://api.example.com/v1/chat'),
+        headers: {},
+        limits: { maxResponseBytes: 4 },
+      }),
+      driver: {
+        send: async () => ({
+          status: 200,
+          headers: {},
+          body: {
+            async *[Symbol.asyncIterator]() {
+              yield new TextEncoder().encode('abc');
+              yield new TextEncoder().encode('de');
+            },
+          },
+        }),
+      },
+      networkPolicy: { authorize: async () => undefined },
+    });
+
+    const response = await transport.send({
+      method: 'GET',
+      responseMode: 'stream',
+      signal: new AbortController().signal,
+    });
+    const consume = async () => {
+      for await (const chunk of response.body) {
+        expect(chunk).toBeInstanceOf(Uint8Array);
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({
+      code: 'TRANSPORT_RESPONSE_TOO_LARGE',
+    });
+  });
+
+  it('uses the smaller error-response limit for non-success status codes', async () => {
+    const transport = bindRequestTransport({
+      target: createFinalRequestTarget({
+        endpoint: new URL('https://api.example.com/v1/chat'),
+        headers: {},
+        limits: { maxResponseBytes: 100, maxErrorBytes: 4 },
+      }),
+      driver: {
+        send: async () => ({
+          status: 400,
+          headers: {},
+          body: {
+            async *[Symbol.asyncIterator]() {
+              yield new TextEncoder().encode('abcde');
+            },
+          },
+        }),
+      },
+      networkPolicy: { authorize: async () => undefined },
+    });
+
+    const response = await transport.send({
+      method: 'GET',
+      responseMode: 'stream',
+      signal: new AbortController().signal,
+    });
+
+    await expect(async () => {
+      for await (const chunk of response.body)
+        expect(chunk).toBeInstanceOf(Uint8Array);
+    }).rejects.toMatchObject({ code: 'TRANSPORT_RESPONSE_TOO_LARGE' });
+  });
+
+  it('discards redirect bodies and refuses to replay streaming request bodies', async () => {
+    let attempts = 0;
+    let discardCalls = 0;
+    const transport = bindRequestTransport({
+      target: createFinalRequestTarget({
+        endpoint: new URL('https://api.example.com/v1/chat'),
+        headers: {},
+      }),
+      driver: {
+        send: async () => {
+          attempts += 1;
+          return {
+            status: 307,
+            headers: { location: '/v1/redirected' },
+            body: {
+              [Symbol.asyncIterator]() {
+                return {
+                  next: async () => ({ done: true, value: undefined }),
+                  return: async () => {
+                    discardCalls += 1;
+                    return { done: true, value: undefined };
+                  },
+                };
+              },
+            },
+          };
+        },
+      },
+      networkPolicy: { authorize: async () => undefined },
+      redirect: 'same-origin',
+    });
+
+    await expect(
+      transport.send({
+        method: 'POST',
+        body: new ReadableStream<Uint8Array>(),
+        responseMode: 'stream',
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ code: 'REDIRECT_NOT_ALLOWED' });
+    expect(attempts).toBe(1);
+    expect(discardCalls).toBe(1);
+  });
+});
 
 describe('bound request transport security', () => {
   it.each([

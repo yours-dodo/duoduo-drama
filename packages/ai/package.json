@@ -20,13 +20,29 @@
       "types": "./dist/transport/index.d.ts",
       "import": "./dist/transport/index.js"
     },
+    "./transport/node": {
+      "types": "./dist/transport/node/index.d.ts",
+      "import": "./dist/transport/node/index.js"
+    },
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js"
+    },
     "./protocols/openai-responses": {
       "types": "./dist/protocols/openai-responses/index.d.ts",
       "import": "./dist/protocols/openai-responses/index.js"
     },
+    "./protocols/azure-openai-responses": {
+      "types": "./dist/protocols/azure-openai-responses/index.d.ts",
+      "import": "./dist/protocols/azure-openai-responses/index.js"
+    },
     "./providers/openai": {
       "types": "./dist/providers/openai/index.d.ts",
       "import": "./dist/providers/openai/index.js"
+    },
+    "./providers/azure-openai-responses": {
+      "types": "./dist/providers/azure-openai-responses/index.d.ts",
+      "import": "./dist/providers/azure-openai-responses/index.js"
     }
   },
   "files": [
@@ -37,7 +53,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test"
   },

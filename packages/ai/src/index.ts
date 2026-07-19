@@ -59,9 +59,17 @@ export type {
   ModelListFilter,
   ModelReadOptions,
   ModelsApi,
+  SessionsApi,
   RuntimeResourcePolicyInput,
   StreamOptionsInput,
 } from './runtime/create-ai.js';
+export type {
+  SessionHandle,
+  SessionLease,
+  SessionResource,
+} from './session/lease.js';
+export type { RetryKind, RetryPolicy } from './transport/retry.js';
+
 export { AiRuntimeError, isContextOverflowError } from './core/errors.js';
 export type { AiError, AiErrorCategory } from './core/errors.js';
 export type {

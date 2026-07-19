@@ -5,6 +5,8 @@ import type {
   ToolCallContent,
 } from './content.js';
 import type { AiError } from './errors.js';
+import type { SessionHandle } from '../session/lease.js';
+import type { RetryPolicy } from '../transport/retry.js';
 import type { RequestTransport } from '../transport/types.js';
 import type { AiContext, CompletedFinishReason } from './messages.js';
 import type { ModelDefinition, ModelRef } from './models.js';
@@ -180,6 +182,8 @@ export interface ResolvedStreamOptions<TProtocol extends string = string> {
   readonly maxOutputTokens: number;
   readonly stop: readonly string[];
   readonly timeoutMs: number;
+  readonly retry: false | RetryPolicy;
+  readonly sessionId?: string;
   readonly protocolOptions: TProtocol extends string
     ? Readonly<Record<string, unknown>>
     : never;
@@ -191,6 +195,7 @@ export interface ChatRequest<TProtocol extends string = string> {
   readonly options: Readonly<ResolvedStreamOptions<TProtocol>>;
   readonly signal: AbortSignal;
   readonly transport?: RequestTransport;
+  readonly session: SessionHandle;
 }
 
 export interface AiResponseStream extends AsyncIterable<AiStreamEvent> {

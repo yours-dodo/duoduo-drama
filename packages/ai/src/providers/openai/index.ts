@@ -36,6 +36,11 @@ export function createOpenAiProvider(
         endpoint: options.endpoint ?? 'https://api.openai.com/v1/responses',
         headers: { 'content-type': 'application/json' },
         credential: { headerName: 'authorization', defaultScheme: 'Bearer' },
+        retrySafety: {
+          mode: 'idempotency-key',
+          headerName: 'idempotency-key',
+          keyVersion: 1,
+        },
       },
       runChat: runOpenAiResponses,
     },
