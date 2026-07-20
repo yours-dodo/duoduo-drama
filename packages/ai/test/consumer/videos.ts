@@ -10,17 +10,25 @@ import {
   doubaoVideoModelRef,
   type DoubaoExplicitVideoModelInput,
 } from '@duoduo/ai/providers/doubao';
+import { klingProvider, klingVideoModelRef } from '@duoduo/ai/providers/kling';
 import { xAiProvider, xAiVideoModelRef } from '@duoduo/ai/providers/xai';
 import {
   arkVideoTasksContract,
   createArkVideoTasksAdapter,
   type ArkVideoTasksCompatibility,
 } from '@duoduo/ai/protocols/ark-video-tasks';
+import {
+  createKlingVideoTasksAdapter,
+  klingVideoTasksContract,
+  validateKlingVideoTaskId,
+  type KlingVideoTasksCompatibility,
+} from '@duoduo/ai/protocols/kling-video-tasks';
 
 const ai = createAi({
   credentialOverridePolicy: { allow: () => true },
 });
 ai.providers.register(xAiProvider());
+ai.providers.register(klingProvider());
 const seedanceModel: DoubaoExplicitVideoModelInput = {
   id: 'doubao-seedance-2-0',
   upstreamModelId: 'doubao-seedance-2-0-260128',
@@ -70,3 +78,14 @@ void arkCompatibility;
 void arkVideoTasksContract;
 void createArkVideoTasksAdapter;
 void doubaoVideoModelRef();
+
+const klingCompatibility: KlingVideoTasksCompatibility = {
+  wireVersion: 2,
+  taskApi: 'kling-api-v2',
+  modelFamily: 'kling-video-3.0-omni',
+};
+void klingCompatibility;
+void klingVideoTasksContract;
+void createKlingVideoTasksAdapter;
+void validateKlingVideoTaskId('kling-task-1');
+void klingVideoModelRef();

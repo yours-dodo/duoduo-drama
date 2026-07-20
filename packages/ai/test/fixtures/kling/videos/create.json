@@ -1,0 +1,6 @@
+{
+  "code": 0,
+  "message": "success",
+  "request_id": "req-create-1",
+  "data": { "id": "kling-task-1", "status": "submitted" }
+}

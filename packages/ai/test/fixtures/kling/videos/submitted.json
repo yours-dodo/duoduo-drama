@@ -1,0 +1,14 @@
+{
+  "code": 0,
+  "message": "success",
+  "request_id": "req-poll-1",
+  "data": [
+    {
+      "id": "kling-task-1",
+      "status": "submitted",
+      "create_time": 1784512800000,
+      "update_time": 1784512800000,
+      "outputs": []
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "code": 0,
+  "message": "success",
+  "request_id": "req-poll-failed",
+  "data": [
+    {
+      "id": "kling-task-1",
+      "status": "failed",
+      "message": "content policy violation",
+      "error": {
+        "code": "ContentPolicyViolation",
+        "message": "content policy violation"
+      },
+      "create_time": 1784512800000,
+      "update_time": 1784512920000,
+      "outputs": []
+    }
+  ]
+}

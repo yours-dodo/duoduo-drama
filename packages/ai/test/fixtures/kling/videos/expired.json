@@ -1,0 +1,22 @@
+{
+  "code": 0,
+  "message": "success",
+  "request_id": "req-poll-expired",
+  "data": [
+    {
+      "id": "kling-task-1",
+      "status": "succeeded",
+      "message": "success",
+      "create_time": 1700000000000,
+      "update_time": 1700000000000,
+      "outputs": [
+        {
+          "type": "video",
+          "id": "video-old",
+          "url": "https://assets.example/expired.mp4",
+          "duration": "8"
+        }
+      ]
+    }
+  ]
+}
