@@ -32,6 +32,8 @@ import type {
   ProviderSnapshot,
 } from '../core/models.js';
 import { createSessionManager } from '../session/manager.js';
+import { createImagesApi } from '../images/runtime.js';
+import type { ImagesApi } from '../images/contracts.js';
 import type { SessionHandle } from '../session/lease.js';
 import { ResponseStream } from '../stream/response-stream.js';
 import type { RetryPolicy } from '../transport/retry.js';
@@ -138,6 +140,7 @@ export interface AiRuntime<TScopeHandle = unknown> {
   readonly inventory: InventoryApi;
   readonly auth: AuthApi<TScopeHandle>;
   readonly models: ModelsApi<TScopeHandle>;
+  readonly images: ImagesApi<TScopeHandle>;
   readonly sessions: SessionsApi<TScopeHandle>;
   stream<TProtocol extends string>(
     model: ModelHandle<TProtocol>,
@@ -174,6 +177,11 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly credentialStore?: CredentialStore;
   readonly scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
   readonly auth?: AuthRuntimeOptions;
+  readonly imageDefaults?: Readonly<{
+    timeoutMs?: number;
+    responseFormat?: 'url' | 'base64';
+    pollIntervalMs?: number;
+  }>;
 }
 
 interface BlockState {
@@ -364,11 +372,50 @@ export function createAi<TScopeHandle = unknown>(
     },
   };
 
+  const images = createImagesApi({
+    registry,
+    runtimeId,
+    transport: options.transport,
+    networkPolicy: options.networkPolicy,
+    credentialOverridePolicy: options.credentialOverridePolicy,
+    imageDefaults: options.imageDefaults,
+    resolveAuth: async ({ provider, scope, override, signal }) => {
+      const entry = registry.get(provider.id);
+      const resolved = await resolveModelAuth({
+        chat: entry?.provider.chat,
+        auth: entry?.provider.auth,
+        provider,
+        scope,
+        override,
+        policy: options.credentialOverridePolicy,
+        ambientPolicy: options.ambientAuthPolicy,
+        key: credentialFingerprintKey,
+        coordinator: authCoordinator,
+        signal,
+      });
+      return Object.freeze({
+        ...((override ?? resolved.storedAuth?.override)
+          ? { requestCredential: override ?? resolved.storedAuth!.override }
+          : {}),
+        ...(resolved.storedAuth
+          ? {
+              assertCurrent: (currentSignal?: AbortSignal) =>
+                authCoordinator!.assertCurrent(
+                  resolved.storedAuth!,
+                  currentSignal,
+                ),
+            }
+          : {}),
+      });
+    },
+  });
+
   const runtime: AiRuntime<TScopeHandle> = {
     providers: registry,
     inventory,
     auth: authCoordinator?.api ?? createUnavailableAuthApi(),
     models,
+    images,
     sessions: Object.freeze({
       cleanup: async (
         providerInstanceId: string,

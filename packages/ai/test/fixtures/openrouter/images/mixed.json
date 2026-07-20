@@ -1,0 +1,34 @@
+{
+  "id": "gen-or-1",
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Here are the images.",
+        "images": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aW1hZ2Ux"
+            }
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/jpeg;base64,aW1hZ2Uy"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 100,
+    "completion_tokens": 20,
+    "total_tokens": 120,
+    "prompt_tokens_details": {
+      "cached_tokens": 25,
+      "cache_write_tokens": 5
+    }
+  }
+}

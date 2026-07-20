@@ -15,7 +15,8 @@
     "gateways.ts",
     "pi-baseline.ts",
     "qwen.ts",
-    "doubao.ts"
+    "doubao.ts",
+    "images.ts"
   ],
   "references": []
 }

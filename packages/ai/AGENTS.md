@@ -5,6 +5,9 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 ## Public Boundaries
 
 - `@duoduo/ai` exposes provider-neutral runtime, auth, model, stream, and response types.
+- `@duoduo/ai/images` owns provider-neutral image model, input/output, stream, cost, and direct-generation contracts; protocol-specific fields must remain typed through declaration merging.
+- `@duoduo/ai/protocols/openrouter-images` owns OpenRouter ordered multimodal request mapping and text/image response normalization; application consumers should use the Provider facade rather than importing the protocol adapter.
+- `@duoduo/ai/providers/openrouter` owns the explicit OpenRouter chat and direct-image bindings, including public image model references and catalog descriptors.
 - `@duoduo/ai/auth/node` exposes Node-only credential persistence, key-source, and local scope-authority factories. Keep these implementations out of provider-neutral modules.
 - `@duoduo/ai/transport` exposes transport contracts and network policy helpers, but not test drivers.
 - `@duoduo/ai/transport/node` exposes Node-only proxy fetch and WebSocket connectors.
@@ -50,6 +53,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run protocols providers baseline-parity oauth radius`
 - `pnpm --filter @duoduo/ai test -- --run dashscope qwen`
 - `pnpm --filter @duoduo/ai test -- --run ark-responses doubao`
+- `pnpm --filter @duoduo/ai test -- --run images openrouter-images`
 - `pnpm --filter @duoduo/ai parity:check -- --pi-root vendor/pi`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
