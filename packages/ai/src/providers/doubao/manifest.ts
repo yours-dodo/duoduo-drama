@@ -64,5 +64,46 @@ export const doubaoContractManifest: ProviderContractManifest = Object.freeze({
         }),
       ]),
     }),
+    Object.freeze({
+      capability: 'videos' as const,
+      protocol: 'ark-video-tasks',
+      profileIds: Object.freeze(['doubao-seedance-2-v1']),
+      authSchemes: Object.freeze(['api_key']),
+      endpointBranchIds: Object.freeze([
+        'create',
+        'poll',
+        'cn-beijing-ark-v3',
+        'explicit-base-url',
+      ]),
+      requestFixtureIds: Object.freeze([
+        'doubao_seedance_2_create',
+        'doubao_seedance_2_poll',
+      ]),
+      streamFixtureIds: Object.freeze([
+        'doubao_seedance_2_queued',
+        'doubao_seedance_2_running',
+        'doubao_seedance_2_succeeded',
+      ]),
+      errorFixtureIds: Object.freeze([
+        'doubao_seedance_2_failed',
+        'doubao_seedance_2_expired',
+      ]),
+      sources: Object.freeze([
+        Object.freeze({
+          kind: 'official' as const,
+          locator:
+            'https://api.volcengine.com/api-docs/view?action=CreateContentsGenerationsTasks&serviceCode=ark&version=2024-01-01',
+        }),
+        Object.freeze({
+          kind: 'official' as const,
+          locator:
+            'https://api.volcengine.com/api-docs/view?action=GetContentsGenerationsTask&serviceCode=ark&version=2024-01-01',
+        }),
+        Object.freeze({
+          kind: 'fixture' as const,
+          locator: 'test/fixtures/doubao/seedance-2',
+        }),
+      ]),
+    }),
   ]),
 });

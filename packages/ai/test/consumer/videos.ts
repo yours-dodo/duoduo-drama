@@ -5,12 +5,28 @@ import type {
   VideoGenerationResult,
   VideoOperationRef,
 } from '@duoduo/ai/videos';
+import {
+  doubaoProvider,
+  doubaoVideoModelRef,
+  type DoubaoExplicitVideoModelInput,
+} from '@duoduo/ai/providers/doubao';
 import { xAiProvider, xAiVideoModelRef } from '@duoduo/ai/providers/xai';
+import {
+  arkVideoTasksContract,
+  createArkVideoTasksAdapter,
+  type ArkVideoTasksCompatibility,
+} from '@duoduo/ai/protocols/ark-video-tasks';
 
 const ai = createAi({
   credentialOverridePolicy: { allow: () => true },
 });
 ai.providers.register(xAiProvider());
+const seedanceModel: DoubaoExplicitVideoModelInput = {
+  id: 'doubao-seedance-2-0',
+  upstreamModelId: 'doubao-seedance-2-0-260128',
+  name: 'Doubao Seedance 2.0',
+};
+ai.providers.register(doubaoProvider({ videoModels: [seedanceModel] }));
 
 const credentialOverride = {
   type: 'api_key' as const,
@@ -44,3 +60,13 @@ async function generateVideo(): Promise<VideoGenerationResult> {
 }
 
 void generateVideo;
+
+const arkCompatibility: ArkVideoTasksCompatibility = {
+  wireVersion: 1,
+  taskApi: 'ark-contents-generations-v3',
+  modelFamily: 'seedance-2',
+};
+void arkCompatibility;
+void arkVideoTasksContract;
+void createArkVideoTasksAdapter;
+void doubaoVideoModelRef();

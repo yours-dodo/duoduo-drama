@@ -11,6 +11,7 @@ export interface DoubaoEndpoints {
   readonly responsesUrl: string;
   readonly chatCompletionsUrl: string;
   readonly imagesUrl: string;
+  readonly contentsGenerationTasksUrl: string;
 }
 
 export function resolveDoubaoEndpoints(
@@ -28,6 +29,10 @@ export function resolveDoubaoEndpoints(
     responsesUrl: appendDoubaoPath(baseUrl, 'responses'),
     chatCompletionsUrl: appendDoubaoPath(baseUrl, 'chat/completions'),
     imagesUrl: appendDoubaoPath(baseUrl, 'images/generations'),
+    contentsGenerationTasksUrl: appendDoubaoPath(
+      baseUrl,
+      'contents/generations/tasks',
+    ),
   });
 }
 

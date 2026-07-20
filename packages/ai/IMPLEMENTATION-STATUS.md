@@ -1,6 +1,6 @@
 # @duoduo/ai Implementation Status
 
-> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S16; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, the Grok Imagine image/video tracer is complete, and the remaining video, ecosystem, and productization slices are still in progress.
+> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S17; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, the Grok Imagine and Seedance video tracers are complete, and the remaining generation ecosystem and productization slices are still in progress.
 
 ## Slices
 
@@ -22,6 +22,7 @@
 | S14 Resumable generation and Qwen images              | passed | 241 tests, including operation envelope policy, credential proof, detach/serialize/parse/resume, race arbitration, descriptor consistency, Qwen Wan direct/task request, poll, output, usage, task-ID, abort, and public consumer coverage, plus all package verification gates passed on July 20, 2026. |
 | S15 Doubao Seedream direct images                     | passed | 245 tests, including explicit Model ID/Endpoint ID body binding, direct-only Ark routing, URL/base64 output, usage/error normalization, Provider identity fencing, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                            |
 | S16 Grok Imagine images and videos                    | passed | 272 tests, including official image generation/edit and video generate/edit/extend/poll routes, validated request IDs, strict resumable claims, cross-domain rejection, usage/cost, temporary artifacts, and public consumer coverage, plus all package verification gates passed on July 20, 2026.      |
+| S17 Doubao Seedance 2.0 videos                        | passed | 284 tests, including official Ark task creation/polling, text/image/video/audio references, lifecycle normalization, validated task IDs, temporary artifacts, failure/expiry handling, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                        |
 
 ## Gates
 
@@ -33,5 +34,5 @@
 | Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                            |
 | Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                     |
 | Generation           | passed      | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage. |
-| Generation Ecosystem | not-started | —                                                                                                                                     |
+| Generation Ecosystem | in-progress | S17 passed with Seedance 2.0 task lifecycle and multimodal reference coverage; S18–S20 remain.                                        |
 | Productization       | not-started | —                                                                                                                                     |

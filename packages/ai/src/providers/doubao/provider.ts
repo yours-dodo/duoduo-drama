@@ -14,6 +14,10 @@ import {
   type DoubaoExplicitImageModelInput,
 } from './images.js';
 import {
+  createDoubaoVideosBinding,
+  type DoubaoExplicitVideoModelInput,
+} from './videos.js';
+import {
   createDoubaoProtocolRunners,
   type DoubaoTextProtocol,
 } from './profiles.js';
@@ -25,6 +29,7 @@ export interface DoubaoProviderOptions {
   readonly compatibilityMode?: 'responses' | 'chat-completions';
   readonly additionalModels?: readonly DoubaoExplicitModelInput[];
   readonly imageModels?: readonly DoubaoExplicitImageModelInput[];
+  readonly videoModels?: readonly DoubaoExplicitVideoModelInput[];
 }
 
 export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
@@ -42,6 +47,13 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
         providerInstanceId: id,
         endpoints,
         models: options.imageModels,
+      })
+    : undefined;
+  const videos = options.videoModels?.length
+    ? createDoubaoVideosBinding({
+        providerInstanceId: id,
+        endpoints,
+        models: options.videoModels,
       })
     : undefined;
   const endpointForModel = (model: Readonly<ModelDefinition>): string =>
@@ -67,6 +79,7 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
       ),
       explicit: JSON.stringify(options.additionalModels ?? []),
       imageModels: JSON.stringify(options.imageModels ?? []),
+      videoModels: JSON.stringify(options.videoModels ?? []),
     }),
     auth: Object.freeze({
       policyFingerprint:
@@ -79,12 +92,14 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
               endpoints.baseUrl,
               options.additionalModels ?? [],
               options.imageModels ?? [],
+              options.videoModels ?? [],
             ]),
           )
           .digest('base64url') + ':ARK_API_KEY',
     }),
     contractManifest: doubaoContractManifest,
     ...(images ? { images } : {}),
+    ...(videos ? { videos } : {}),
     chat: Object.freeze({
       models,
       transport: Object.freeze({

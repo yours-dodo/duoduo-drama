@@ -1,0 +1,21 @@
+{
+  "id": "cgt-seedance-2-task-1",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "succeeded",
+  "content": {
+    "video_url": "https://tos-cn-beijing.volces.com/seedance/result.mp4?X-Amz-Signature=redacted",
+    "last_frame_url": "https://tos-cn-beijing.volces.com/seedance/last-frame.jpeg?X-Amz-Signature=redacted"
+  },
+  "created_at": 1784512800,
+  "updated_at": 1784512840,
+  "duration": 8,
+  "framespersecond": 24,
+  "generate_audio": true,
+  "ratio": "16:9",
+  "resolution": "1080p",
+  "seed": 42,
+  "usage": {
+    "completion_tokens": 2048,
+    "total_tokens": 2048
+  }
+}

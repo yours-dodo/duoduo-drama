@@ -15,6 +15,8 @@ describe('Doubao provider', () => {
       chatCompletionsUrl:
         'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
       imagesUrl: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
+      contentsGenerationTasksUrl:
+        'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
     });
     const provider = doubaoProvider();
     const model = provider.chat?.models[0];
@@ -26,6 +28,33 @@ describe('Doubao provider', () => {
     expect(provider.chat?.transport?.endpointForModel?.(model!)).toBe(
       'https://ark.cn-beijing.volces.com/api/v3/responses',
     );
+  });
+
+  it('binds explicit Seedance video models to the official task routes', () => {
+    const provider = doubaoProvider({
+      videoModels: [
+        {
+          id: 'seedance-public',
+          upstreamModelId: 'doubao-seedance-2-0-260128',
+          name: 'Seedance public',
+        },
+      ],
+    });
+    expect(provider.videos?.models[0]).toMatchObject({
+      id: 'seedance-public',
+      upstreamModelId: 'doubao-seedance-2-0-260128',
+      protocol: 'ark-video-tasks',
+      protocolProfileId: 'doubao-seedance-2-v1',
+      capabilities: {
+        operations: ['generate'],
+        inputModalities: ['text', 'image', 'video', 'audio'],
+      },
+    });
+    expect(provider.videos?.protocols[0]).toMatchObject({
+      endpoint:
+        'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
+      operationActions: ['poll'],
+    });
   });
 
   it('freezes compatibility mode and explicit model/endpoint identity in the catalog', () => {

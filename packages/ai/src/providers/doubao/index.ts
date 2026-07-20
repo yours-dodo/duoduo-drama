@@ -29,3 +29,9 @@ export {
   doubaoImageModelRef,
   type DoubaoExplicitImageModelInput,
 } from './images.js';
+
+export {
+  createDoubaoVideosBinding,
+  doubaoVideoModelRef,
+  type DoubaoExplicitVideoModelInput,
+} from './videos.js';
