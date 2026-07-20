@@ -6,7 +6,7 @@ import {
 } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { constants, lstat, open } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 
 import type { EnvironmentSource } from '../auth/ambient.js';
@@ -29,7 +29,10 @@ import {
 import type { AuthInteraction } from '../auth/login.js';
 import { createAi } from '../runtime/create-ai.js';
 import type { Provider } from '../runtime/registry.js';
+import { createAllowlistNetworkPolicy } from '../transport/network-policy.js';
+import type { NetworkPolicy, TransportDriver } from '../transport/types.js';
 import {
+  builtinProviderKinds,
   builtinProviders,
   type BuiltinProvidersOptions,
 } from '../providers/all/index.js';
@@ -72,20 +75,27 @@ export interface CreateNodeCliOptions {
   readonly interaction?: AuthInteraction;
   readonly stdout?: CliWriter;
   readonly stderr?: CliWriter;
+  readonly providerOptions?: BuiltinProvidersOptions;
+  readonly transport?: TransportDriver;
+  readonly platform?: NodeJS.Platform;
+  readonly homeDirectory?: string;
 }
 
 interface NodeCliConfig {
-  readonly providers?: BuiltinProvidersOptions;
-  readonly credentialSlotId?: string;
+  readonly providers: BuiltinProvidersOptions;
+  readonly defaultAccount?: string;
+  readonly networkAllowlist: readonly string[];
 }
 
 export function resolveNodeCliPaths(
   environment: EnvironmentSource = processEnvironmentSource(),
+  platform: NodeJS.Platform = process.platform,
+  homeDirectory: string = homedir(),
 ): NodeCliPaths {
   const override = trim(environment.get('DUODUO_AI_HOME'));
   const stateDirectory = override
     ? resolve(override)
-    : defaultStateDirectory(environment);
+    : defaultStateDirectory(environment, platform, homeDirectory);
   return Object.freeze({
     stateDirectory,
     configFile: join(stateDirectory, 'config.json'),
@@ -192,18 +202,24 @@ export async function createNodeCliDependencies(
   options: CreateNodeCliOptions = {},
 ): Promise<NodeCliDependencies<LocalScopeHandle>> {
   const environment = options.environment ?? processEnvironmentSource();
-  const defaults = resolveNodeCliPaths(environment);
+  const defaults = resolveNodeCliPaths(
+    environment,
+    options.platform,
+    options.homeDirectory,
+  );
   const paths = resolvePaths(defaults, options.paths);
-  const config = await readConfig(paths.configFile);
+  const config = await readConfig(paths.configFile, options.platform);
+  const providerOptions = Object.freeze({
+    ...config.providers,
+    ...(options.providerOptions ?? {}),
+  });
+  const builtins = await builtinProviders(providerOptions);
   const keySource =
     options.masterKeySource ?? createEnvironmentMasterKeySource(environment);
   const activeKey = await keySource.active();
   const local = createLocalScopeAuthority({
     tenantId: 'local',
     subjectId: 'local-cli',
-    ...(config.credentialSlotId
-      ? { credentialSlotId: config.credentialSlotId }
-      : {}),
     ...(activeKey.status === 'available'
       ? {
           activeKeyId: activeKey.keyId,
@@ -234,11 +250,15 @@ export async function createNodeCliDependencies(
     ...(options.clock ? { clock: options.clock } : {}),
   });
   const runtime = createAi<LocalScopeHandle>({
+    ...createRuntimeAssemblyOptions(
+      builtins.providers,
+      config.networkAllowlist,
+      options.transport,
+    ),
     ...(credentialStore
       ? { credentialStore, scopeAuthority: local.authority }
       : {}),
   });
-  const builtins = await builtinProviders(config.providers ?? {});
   runtime.providers.registerAll(builtins.providers);
   return Object.freeze({
     runtime,
@@ -249,6 +269,7 @@ export async function createNodeCliDependencies(
     inventory: collectProviderInventory(builtins.providers),
     unconfigured: builtins.unconfigured,
     credentialKeyAvailable: activeKey.status === 'available',
+    ...(config.defaultAccount ? { defaultAccount: config.defaultAccount } : {}),
   });
 }
 
@@ -273,18 +294,21 @@ export function collectProviderInventory(
   );
 }
 
-function defaultStateDirectory(environment: EnvironmentSource): string {
-  if (process.platform === 'win32') {
-    const localAppData = trim(environment.get('LOCALAPPDATA'));
-    if (!localAppData)
-      throw new Error('LOCALAPPDATA is required to resolve CLI state path');
-    return join(localAppData, 'duoduo-ai');
-  }
-  if (process.platform === 'darwin')
-    return join(homedir(), 'Library', 'Application Support', 'duoduo-ai');
+function defaultStateDirectory(
+  environment: EnvironmentSource,
+  platform: NodeJS.Platform,
+  homeDirectory: string,
+): string {
+  if (platform === 'win32')
+    return join(
+      trim(environment.get('LOCALAPPDATA')) ?? homeDirectory,
+      'duoduo-ai',
+    );
+  if (platform === 'darwin')
+    return join(homeDirectory, 'Library', 'Application Support', 'duoduo-ai');
   return join(
     trim(environment.get('XDG_STATE_HOME')) ??
-      join(homedir(), '.local', 'state'),
+      join(homeDirectory, '.local', 'state'),
     'duoduo-ai',
   );
 }
@@ -310,28 +334,189 @@ function resolvePaths(
   });
 }
 
-async function readConfig(path: string): Promise<NodeCliConfig> {
+async function readConfig(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<NodeCliConfig> {
+  let metadata: Awaited<ReturnType<typeof lstat>>;
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-    if (!isRecord(parsed)) throw new Error('CLI config must be an object');
-    rejectSecretFields(parsed, 'config');
-    const providers = parsed.providers;
-    if (providers !== undefined && !isRecord(providers))
-      throw new Error('CLI config providers must be an object');
-    const credentialSlotId = parsed.credentialSlotId;
-    if (
-      credentialSlotId !== undefined &&
-      (typeof credentialSlotId !== 'string' || credentialSlotId.length === 0)
-    )
-      throw new Error('CLI credentialSlotId must be a non-empty string');
-    return Object.freeze({
-      ...(providers ? { providers: providers as BuiltinProvidersOptions } : {}),
-      ...(typeof credentialSlotId === 'string' ? { credentialSlotId } : {}),
-    });
+    metadata = await lstat(path);
   } catch (error) {
-    if (isNodeError(error, 'ENOENT')) return Object.freeze({});
+    if (isNodeError(error, 'ENOENT')) return emptyConfig();
     throw error;
   }
+  if (metadata.isSymbolicLink())
+    throw new Error('CLI config file must not be a symbolic link');
+  if (!metadata.isFile()) throw new Error('CLI config path must be a file');
+  if (platform !== 'win32') {
+    const getuid = process.getuid;
+    if (getuid && metadata.uid !== getuid())
+      throw new Error('CLI config file must be owned by the current user');
+    if ((metadata.mode & 0o077) !== 0)
+      throw new Error('CLI config file permissions must be 0600');
+  }
+
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const text = await handle.readFile('utf8');
+    if (Buffer.byteLength(text) > 1024 * 1024)
+      throw new Error('CLI config file exceeds the 1 MiB limit');
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch (error) {
+      throw new Error('CLI config file contains invalid JSON', {
+        cause: error,
+      });
+    }
+    return parseConfig(parsed);
+  } finally {
+    await handle.close();
+  }
+}
+
+function parseConfig(parsed: unknown): NodeCliConfig {
+  if (!isRecord(parsed)) throw new Error('CLI config must be an object');
+  const supportedKeys = new Set([
+    'schemaVersion',
+    'providers',
+    'defaultAccount',
+    'networkAllowlist',
+  ]);
+  for (const key of Object.keys(parsed))
+    if (!supportedKeys.has(key))
+      throw new Error(`unsupported CLI config field: ${key}`);
+  if (parsed.schemaVersion !== undefined && parsed.schemaVersion !== 1)
+    throw new Error('CLI config schemaVersion must be 1');
+
+  const providers = parsed.providers ?? {};
+  if (!isRecord(providers))
+    throw new Error('CLI config providers must be an object');
+  const kinds = new Set<string>(builtinProviderKinds);
+  for (const [kind, providerOptions] of Object.entries(providers)) {
+    if (!kinds.has(kind)) throw new Error(`unknown built-in provider: ${kind}`);
+    if (!isRecord(providerOptions))
+      throw new Error(`provider config must be an object: ${kind}`);
+    rejectSecretFields(providerOptions, `providers.${kind}`);
+  }
+  const defaultAccount = optionalConfigString(
+    parsed.defaultAccount,
+    'defaultAccount',
+  );
+  const networkAllowlist = parseNetworkAllowlist(parsed.networkAllowlist);
+  return Object.freeze({
+    providers: Object.freeze({ ...providers }) as BuiltinProvidersOptions,
+    ...(defaultAccount ? { defaultAccount } : {}),
+    networkAllowlist,
+  });
+}
+
+function emptyConfig(): NodeCliConfig {
+  return Object.freeze({
+    providers: Object.freeze({}),
+    networkAllowlist: Object.freeze([]),
+  });
+}
+
+function parseNetworkAllowlist(value: unknown): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value))
+    throw new Error('CLI config networkAllowlist must be an array');
+  return Object.freeze(
+    value.map((entry, index) => {
+      if (typeof entry !== 'string')
+        throw new Error(
+          `CLI config networkAllowlist[${index}] must be a string`,
+        );
+      return normalizeHttpsOrigin(entry);
+    }),
+  );
+}
+
+function optionalConfigString(
+  value: unknown,
+  field: string,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string')
+    throw new Error(`CLI config ${field} must be a string`);
+  const normalized = value.trim();
+  if (
+    normalized.length === 0 ||
+    normalized.length > 128 ||
+    [...normalized].some((character) => {
+      const code = character.codePointAt(0)!;
+      return code <= 0x1f || code === 0x7f;
+    })
+  )
+    throw new Error(`CLI config ${field} is invalid`);
+  return normalized;
+}
+
+function normalizeHttpsOrigin(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`invalid HTTPS origin: ${value}`, { cause: error });
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  )
+    throw new Error(`invalid HTTPS origin: ${value}`);
+  return url.origin;
+}
+
+function providerEndpointOrigin(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`invalid provider HTTPS endpoint: ${value}`, {
+      cause: error,
+    });
+  }
+  if (url.protocol !== 'https:' || url.username || url.password)
+    throw new Error(`invalid provider HTTPS endpoint: ${value}`);
+  return url.origin;
+}
+
+function createRuntimeAssemblyOptions(
+  providers: readonly Provider[],
+  configuredOrigins: readonly string[],
+  transport: TransportDriver | undefined,
+): Readonly<{
+  transport?: TransportDriver;
+  networkPolicy: NetworkPolicy;
+  ambientAuthPolicy: Readonly<{
+    allow(scope: LocalScopeHandle): boolean;
+  }>;
+  credentialOverridePolicy: Readonly<{
+    allow(scope: LocalScopeHandle): boolean;
+  }>;
+}> {
+  const origins = new Set(configuredOrigins);
+  for (const provider of providers) {
+    if (provider.chat?.transport?.endpoint)
+      origins.add(providerEndpointOrigin(provider.chat.transport.endpoint));
+    for (const protocol of provider.images?.protocols ?? [])
+      origins.add(providerEndpointOrigin(protocol.endpoint));
+    for (const protocol of provider.videos?.protocols ?? [])
+      origins.add(providerEndpointOrigin(protocol.endpoint));
+  }
+  const allowLocalCli = (scope: LocalScopeHandle): boolean =>
+    scope.tenantId === 'local' && scope.subjectId === 'local-cli';
+  return Object.freeze({
+    ...(transport ? { transport } : {}),
+    networkPolicy: createAllowlistNetworkPolicy({ origins: [...origins] }),
+    ambientAuthPolicy: Object.freeze({ allow: allowLocalCli }),
+    credentialOverridePolicy: Object.freeze({ allow: allowLocalCli }),
+  });
 }
 
 function rejectSecretFields(value: unknown, path: string): void {
@@ -344,12 +529,12 @@ function rejectSecretFields(value: unknown, path: string): void {
   if (!isRecord(value)) return;
   for (const [key, item] of Object.entries(value)) {
     if (
-      /(?:secret|token|password|authorization|cookie|api[-_]?key|credential)/iu.test(
+      /(?:secret|token|password|authorization|cookie|api[-_]?key|credential|private[-_]?key)/iu.test(
         key,
       )
     )
       throw new Error(
-        `CLI config must not contain secret field ${path}.${key}`,
+        `CLI config must not contain secret or credential field ${path}.${key}`,
       );
     rejectSecretFields(item, `${path}.${key}`);
   }

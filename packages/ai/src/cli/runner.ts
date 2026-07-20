@@ -33,28 +33,41 @@ export interface NodeCliDependencies<TScopeHandle = unknown> {
     missingOptions: readonly string[];
   }>[];
   readonly credentialKeyAvailable: boolean;
+  readonly defaultAccount?: string;
 }
 
 export const CLI_SKIPPED_EXIT_CODE = 3;
 export const CLI_USAGE_EXIT_CODE = 64;
 export const CLI_UNAVAILABLE_EXIT_CODE = 69;
+export const CLI_EXIT_CREDENTIAL_KEY_UNAVAILABLE = CLI_UNAVAILABLE_EXIT_CODE;
 
 export async function runCli<TScopeHandle>(
   argv: readonly string[],
   dependencies: NodeCliDependencies<TScopeHandle>,
 ): Promise<number> {
   const json = argv.includes('--json');
-  const args = argv.filter((argument) => argument !== '--json');
   try {
+    const explicitAccount = readOption(argv, '--account');
+    const account = explicitAccount ?? dependencies.defaultAccount;
+    const scopedDependencies = account
+      ? Object.freeze({
+          ...dependencies,
+          scope: scopeForAccount(dependencies.scope, account),
+        })
+      : dependencies;
+    const args = removeOption(
+      argv.filter((argument) => argument !== '--json'),
+      '--account',
+    );
     switch (args[0]) {
       case 'providers':
-        return providersCommand(dependencies, json);
+        return providersCommand(scopedDependencies, json);
       case 'models':
-        return await modelsCommand(args.slice(1), dependencies, json);
+        return await modelsCommand(args.slice(1), scopedDependencies, json);
       case 'auth':
-        return await authCommand(args.slice(1), dependencies, json);
+        return await authCommand(args.slice(1), scopedDependencies, json);
       case 'diagnose':
-        return await diagnoseCommand(args.slice(1), dependencies, json);
+        return await diagnoseCommand(args.slice(1), scopedDependencies, json);
       case undefined:
       case 'help':
       case '--help':
@@ -74,6 +87,44 @@ export async function runCli<TScopeHandle>(
       ? CLI_UNAVAILABLE_EXIT_CODE
       : 1;
   }
+}
+
+function readOption(args: readonly string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (!value || value.startsWith('--'))
+    throw new AiRuntimeError(
+      'CLI_USAGE',
+      'invalid_request',
+      `${name} requires a non-empty value`,
+    );
+  return value;
+}
+
+function removeOption(
+  args: readonly string[],
+  name: string,
+): readonly string[] {
+  const index = args.indexOf(name);
+  if (index < 0) return args;
+  return Object.freeze([...args.slice(0, index), ...args.slice(index + 2)]);
+}
+
+function scopeForAccount<TScopeHandle>(
+  scope: TScopeHandle,
+  account: string,
+): TScopeHandle {
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope))
+    throw new AiRuntimeError(
+      'CLI_USAGE',
+      'invalid_request',
+      '--account requires an object-shaped credential scope',
+    );
+  return Object.freeze({
+    ...(scope as Readonly<Record<string, unknown>>),
+    credentialSlotId: account,
+  }) as TScopeHandle;
 }
 
 function providersCommand<TScopeHandle>(

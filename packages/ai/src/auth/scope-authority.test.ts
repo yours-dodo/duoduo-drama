@@ -5,6 +5,20 @@ import { createLocalScopeAuthority } from './node/local-scope.js';
 import { validateResolvedScope } from './scope-authority.js';
 
 describe('local credential scope authority', () => {
+  it('lets the single-user local preset select an explicit credential slot', async () => {
+    const { authority, scope } = createLocalScopeAuthority({
+      tenantId: 'local',
+      subjectId: 'local-cli',
+    });
+
+    await expect(
+      authority.resolve(
+        { ...scope, credentialSlotId: 'team-a' },
+        { expectedProviderInstanceId: 'openai', action: 'inspect_auth' },
+      ),
+    ).resolves.toMatchObject({ credentialSlotId: 'team-a' });
+  });
+
   it('binds a scope to the expected provider and rejects mismatches', async () => {
     const { authority, scope } = createLocalScopeAuthority({
       tenantId: 'tenant-a',

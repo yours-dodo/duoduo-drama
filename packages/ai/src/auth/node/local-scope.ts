@@ -54,7 +54,8 @@ export function createLocalScopeAuthority(
       if (
         handle.tenantId !== scope.tenantId ||
         handle.subjectId !== scope.subjectId ||
-        handle.credentialSlotId !== scope.credentialSlotId
+        (scope.credentialSlotId !== undefined &&
+          handle.credentialSlotId !== scope.credentialSlotId)
       )
         throw new TypeError('unknown local credential scope handle');
       return validateResolvedScope(
