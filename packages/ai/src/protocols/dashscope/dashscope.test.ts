@@ -10,11 +10,10 @@ import { createAllowlistNetworkPolicy } from '../../transport/index.js';
 import { dashScopeContract, dashScopeReplayCodecs } from './index.js';
 
 async function fixture(path: string): Promise<Uint8Array[]> {
-  return [
-    await readFile(
-      new URL(`../../../test/fixtures/qwen/${path}`, import.meta.url),
-    ),
-  ];
+  const data = await readFile(
+    new URL(`../../../test/fixtures/qwen/${path}`, import.meta.url),
+  );
+  return [Buffer.concat([data, Buffer.from('\n')])];
 }
 
 const credentialOverride = {

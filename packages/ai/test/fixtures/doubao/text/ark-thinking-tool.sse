@@ -1,0 +1,23 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_ark_1","model":"ep-20260720"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"reasoning_1","type":"reasoning"}}
+
+event: response.reasoning.delta
+data: {"type":"response.reasoning.delta","item_id":"reasoning_1","output_index":0,"delta":"先检查。"}
+
+event: response.reasoning.done
+data: {"type":"response.reasoning.done","item_id":"reasoning_1","output_index":0,"text":"先检查。"}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"id":"call_item_1","type":"function_call","call_id":"call_1","name":"lookup"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"call_item_1","output_index":1,"delta":"{\"id\":\"42\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","item_id":"call_item_1","output_index":1,"arguments":"{\"id\":\"42\"}"}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_ark_1","model":"doubao-seed-1-6-250615","usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18,"output_tokens_details":{"reasoning_tokens":2}}}}

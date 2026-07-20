@@ -1,6 +1,6 @@
 # @duoduo/ai Implementation Status
 
-> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S10; the broader Protocol gate remains in progress until its remaining slices pass.
+> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S12; the Protocol gate is complete and the remaining Provider, Generation, ecosystem, and productization slices are still in progress.
 
 ## Slices
 
@@ -17,6 +17,7 @@
 | S09 Multi-protocol gateways and GitHub OAuth          | passed | 182 tests, including all 19 gateway Provider × protocol fixtures, GitHub device/token exchange and credential-derived endpoint isolation, plus all package verification gates passed on July 20, 2026.                                                                    |
 | S10 Codex, Mistral, Radius, and PI parity             | passed | 200 tests, including the deterministic 36-Provider/10-protocol parity ledger, Codex/Mistral/PI stream contracts, five OAuth refresh skews, polling/revocation, and Radius discovery isolation, plus all package verification gates passed on July 20, 2026.               |
 | S11 Qwen text protocols and native DashScope          | passed | 208 tests, including six-region shared/workspace endpoint validation, four deterministic Qwen protocol bindings, curated native DashScope text/multimodal routes, thinking/tools/usage/replay normalization, plus all package verification gates passed on July 20, 2026. |
+| S12 Doubao Responses and Ark text protocols           | passed | 214 tests, including explicit Beijing Ark endpoint resolution, Model ID/Endpoint ID body-only binding, Responses/Chat compatibility selection, Ark thinking/tool/replay normalization, plus all package verification gates passed on July 20, 2026.                       |
 
 ## Gates
 
@@ -24,7 +25,7 @@
 | -------------------- | ----------- | ----------------------------------------------------------------------------------- |
 | Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates. |
 | Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.      |
-| Protocol             | in-progress | S03 and S05–S10 protocol paths passed; S11–S12 remain.                              |
+| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.   |
 | Baseline Provider    | in-progress | PI text baseline passed in S10; OpenRouter Images remains in S13.                   |
 | Extended Provider    | not-started | —                                                                                   |
 | Generation           | not-started | —                                                                                   |

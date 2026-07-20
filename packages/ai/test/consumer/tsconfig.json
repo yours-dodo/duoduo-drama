@@ -14,7 +14,8 @@
     "google-vertex-bedrock.ts",
     "gateways.ts",
     "pi-baseline.ts",
-    "qwen.ts"
+    "qwen.ts",
+    "doubao.ts"
   ],
   "references": []
 }
