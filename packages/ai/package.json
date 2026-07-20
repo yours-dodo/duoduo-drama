@@ -64,6 +64,18 @@
       "types": "./dist/protocols/anthropic-messages/index.d.ts",
       "import": "./dist/protocols/anthropic-messages/index.js"
     },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    },
+    "./providers/all": {
+      "types": "./dist/providers/all/index.d.ts",
+      "import": "./dist/providers/all/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js"
+    },
     "./providers/openai": {
       "types": "./dist/providers/openai/index.d.ts",
       "import": "./dist/providers/openai/index.js"
@@ -321,14 +333,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11','S12','S13','S14','S15','S16','S17','S18','S19']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
-    "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
-    "lint": "eslint src test",
-    "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check"
+    "manifest:check": "node --experimental-strip-types scripts/manifest/check.ts",
+    "format:check": "prettier --check src scripts test README.md package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
+    "lint": "eslint src scripts test",
+    "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check",
+    "catalog:update": "node --experimental-strip-types scripts/catalog/update.ts",
+    "test:live": "pnpm build && node --experimental-strip-types test/live/run.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "bin": {
+    "duoduo-ai": "./dist/cli/bin.js"
   }
 }

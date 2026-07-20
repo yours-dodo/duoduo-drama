@@ -34,3 +34,9 @@ Use concise, imperative commit subjects with a conventional prefix where it impr
 ## Security & Configuration
 
 Never commit credentials, tokens, private keys, or machine-specific configuration. Add generated files and local environment files to `.gitignore`, and provide sanitized examples such as `.env.example` when configuration is introduced.
+
+## AI Runtime Productization
+
+`packages/ai` owns the `@duoduo/ai` runtime and its generated built-in Provider catalog. Import individual Provider subpaths by default; `@duoduo/ai/providers/all` is the only boundary allowed to statically import every built-in Provider. The Node CLI is exported from `@duoduo/ai/cli` and built as `duoduo-ai`. Keep real credentials, environment reads, filesystem stores, and interactive auth out of provider-neutral/root imports.
+
+When Provider exports change, run `pnpm --filter @duoduo/ai catalog:update`, `catalog:update -- --check --offline`, `api:check`, and `manifest:check`. Normal `test`, `build`, install, and catalog scripts must never import `packages/ai/test/live/run.ts`; live execution requires its dedicated command and all documented paid-use opt-ins.

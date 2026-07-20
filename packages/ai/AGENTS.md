@@ -73,3 +73,20 @@ Run from the repository root:
 
 Tests are offline and deterministic.
 Resumable generation references are runtime-owned and redacted. Only cross-runtime authentication identity, scope authority, and an injected `GenerationOperationCodec` may produce serialized operation tokens. Resume must fail closed on domain/version/TTL, scope, credential, Provider config, model, profile, or operation-binding mismatch; adapters never receive credential proofs or sealed tokens.
+
+## Productization Boundaries
+
+- `@duoduo/ai/providers` exposes Provider factory extension types without importing concrete Providers.
+- `@duoduo/ai/providers/all` is the sole opt-in all-built-in entry. `builtinProviders()` is asynchronous, reports missing required non-secret configuration through `unconfigured`, and must never guess regions, endpoints, account IDs, deployments, or gateway adapters.
+- `@duoduo/ai/cli` exposes the Node CLI assembly and testable runner. Secret-shaped configuration is rejected; credential persistence requires an explicit usable master key and otherwise fails closed.
+- `scripts/catalog` owns deterministic offline catalog generation. Remote shards may contain safe model facts only and cannot control endpoint, auth, protocol, profile, operation, or route behavior.
+- `scripts/manifest` fences the generated 40-Provider catalog, public export map, source/build paths, CLI binary, and passed implementation slices.
+- `test/live/run.ts` is the only live harness entry. Do not import it from normal tests, builds, install hooks, source entrypoints, or catalog scripts. It requires the environment enable flag, Provider allowlist, positive USD budget, explicit Provider/model, and `--allow-paid`; media runs also require count/duration budgets.
+- A self-hosted generation Provider requires an injected `DuoduoGenerationGateway`. A base URL is identity/configuration only and is never enough to synthesize an adapter.
+
+Additional package commands:
+
+- `pnpm --filter @duoduo/ai catalog:update`
+- `pnpm --filter @duoduo/ai catalog:update -- --check --offline`
+- `pnpm --filter @duoduo/ai manifest:check`
+- `pnpm --filter @duoduo/ai test:live -- --provider <kind> --model <id> --estimated-max-usd <usd> --allow-paid`

@@ -327,3 +327,19 @@ docs: refine short drama workflow
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+## AI Runtime 包
+
+`packages/ai` 提供 `@duoduo/ai` 的 Provider-neutral runtime、40 个显式 Provider 子路径、聊天/图片/视频能力、密封凭据、可恢复生成任务、目录生成器和本地 CLI。应用应按需导入单个 `@duoduo/ai/providers/<kind>`；只有明确导入 `@duoduo/ai/providers/all` 时才会把全部内建 Provider 纳入依赖图。
+
+常用离线命令：
+
+```bash
+pnpm --filter @duoduo/ai test
+pnpm --filter @duoduo/ai typecheck
+pnpm --filter @duoduo/ai build
+pnpm --filter @duoduo/ai catalog:update -- --check --offline
+pnpm --filter @duoduo/ai manifest:check
+```
+
+CLI、鉴权、Provider 清单、自建生成网关和 live 安全开关详见 `packages/ai/README.md`。默认测试、构建和目录生成绝不运行付费 live 请求。

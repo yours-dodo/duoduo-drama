@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    { "kind": "amazon-bedrock", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "ant-ling", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "anthropic", "requiredNonSecretOptions": [], "models": [] },
+    {
+      "kind": "azure-openai-responses",
+      "requiredNonSecretOptions": [
+        "baseUrl|resourceName",
+        "deploymentName|deploymentMap"
+      ],
+      "models": []
+    },
+    { "kind": "cerebras", "requiredNonSecretOptions": [], "models": [] },
+    {
+      "kind": "cloudflare-ai-gateway",
+      "requiredNonSecretOptions": ["accountId", "gatewayId"],
+      "models": []
+    },
+    {
+      "kind": "cloudflare-workers-ai",
+      "requiredNonSecretOptions": ["accountId"],
+      "models": []
+    },
+    { "kind": "deepseek", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "doubao", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "fireworks", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "github-copilot", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "google", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "google-vertex", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "groq", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "huggingface", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "kimi-coding", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "kling", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "minimax", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "minimax-cn", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "mistral", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "moonshotai", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "moonshotai-cn", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "nvidia", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "openai", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "openai-codex", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "opencode", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "opencode-go", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "openrouter", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "qwen", "requiredNonSecretOptions": ["region"], "models": [] },
+    { "kind": "radius", "requiredNonSecretOptions": [], "models": [] },
+    {
+      "kind": "self-hosted-generation",
+      "requiredNonSecretOptions": ["gateway", "gatewayBaseUrl"],
+      "models": []
+    },
+    { "kind": "together", "requiredNonSecretOptions": [], "models": [] },
+    {
+      "kind": "vercel-ai-gateway",
+      "requiredNonSecretOptions": [],
+      "models": []
+    },
+    { "kind": "xai", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "xiaomi", "requiredNonSecretOptions": [], "models": [] },
+    {
+      "kind": "xiaomi-token-plan-ams",
+      "requiredNonSecretOptions": [],
+      "models": []
+    },
+    {
+      "kind": "xiaomi-token-plan-cn",
+      "requiredNonSecretOptions": [],
+      "models": []
+    },
+    {
+      "kind": "xiaomi-token-plan-sgp",
+      "requiredNonSecretOptions": [],
+      "models": []
+    },
+    { "kind": "zai", "requiredNonSecretOptions": [], "models": [] },
+    { "kind": "zai-coding-cn", "requiredNonSecretOptions": [], "models": [] }
+  ],
+  "digest": "23dc46829ea406a383b6cf27897f185685038370b5f1f2e321f1d67fdeba0f8b"
+}

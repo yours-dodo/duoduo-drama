@@ -19,7 +19,10 @@
     "images.ts",
     "videos.ts",
     "custom-aggregator.ts",
-    "self-hosted-generation.ts"
+    "self-hosted-generation.ts",
+    "chat.ts",
+    "providers-all.ts",
+    "cli.ts"
   ],
   "references": []
 }
