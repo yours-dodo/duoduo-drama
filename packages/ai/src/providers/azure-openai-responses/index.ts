@@ -116,6 +116,43 @@ export function createAzureOpenAiResponsesProvider(
     kind: 'azure-openai-responses',
     name: 'Azure OpenAI Responses',
     identity: Object.freeze({ endpoint }),
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'azure-openai-responses',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'azure-openai-responses',
+          profileIds: Object.freeze(['azure-openai-responses-default']),
+          authSchemes: Object.freeze(['api_key']),
+          endpointBranchIds: Object.freeze([
+            'explicit-base-url',
+            'environment-base-url',
+            'resource-name',
+            'explicit-deployment',
+            'deployment-map',
+            'model-id-fallback',
+          ]),
+          requestFixtureIds: Object.freeze(['azure_openai_responses_request']),
+          streamFixtureIds: Object.freeze(['azure_openai_responses_stream']),
+          errorFixtureIds: Object.freeze([
+            'azure_openai_endpoint_unconfigured',
+            'azure_openai_model_endpoint_conflict',
+          ]),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'src/providers/azure-openai-responses/index.test.ts',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: Object.freeze({
       models: Object.freeze(definitions),
       transport: Object.freeze({

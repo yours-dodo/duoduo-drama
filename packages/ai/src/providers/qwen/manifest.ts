@@ -54,7 +54,7 @@ export const qwenContractManifest: ProviderContractManifest = Object.freeze({
       authSchemes: Object.freeze(['api_key']),
       endpointBranchIds: Object.freeze(['multimodal-generation']),
       requestFixtureIds: Object.freeze(['qwen_wan_direct_request']),
-      streamFixtureIds: Object.freeze([]),
+      streamFixtureIds: Object.freeze(['qwen_wan_direct_result']),
       errorFixtureIds: Object.freeze(['qwen_wan_invalid_request']),
       sources: Object.freeze([
         Object.freeze({

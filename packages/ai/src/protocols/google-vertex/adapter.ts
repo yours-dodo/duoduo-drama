@@ -13,3 +13,7 @@ export const googleVertexReplayCodecs = Object.freeze([
 export const runGoogleVertex = createGoogleStreamingAdapter({
   protocolId: 'google-vertex',
 });
+
+export function createGoogleVertexAdapter() {
+  return runGoogleVertex;
+}

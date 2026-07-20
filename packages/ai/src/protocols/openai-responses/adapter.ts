@@ -13,6 +13,21 @@ interface OpenAiEvent {
   readonly [key: string]: unknown;
 }
 
+export const openAiResponsesContract = Object.freeze({
+  protocol: 'openai-responses' as const,
+  route: 'responses' as const,
+  streaming: true,
+  terminalOwner: 'runtime' as const,
+});
+
+export const openAiResponsesReplayCodecs = Object.freeze([
+  Object.freeze({ id: 'openai-response-id', version: 1 }),
+]);
+
+export function createOpenAiResponsesAdapter() {
+  return runOpenAiResponses;
+}
+
 export async function runOpenAiResponses<TProtocol extends ResponsesProtocol>(
   request: ChatRequest<TProtocol>,
   sink: ProtocolEventSink,

@@ -1,4 +1,5 @@
 export {
+  createGoogleVertexAdapter,
   googleVertexContract,
   googleVertexReplayCodecs,
   runGoogleVertex,

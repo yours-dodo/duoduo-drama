@@ -1,1 +1,6 @@
-export { runAzureOpenAiResponses } from './adapter.js';
+export {
+  azureOpenAiResponsesContract,
+  azureOpenAiResponsesReplayCodecs,
+  createAzureOpenAiResponsesAdapter,
+  runAzureOpenAiResponses,
+} from './adapter.js';

@@ -332,13 +332,15 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
-    "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
+    "api:check": "tsc -p test/consumer/tsconfig.json --noEmit && node --experimental-strip-types scripts/api/check.ts",
     "manifest:check": "node --experimental-strip-types scripts/manifest/check.ts",
     "format:check": "prettier --check src scripts test README.md package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src scripts test",
     "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check",
     "catalog:update": "node --experimental-strip-types scripts/catalog/update.ts",
-    "test:live": "pnpm build && node --experimental-strip-types test/live/run.ts"
+    "test:live": "pnpm build && node --experimental-strip-types test/live/run.ts",
+    "release:check": "pnpm build && node --experimental-strip-types scripts/release/check.ts",
+    "release:no-vendor": "node --experimental-strip-types scripts/release/no-vendor.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,1 +1,6 @@
-export { runOpenAiResponses } from './adapter.js';
+export {
+  createOpenAiResponsesAdapter,
+  openAiResponsesContract,
+  openAiResponsesReplayCodecs,
+  runOpenAiResponses,
+} from './adapter.js';

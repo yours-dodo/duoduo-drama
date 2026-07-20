@@ -50,7 +50,10 @@ export const doubaoContractManifest: ProviderContractManifest = Object.freeze({
         'doubao_seedream_model_request',
         'doubao_seedream_endpoint_request',
       ]),
-      streamFixtureIds: Object.freeze([]),
+      streamFixtureIds: Object.freeze([
+        'doubao_seedream_model_result',
+        'doubao_seedream_endpoint_result',
+      ]),
       errorFixtureIds: Object.freeze(['doubao_seedream_invalid_request']),
       sources: Object.freeze([
         Object.freeze({

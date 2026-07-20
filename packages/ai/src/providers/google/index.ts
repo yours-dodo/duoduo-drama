@@ -31,6 +31,36 @@ export function createGoogleProvider(
     kind: 'google',
     name: 'Google Gemini Developer API',
     identity: { baseUrl, authMode: 'api-key', apiVersion: 'v1beta' },
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'google',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'google-generative-ai',
+          profileIds: Object.freeze(['google-generative-ai-default']),
+          authSchemes: Object.freeze(['api_key']),
+          endpointBranchIds: Object.freeze([
+            'generative-language-v1beta',
+            'explicit-base-url',
+          ]),
+          requestFixtureIds: Object.freeze(['google_thinking_tool_request']),
+          streamFixtureIds: Object.freeze(['google_thinking_tool_stream']),
+          errorFixtureIds: Object.freeze(['google_api_error']),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'https://ai.google.dev/api/generate-content#method:-models.streamgeneratecontent',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/google-generative-ai',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: {
       models: models.map((model) => makeModel(id, model)),
       transport: {

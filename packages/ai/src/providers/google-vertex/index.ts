@@ -69,6 +69,37 @@ export function createGoogleVertexProvider(
           },
         }
       : {}),
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'google-vertex',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'google-vertex',
+          profileIds: Object.freeze(['google-vertex-default']),
+          authSchemes: Object.freeze(['api_key', 'adc']),
+          endpointBranchIds: Object.freeze([
+            'global-api-key',
+            'regional-adc',
+            'explicit-base-url',
+          ]),
+          requestFixtureIds: Object.freeze(['google_vertex_text_request']),
+          streamFixtureIds: Object.freeze(['google_vertex_text_stream']),
+          errorFixtureIds: Object.freeze(['google_vertex_api_error']),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/google-vertex',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: {
       models: models.map((model) => makeModel(id, model)),
       transport: {

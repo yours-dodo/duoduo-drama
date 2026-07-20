@@ -67,6 +67,40 @@ export function createAmazonBedrockProvider(
           },
         }
       : {}),
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'amazon-bedrock',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'bedrock-converse-stream',
+          profileIds: Object.freeze(['bedrock-converse-stream-default']),
+          authSchemes: Object.freeze(['bearer', 'aws']),
+          endpointBranchIds: Object.freeze([
+            'model-region',
+            'explicit-region',
+            'environment-region',
+            'profile-region',
+            'default-region',
+            'explicit-base-url',
+          ]),
+          requestFixtureIds: Object.freeze(['bedrock_reasoning_tool_request']),
+          streamFixtureIds: Object.freeze(['bedrock_reasoning_tool_stream']),
+          errorFixtureIds: Object.freeze(['bedrock_http_error']),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/bedrock-converse-stream',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: {
       models: models.map((model) => makeModel(id, model)),
       transport: {

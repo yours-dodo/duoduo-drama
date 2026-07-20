@@ -30,6 +30,37 @@ export function createOpenAiProvider(
     identity: {
       endpoint: options.endpoint ?? 'https://api.openai.com/v1/responses',
     },
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'openai',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'openai-responses',
+          profileIds: Object.freeze(['openai-responses-default']),
+          authSchemes: Object.freeze(['api_key']),
+          endpointBranchIds: Object.freeze([
+            'responses-default',
+            'explicit-endpoint',
+          ]),
+          requestFixtureIds: Object.freeze(['openai_responses_request']),
+          streamFixtureIds: Object.freeze(['openai_responses_stream']),
+          errorFixtureIds: Object.freeze(['openai_responses_error']),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'https://platform.openai.com/docs/api-reference/responses-streaming',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator:
+                'src/protocols/openai-responses/openai-responses.test.ts',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: {
       models: models.map((model) => makeModel(id, model)),
       transport: {

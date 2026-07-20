@@ -113,6 +113,78 @@ export async function selfHostedGenerationProvider(
       catalogRevision: catalog.revision,
       gatewayBaseUrl: endpoint,
     }),
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'self-hosted-generation',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'images' as const,
+          protocol: 'duoduo-generation-v1',
+          profileIds: Object.freeze(['duoduo-generation-v1']),
+          authSchemes: Object.freeze(['api_key', 'ambient_service_identity']),
+          endpointBranchIds: Object.freeze(['create', 'poll', 'cancel']),
+          requestFixtureIds: Object.freeze([
+            'self_hosted_image_create',
+            'self_hosted_catalog',
+          ]),
+          streamFixtureIds: Object.freeze([
+            'self_hosted_queued',
+            'self_hosted_preparing',
+            'self_hosted_running',
+            'self_hosted_finalizing',
+            'self_hosted_succeeded_image',
+          ]),
+          errorFixtureIds: Object.freeze([
+            'self_hosted_cancelled',
+            'self_hosted_invalid_extension',
+          ]),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'docs/superpowers/specs/2026-07-19-duoduo-ai-design.md#self-hosted-generation',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/self-hosted-generation',
+            }),
+          ]),
+        }),
+        Object.freeze({
+          capability: 'videos' as const,
+          protocol: 'duoduo-generation-v1',
+          profileIds: Object.freeze(['duoduo-generation-v1']),
+          authSchemes: Object.freeze(['api_key', 'ambient_service_identity']),
+          endpointBranchIds: Object.freeze(['create', 'poll', 'cancel']),
+          requestFixtureIds: Object.freeze([
+            'self_hosted_video_create',
+            'self_hosted_catalog',
+          ]),
+          streamFixtureIds: Object.freeze([
+            'self_hosted_queued',
+            'self_hosted_preparing',
+            'self_hosted_running',
+            'self_hosted_finalizing',
+            'self_hosted_succeeded_video',
+          ]),
+          errorFixtureIds: Object.freeze([
+            'self_hosted_cancelled',
+            'self_hosted_invalid_extension',
+          ]),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator:
+                'docs/superpowers/specs/2026-07-19-duoduo-ai-design.md#self-hosted-generation',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/self-hosted-generation',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     images: Object.freeze({
       catalogCompatibilityVersion: `duoduo-generation-v1:${catalog.revision}`,
       models: Object.freeze(

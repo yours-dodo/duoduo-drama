@@ -57,7 +57,7 @@ export function xAiProvider(options: XAiProviderOptions = {}): Provider {
             authSchemes: ['api-key', 'oauth'],
             endpointBranchIds: ['generate', 'edit'],
             requestFixtureIds: ['generate', 'edit'],
-            streamFixtureIds: [],
+            streamFixtureIds: ['generate-success', 'edit-base64'],
             errorFixtureIds: ['provider-error'],
             sources: [
               {

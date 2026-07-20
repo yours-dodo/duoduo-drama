@@ -13,3 +13,7 @@ export const googleGenerativeAiReplayCodecs = Object.freeze([
 export const runGoogleGenerativeAi = createGoogleStreamingAdapter({
   protocolId: 'google-generative-ai',
 });
+
+export function createGoogleGenerativeAiAdapter() {
+  return runGoogleGenerativeAi;
+}

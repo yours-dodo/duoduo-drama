@@ -52,6 +52,38 @@ export function createAnthropicProvider(
             oauth: createAnthropicOAuthFlow(options.oauth),
           },
         }),
+    contractManifest: Object.freeze({
+      schemaVersion: 1 as const,
+      providerKind: 'anthropic',
+      bindings: Object.freeze([
+        Object.freeze({
+          capability: 'chat' as const,
+          protocol: 'anthropic-messages',
+          profileIds: Object.freeze(['anthropic-messages-default']),
+          authSchemes: Object.freeze(['api_key', 'oauth']),
+          endpointBranchIds: Object.freeze([
+            'messages-default',
+            'explicit-endpoint',
+          ]),
+          requestFixtureIds: Object.freeze(['anthropic_thinking_tool_request']),
+          streamFixtureIds: Object.freeze([
+            'anthropic_thinking_unsigned_stream',
+            'anthropic_cache_one_hour_stream',
+          ]),
+          errorFixtureIds: Object.freeze(['anthropic_overloaded_error']),
+          sources: Object.freeze([
+            Object.freeze({
+              kind: 'official' as const,
+              locator: 'https://docs.anthropic.com/en/api/messages-streaming',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/anthropic',
+            }),
+          ]),
+        }),
+      ]),
+    }),
     chat: {
       models: models.map((model) => makeModel(id, model)),
       transport: {

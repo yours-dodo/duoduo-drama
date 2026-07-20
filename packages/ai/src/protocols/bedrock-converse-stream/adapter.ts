@@ -27,6 +27,10 @@ export const bedrockConverseStreamReplayCodecs = Object.freeze([
   Object.freeze({ id: 'bedrock-reasoning-signature', version: 1 }),
 ]);
 
+export function createBedrockConverseStreamAdapter() {
+  return runBedrockConverseStream;
+}
+
 export async function runBedrockConverseStream(
   request: ChatRequest<'bedrock-converse-stream'>,
   sink: ProtocolEventSink,

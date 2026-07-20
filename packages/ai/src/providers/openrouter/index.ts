@@ -37,12 +37,16 @@ export function openRouterProvider(options: OpenRouterProviderOptions = {}) {
           authSchemes: Object.freeze(['api-key']),
           endpointBranchIds: Object.freeze(['chat-completions']),
           requestFixtureIds: Object.freeze(['mixed']),
-          streamFixtureIds: Object.freeze([]),
-          errorFixtureIds: Object.freeze([]),
+          streamFixtureIds: Object.freeze(['mixed-result']),
+          errorFixtureIds: Object.freeze(['invalid-image-response']),
           sources: Object.freeze([
             Object.freeze({
               kind: 'pi' as const,
               locator: 'vendor/pi/packages/ai/src/api/openrouter-images.ts',
+            }),
+            Object.freeze({
+              kind: 'fixture' as const,
+              locator: 'test/fixtures/openrouter/images',
             }),
           ]),
         }),
