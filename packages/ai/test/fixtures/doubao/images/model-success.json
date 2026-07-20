@@ -1,0 +1,5 @@
+{
+  "id": "ark-image-model-response",
+  "data": [{ "url": "https://images.example/seedream.webp" }],
+  "usage": { "generated_images": 1 }
+}

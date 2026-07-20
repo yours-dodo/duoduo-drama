@@ -14,6 +14,7 @@ describe('Doubao provider', () => {
       responsesUrl: 'https://ark.cn-beijing.volces.com/api/v3/responses',
       chatCompletionsUrl:
         'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+      imagesUrl: 'https://ark.cn-beijing.volces.com/api/v3/images/generations',
     });
     const provider = doubaoProvider();
     const model = provider.chat?.models[0];

@@ -1,0 +1,5 @@
+{
+  "id": "ark-image-endpoint-response",
+  "data": [{ "b64_json": "aW1hZ2U=", "media_type": "image/png" }],
+  "usage": { "image_count": 1 }
+}

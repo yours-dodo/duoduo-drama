@@ -4,8 +4,8 @@ import { doubaoProtocolProfiles } from './profiles.js';
 export const doubaoContractManifest: ProviderContractManifest = Object.freeze({
   schemaVersion: 1,
   providerKind: 'doubao',
-  bindings: Object.freeze(
-    doubaoProtocolProfiles.map((profile) =>
+  bindings: Object.freeze([
+    ...doubaoProtocolProfiles.map((profile) =>
       Object.freeze({
         capability: 'chat' as const,
         protocol: profile.protocol,
@@ -37,5 +37,32 @@ export const doubaoContractManifest: ProviderContractManifest = Object.freeze({
         ]),
       }),
     ),
-  ),
+    Object.freeze({
+      capability: 'images' as const,
+      protocol: 'ark-images',
+      profileIds: Object.freeze(['doubao-ark-images-v1']),
+      authSchemes: Object.freeze(['api_key']),
+      endpointBranchIds: Object.freeze([
+        'cn-beijing-ark-v3',
+        'explicit-base-url',
+      ]),
+      requestFixtureIds: Object.freeze([
+        'doubao_seedream_model_request',
+        'doubao_seedream_endpoint_request',
+      ]),
+      streamFixtureIds: Object.freeze([]),
+      errorFixtureIds: Object.freeze(['doubao_seedream_invalid_request']),
+      sources: Object.freeze([
+        Object.freeze({
+          kind: 'official' as const,
+          locator:
+            'https://api.volcengine.com/api-docs/view?action=ImageGenerations&serviceCode=ark&version=2024-01-01',
+        }),
+        Object.freeze({
+          kind: 'fixture' as const,
+          locator: 'test/fixtures/doubao/images',
+        }),
+      ]),
+    }),
+  ]),
 });

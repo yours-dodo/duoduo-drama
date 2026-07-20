@@ -8,6 +8,7 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/images` owns provider-neutral image model, input/output, stream, cost, and direct-generation contracts; protocol-specific fields must remain typed through declaration merging.
 - `@duoduo/ai/generation` owns the domain-neutral resumable-operation state machine, sealed-envelope/credential-verifier ports, progress, artifact, and compute-usage types; image/video packages own strict claims and branded refs.
 - `@duoduo/ai/protocols/dashscope-images` and `@duoduo/ai/protocols/dashscope-image-tasks` own Qwen Wan direct and resumable image wire contracts; task IDs and operation routes must be validated before transport resolution.
+- `@duoduo/ai/protocols/ark-images` and the `@duoduo/ai/providers/doubao` image binding own explicit Seedream Model ID/Endpoint ID direct generation; Ark image identities belong only in the request body and must never become route segments.
 - `@duoduo/ai/protocols/openrouter-images` owns OpenRouter ordered multimodal request mapping and text/image response normalization; application consumers should use the Provider facade rather than importing the protocol adapter.
 - `@duoduo/ai/providers/openrouter` owns the explicit OpenRouter chat and direct-image bindings, including public image model references and catalog descriptors.
 - `@duoduo/ai/auth/node` exposes Node-only credential persistence, key-source, and local scope-authority factories. Keep these implementations out of provider-neutral modules.

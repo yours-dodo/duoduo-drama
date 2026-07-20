@@ -6,6 +6,7 @@ import {
   type ImageOperationRef,
 } from '@duoduo/ai/images';
 import { type GenerationOperationCodec } from '@duoduo/ai/generation';
+import { createArkImagesAdapter } from '@duoduo/ai/protocols/ark-images';
 import { createDashScopeImagesAdapter } from '@duoduo/ai/protocols/dashscope-images';
 import { createDashScopeImageTasksAdapter } from '@duoduo/ai/protocols/dashscope-image-tasks';
 import {
@@ -13,6 +14,7 @@ import {
   openRouterProvider,
   type OpenRouterImageModelInput,
 } from '@duoduo/ai/providers/openrouter';
+import { doubaoImageModelRef } from '@duoduo/ai/providers/doubao';
 
 const modelInput: OpenRouterImageModelInput = {
   id: 'example/image-model',
@@ -43,3 +45,6 @@ void (undefined as unknown as ImageOperationRef);
 void (undefined as unknown as GenerationOperationCodec);
 void createDashScopeImagesAdapter;
 void createDashScopeImageTasksAdapter;
+
+void createArkImagesAdapter;
+void doubaoImageModelRef;

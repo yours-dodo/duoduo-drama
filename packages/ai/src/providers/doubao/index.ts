@@ -23,3 +23,9 @@ export {
   type DoubaoTextProtocol,
 } from './profiles.js';
 export { doubaoContractManifest } from './manifest.js';
+
+export {
+  createDoubaoImagesBinding,
+  doubaoImageModelRef,
+  type DoubaoExplicitImageModelInput,
+} from './images.js';

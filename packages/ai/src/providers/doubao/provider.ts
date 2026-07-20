@@ -10,6 +10,10 @@ import {
 import { resolveDoubaoEndpoints, type DoubaoRegion } from './endpoints.js';
 import { doubaoContractManifest } from './manifest.js';
 import {
+  createDoubaoImagesBinding,
+  type DoubaoExplicitImageModelInput,
+} from './images.js';
+import {
   createDoubaoProtocolRunners,
   type DoubaoTextProtocol,
 } from './profiles.js';
@@ -20,6 +24,7 @@ export interface DoubaoProviderOptions {
   readonly baseUrl?: URL | string;
   readonly compatibilityMode?: 'responses' | 'chat-completions';
   readonly additionalModels?: readonly DoubaoExplicitModelInput[];
+  readonly imageModels?: readonly DoubaoExplicitImageModelInput[];
 }
 
 export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
@@ -32,6 +37,13 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
     additionalModels: options.additionalModels,
   });
   const runners = createDoubaoProtocolRunners();
+  const images = options.imageModels?.length
+    ? createDoubaoImagesBinding({
+        providerInstanceId: id,
+        endpoints,
+        models: options.imageModels,
+      })
+    : undefined;
   const endpointForModel = (model: Readonly<ModelDefinition>): string =>
     model.protocol === 'openai-chat-completions'
       ? endpoints.chatCompletionsUrl
@@ -54,6 +66,7 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
         ]),
       ),
       explicit: JSON.stringify(options.additionalModels ?? []),
+      imageModels: JSON.stringify(options.imageModels ?? []),
     }),
     auth: Object.freeze({
       policyFingerprint:
@@ -65,11 +78,13 @@ export function doubaoProvider(options: DoubaoProviderOptions = {}): Provider {
               endpoints.origin,
               endpoints.baseUrl,
               options.additionalModels ?? [],
+              options.imageModels ?? [],
             ]),
           )
           .digest('base64url') + ':ARK_API_KEY',
     }),
     contractManifest: doubaoContractManifest,
+    ...(images ? { images } : {}),
     chat: Object.freeze({
       models,
       transport: Object.freeze({
