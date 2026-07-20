@@ -32,46 +32,47 @@ import {
   createSecretHeaderValue,
 } from '../transport/request-transport.js';
 import type { NetworkPolicy, TransportDriver } from '../transport/types.js';
-import { calculateImageCost } from './cost.js';
+import { calculateVideoCost } from './cost.js';
 import type {
-  ImageGenerationOptions,
-  ImageModelsApi,
-  ImageOperationResumeOptions,
-  ImageProtocolAdapter,
-  ImageProtocolBinding,
-  ImageProtocolProfile,
-  ImagesApi,
-  ResolvedImageOperationResumeOptions,
-  ResumableImageProtocolAdapter,
-  ResumableImageProtocolBinding,
+  VideoGenerationOptions,
+  VideoModelsApi,
+  VideoOperationResumeOptions,
+  VideoProtocolAdapter,
+  VideoProtocolBinding,
+  VideoProtocolProfile,
+  VideosApi,
+  ResolvedVideoOperationResumeOptions,
+  ResumableVideoProtocolAdapter,
+  ResumableVideoProtocolBinding,
 } from './contracts.js';
 import {
-  resolveImageGenerationInput,
-  type ImageGenerationInput,
+  resolveVideoGenerationInput,
+  type VideoGenerationInput,
 } from './input.js';
 import {
-  sameImageModelRef,
-  type ImageModelDefinition,
-  type ImageModelHandle,
-  type ImageModelListFilter,
-  type ImageModelRef,
+  sameVideoModelRef,
+  type VideoModelDefinition,
+  type VideoModelHandle,
+  type VideoModelListFilter,
+  type VideoModelRef,
 } from './models.js';
 import {
-  asSerializedImageOperationRef,
-  createImageOperationRef,
-  fingerprintImageOperationBinding,
-  fingerprintImageProtocolProfile,
-  imageClaimsEnvelope,
-  inspectImageOperationRef,
-  parseImageOperationEnvelope,
-  parseSerializedImageOperationRef,
-  type ImageOperationClaims,
-  type ImageOperationRef,
-  type SerializedImageOperationRef,
+  asSerializedVideoOperationRef,
+  createVideoOperationRef,
+  fingerprintVideoGenerationInput,
+  fingerprintVideoOperationBinding,
+  fingerprintVideoProtocolProfile,
+  videoClaimsEnvelope,
+  inspectVideoOperationRef,
+  parseVideoOperationEnvelope,
+  parseSerializedVideoOperationRef,
+  type VideoOperationClaims,
+  type VideoOperationRef,
+  type SerializedVideoOperationRef,
 } from './operation-claims.js';
-import type { ImageGenerationOutput, ImageGenerationResult } from './output.js';
-import { projectImageProtocolEvent } from './operation-projector.js';
-import { DirectImageGenerationStream } from './stream.js';
+import type { VideoGenerationOutput, VideoGenerationResult } from './output.js';
+import { projectVideoProtocolEvent } from './operation-projector.js';
+import { DirectVideoGenerationStream } from './stream.js';
 
 const handleRuntime = new WeakMap<object, symbol>();
 const handleProviderGeneration = new WeakMap<object, string>();
@@ -84,9 +85,9 @@ const handleAssertCredentialCurrent = new WeakMap<
   object,
   (signal?: AbortSignal) => Promise<void>
 >();
-const handleOperationAuth = new WeakMap<object, BoundImageOperationAuth>();
+const handleOperationAuth = new WeakMap<object, BoundVideoOperationAuth>();
 
-interface ResolvedImageAuth {
+interface ResolvedVideoAuth {
   readonly requestCredential?: RequestCredentialOverride;
   readonly assertCurrent?: (signal?: AbortSignal) => Promise<void>;
   readonly authSource?: 'stored' | 'ambient' | 'override';
@@ -97,7 +98,7 @@ interface ResolvedImageAuth {
   readonly authBindingFingerprint?: string;
 }
 
-interface BoundImageOperationAuth {
+interface BoundVideoOperationAuth {
   readonly authSource: 'stored' | 'ambient' | 'override';
   readonly credentialInstanceId?: string;
   readonly credentialIdentityLifetime: CredentialIdentityLifetime;
@@ -106,13 +107,13 @@ interface BoundImageOperationAuth {
   readonly authBindingFingerprint: string;
 }
 
-export interface CreateImagesApiOptions<TScopeHandle> {
+export interface CreateVideosApiOptions<TScopeHandle> {
   readonly registry: ProviderRegistry;
   readonly runtimeId: symbol;
   readonly transport?: TransportDriver;
   readonly networkPolicy?: NetworkPolicy;
   readonly credentialOverridePolicy?: CredentialOverridePolicy<TScopeHandle>;
-  readonly imageDefaults?: Readonly<{
+  readonly videoDefaults?: Readonly<{
     timeoutMs?: number;
     responseFormat?: 'url' | 'base64';
     pollIntervalMs?: number;
@@ -126,12 +127,12 @@ export interface CreateImagesApiOptions<TScopeHandle> {
     readonly scope: TScopeHandle;
     readonly override?: RequestCredentialOverride;
     readonly signal?: AbortSignal;
-  }) => Promise<Readonly<ResolvedImageAuth>>;
+  }) => Promise<Readonly<ResolvedVideoAuth>>;
 }
 
-export function createImagesApi<TScopeHandle>(
-  options: CreateImagesApiOptions<TScopeHandle>,
-): ImagesApi<TScopeHandle> {
+export function createVideosApi<TScopeHandle>(
+  options: CreateVideosApiOptions<TScopeHandle>,
+): VideosApi<TScopeHandle> {
   const credentialKey = randomBytes(32);
   const policy = resolveGenerationOperationPolicy(
     options.generationOperationPolicy,
@@ -140,12 +141,12 @@ export function createImagesApi<TScopeHandle>(
   const scopeFingerprint = createRuntimeScopeFingerprinter<TScopeHandle>();
 
   const resolveAuth = async (input: {
-    binding: ImageProtocolBinding;
+    binding: VideoProtocolBinding;
     provider: ProviderSnapshot;
     scope: TScopeHandle;
     override?: RequestCredentialOverride;
     signal?: AbortSignal;
-  }): Promise<Readonly<ResolvedImageAuth>> => {
+  }): Promise<Readonly<ResolvedVideoAuth>> => {
     if (options.resolveAuth)
       return options.resolveAuth({
         provider: input.provider,
@@ -163,19 +164,19 @@ export function createImagesApi<TScopeHandle>(
     });
   };
 
-  const models: ImageModelsApi<TScopeHandle> = {
+  const models: VideoModelsApi<TScopeHandle> = {
     find: async <TProtocol extends string>(
-      ref: ImageModelRef<TProtocol>,
+      ref: VideoModelRef<TProtocol>,
       scope: TScopeHandle,
-      readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
+      readOptions: import('./contracts.js').VideoModelReadOptions | undefined,
     ) => {
       const entry = options.registry.get(ref.providerInstanceId);
-      const definition = entry?.provider.images?.models.find((candidate) =>
-        sameImageModelRef(candidate, ref),
+      const definition = entry?.provider.videos?.models.find((candidate) =>
+        sameVideoModelRef(candidate, ref),
       );
       if (!entry || !definition) return undefined;
       const binding = findBinding(
-        entry.provider.images!.protocols,
+        entry.provider.videos!.protocols,
         definition.protocol,
       );
       const auth = await resolveAuth({
@@ -186,38 +187,38 @@ export function createImagesApi<TScopeHandle>(
         signal: readOptions?.signal,
       });
       return makeHandle(
-        definition as ImageModelDefinition<TProtocol>,
+        definition as VideoModelDefinition<TProtocol>,
         entry.snapshot,
         options.runtimeId,
         bindHandleAuth(auth, credentialKey, entry.snapshot),
       );
     },
     require: async <TProtocol extends string>(
-      ref: ImageModelRef<TProtocol>,
+      ref: VideoModelRef<TProtocol>,
       scope: TScopeHandle,
-      readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
+      readOptions: import('./contracts.js').VideoModelReadOptions | undefined,
     ) => {
       const model = await models.find(ref, scope, readOptions);
       if (!model)
         throw new AiRuntimeError(
-          'IMAGE_MODEL_NOT_FOUND',
+          'VIDEO_MODEL_NOT_FOUND',
           'invalid_request',
-          `image model not found: ${ref.providerInstanceId}/${ref.modelId}`,
+          `video model not found: ${ref.providerInstanceId}/${ref.modelId}`,
         );
       return model;
     },
     list: async (
       scope: TScopeHandle,
-      filter?: ImageModelListFilter,
+      filter?: VideoModelListFilter,
       readOptions?,
     ) => {
       if (readOptions?.credentialOverride && !filter?.providerInstanceId)
         throw new AiRuntimeError(
           'CREDENTIAL_OVERRIDE_PROVIDER_REQUIRED',
           'invalid_request',
-          'providerInstanceId is required when listing image models with a credential override',
+          'providerInstanceId is required when listing video models with a credential override',
         );
-      const handles: ImageModelHandle[] = [];
+      const handles: VideoModelHandle[] = [];
       for (const snapshot of options.registry.list()) {
         if (
           filter?.providerInstanceId &&
@@ -225,12 +226,12 @@ export function createImagesApi<TScopeHandle>(
         )
           continue;
         const entry = options.registry.get(snapshot.id);
-        if (!entry?.provider.images) continue;
-        for (const definition of entry.provider.images.models) {
+        if (!entry?.provider.videos) continue;
+        for (const definition of entry.provider.videos.models) {
           if (filter?.protocol && definition.protocol !== filter.protocol)
             continue;
           const binding = findBinding(
-            entry.provider.images.protocols,
+            entry.provider.videos.protocols,
             definition.protocol,
           );
           const auth = await resolveAuth({
@@ -255,29 +256,29 @@ export function createImagesApi<TScopeHandle>(
   };
 
   const stream = <TProtocol extends string>(
-    model: ImageModelHandle<TProtocol>,
-    input: ImageGenerationInput,
-    callOptions: ImageGenerationOptions<TProtocol> = {},
-  ): DirectImageGenerationStream => {
-    const machine = new GenerationOperationMachine<ImageOperationRef>();
+    model: VideoModelHandle<TProtocol>,
+    input: VideoGenerationInput,
+    callOptions: VideoGenerationOptions<TProtocol> = {},
+  ): DirectVideoGenerationStream => {
+    const machine = new GenerationOperationMachine<VideoOperationRef>();
     let sequence = 0;
     let detachedBase:
       | Readonly<{
           requestId: string;
-          model: Readonly<ImageModelDefinition>;
-          outputs: ImageGenerationOutput[];
+          model: Readonly<VideoModelDefinition>;
+          outputs: VideoGenerationOutput[];
           startedAt: number;
         }>
       | undefined;
 
-    return new DirectImageGenerationStream(
+    return new DirectVideoGenerationStream(
       async (generationStream) => {
         const startedAt = now();
         const requestId = randomUUID();
-        const outputs: ImageGenerationOutput[] = [];
+        const outputs: VideoGenerationOutput[] = [];
         detachedBase = {
           requestId,
-          model: model.definition as Readonly<ImageModelDefinition>,
+          model: model.definition as Readonly<VideoModelDefinition>,
           outputs,
           startedAt,
         };
@@ -285,13 +286,13 @@ export function createImagesApi<TScopeHandle>(
         let timedOut = false;
         let resumableContext:
           | {
-              binding: ResumableImageProtocolBinding<TProtocol>;
-              adapter: ResumableImageProtocolAdapter<TProtocol>;
-              claims: ImageOperationClaims;
+              binding: ResumableVideoProtocolBinding<TProtocol>;
+              adapter: ResumableVideoProtocolAdapter<TProtocol>;
+              claims: VideoOperationClaims;
               override?: RequestCredentialOverride;
               entry: NonNullable<ReturnType<ProviderRegistry['get']>>;
-              profile: ImageProtocolProfile<TProtocol>;
-              resolvedOptions: import('./contracts.js').ResolvedImageGenerationOptions<TProtocol>;
+              profile: VideoProtocolProfile<TProtocol>;
+              resolvedOptions: import('./contracts.js').ResolvedVideoGenerationOptions<TProtocol>;
             }
           | undefined;
         const base = detachedBase;
@@ -327,7 +328,7 @@ export function createImagesApi<TScopeHandle>(
                 networkPolicy: options.networkPolicy,
               });
               await resumableContext.adapter.cancel({
-                operation: resumableContext.claims as ImageOperationClaims & {
+                operation: resumableContext.claims as VideoOperationClaims & {
                   protocol: TProtocol;
                 },
                 provider: resumableContext.entry.snapshot,
@@ -370,11 +371,11 @@ export function createImagesApi<TScopeHandle>(
           assertHandle(model, options.runtimeId, options.registry);
           const entry = options.registry.get(model.ref.providerInstanceId)!;
           const binding = findBinding(
-            entry.provider.images!.protocols,
+            entry.provider.videos!.protocols,
             model.definition.protocol,
-          ) as ImageProtocolBinding<TProtocol>;
+          ) as VideoProtocolBinding<TProtocol>;
           const adapter =
-            (await binding.loadAdapter()) as ImageProtocolAdapter<TProtocol>;
+            (await binding.loadAdapter()) as VideoProtocolAdapter<TProtocol>;
           assertAdapter(binding, adapter);
           const profile = findProfile(binding, model.definition);
           const resolvedOptions = resolveOptions(
@@ -382,12 +383,12 @@ export function createImagesApi<TScopeHandle>(
             model.definition,
             callOptions,
             generationStream.signal,
-            options.imageDefaults,
+            options.videoDefaults,
             adapter.contract,
           );
           timeout = setTimeout(() => {
             timedOut = true;
-            generationStream.abort('image generation timeout');
+            generationStream.abort('video generation timeout');
           }, resolvedOptions.timeoutMs);
           await handleAssertCredentialCurrent.get(model as object)?.(
             generationStream.signal,
@@ -427,7 +428,7 @@ export function createImagesApi<TScopeHandle>(
               overrideProof = proof.proof;
             }
           }
-          const resolvedInput = await resolveImageGenerationInput({
+          const resolvedInput = await resolveVideoGenerationInput({
             model: model.definition,
             value: input,
             driver: options.transport,
@@ -469,7 +470,7 @@ export function createImagesApi<TScopeHandle>(
             signal: generationStream.signal,
           };
 
-          let adapterTerminal: import('./contracts.js').ImageProtocolTerminal;
+          let adapterTerminal: import('./contracts.js').VideoProtocolTerminal;
           if (binding.operationMode === 'direct') {
             if (adapter.operationMode !== 'direct') throw protocolViolation();
             adapterTerminal = await adapter.run(request, {
@@ -477,14 +478,14 @@ export function createImagesApi<TScopeHandle>(
                 if (event.type === 'generation_output')
                   outputs[event.outputIndex] = event.output;
                 await generationStream.publish(
-                  projectImageProtocolEvent(event, sequence++),
+                  projectVideoProtocolEvent(event, sequence++),
                 );
               },
             });
           } else {
             if (adapter.operationMode !== 'resumable' || !operationAuth)
               throw protocolViolation();
-            let claims: ImageOperationClaims | undefined;
+            let claims: VideoOperationClaims | undefined;
             const setOperation = async (operationInput: {
               readonly operationId: string;
               readonly operationState?: import('../core/content.js').JsonValue;
@@ -498,12 +499,12 @@ export function createImagesApi<TScopeHandle>(
                 operationInput.operationState !== undefined &&
                 operationState === undefined
               )
-                throw protocolViolation('image operation state was rejected');
+                throw protocolViolation('video operation state was rejected');
               if (
                 operationState !== undefined &&
                 JSON.stringify(operationState).length > 16_384
               )
-                throw protocolViolation('image operation state is too large');
+                throw protocolViolation('video operation state is too large');
               const issuedAt = now();
               const providerExpiresAt = operationInput.providerExpiresAt;
               if (
@@ -511,12 +512,12 @@ export function createImagesApi<TScopeHandle>(
                 (!Number.isInteger(providerExpiresAt) ||
                   providerExpiresAt <= issuedAt)
               )
-                throw protocolViolation('image operation expiry is invalid');
+                throw protocolViolation('video operation expiry is invalid');
               const expiresAt = Math.min(
                 providerExpiresAt ?? Number.MAX_SAFE_INTEGER,
                 issuedAt + policy.maxTtlMs,
               );
-              const profileFingerprint = fingerprintImageProtocolProfile({
+              const profileFingerprint = fingerprintVideoProtocolProfile({
                 id: profile.id,
                 compatibility: profile.compatibility,
                 protocolDefaults: profile.protocolDefaults ?? null,
@@ -529,7 +530,7 @@ export function createImagesApi<TScopeHandle>(
                 protocolProfileId: model.definition.protocolProfileId,
                 modelProtocolProfileFingerprint: profileFingerprint,
                 providerOperationBindingFingerprint:
-                  fingerprintImageOperationBinding({
+                  fingerprintVideoOperationBinding({
                     providerKind: entry.snapshot.kind,
                     providerInstanceId: entry.snapshot.id,
                     providerConfigFingerprint: entry.snapshot.configFingerprint,
@@ -545,6 +546,24 @@ export function createImagesApi<TScopeHandle>(
                 credentialScopeFingerprint:
                   operationAuth.credentialScopeFingerprint,
                 operationId: operationInput.operationId,
+                operationKind: resolvedInput.operation,
+                inputDigest: fingerprintVideoGenerationInput(resolvedInput),
+                outputSpecification: Object.freeze({
+                  ...(resolvedInput.durationSeconds === undefined
+                    ? {}
+                    : { durationSeconds: resolvedInput.durationSeconds }),
+                  ...(resolvedInput.resolution === undefined
+                    ? {}
+                    : { resolution: resolvedInput.resolution }),
+                  ...(resolvedInput.aspectRatio === undefined
+                    ? {}
+                    : { aspectRatio: resolvedInput.aspectRatio }),
+                  ...(resolvedInput.fps === undefined
+                    ? {}
+                    : { fps: resolvedInput.fps }),
+                  generateAudio: resolvedInput.generateAudio,
+                  count: resolvedInput.count,
+                }),
                 ...(operationState === undefined ? {} : { operationState }),
                 issuedAt,
                 expiresAt,
@@ -563,8 +582,8 @@ export function createImagesApi<TScopeHandle>(
                       authSource: operationAuth.authSource,
                       credentialInstanceId: operationAuth.credentialInstanceId!,
                     },
-              ) as ImageOperationClaims;
-              const operation = createImageOperationRef({
+              ) as VideoOperationClaims;
+              const operation = createVideoOperationRef({
                 kind: 'memory',
                 runtimeId: options.runtimeId,
                 claims,
@@ -578,7 +597,7 @@ export function createImagesApi<TScopeHandle>(
                 machine.setOperation(operation);
               } catch {
                 throw protocolViolation(
-                  'image operation was set more than once',
+                  'video operation was set more than once',
                 );
               }
               generationStream.setOperation(operation);
@@ -606,7 +625,7 @@ export function createImagesApi<TScopeHandle>(
                     'operation transport requested before setOperation',
                   );
                 if (!binding.operationActions.includes(action))
-                  throw protocolViolation('undeclared image operation action');
+                  throw protocolViolation('undeclared video operation action');
                 return resolveOperationTransport({
                   binding,
                   action,
@@ -629,12 +648,12 @@ export function createImagesApi<TScopeHandle>(
               publish: async (event) => {
                 if (!claims)
                   throw protocolViolation(
-                    'image protocol emitted before setOperation',
+                    'video protocol emitted before setOperation',
                   );
                 if (event.type === 'generation_output')
                   outputs[event.outputIndex] = event.output;
                 await generationStream.publish(
-                  projectImageProtocolEvent(
+                  projectVideoProtocolEvent(
                     event,
                     sequence++,
                     machine.snapshot().operation,
@@ -642,9 +661,9 @@ export function createImagesApi<TScopeHandle>(
                 );
               },
             });
-            if (!claims)
+            if (!claims && adapterTerminal.status !== 'failed')
               throw protocolViolation(
-                'image protocol completed before setOperation',
+                'video protocol completed before setOperation',
               );
           }
 
@@ -693,15 +712,15 @@ export function createImagesApi<TScopeHandle>(
           throw new AiRuntimeError(
             'OPERATION_NOT_AVAILABLE',
             'invalid_request',
-            'image generation operation is already terminal',
+            'video generation operation is already terminal',
           );
         if (!detachedBase)
           throw new AiRuntimeError(
             'OPERATION_NOT_AVAILABLE',
             'invalid_request',
-            'image generation operation is not initialized',
+            'video generation operation is not initialized',
           );
-        const result: Extract<ImageGenerationResult, { status: 'detached' }> =
+        const result: Extract<VideoGenerationResult, { status: 'detached' }> =
           Object.freeze({
             ...detachedBase,
             outputs: Object.freeze([...detachedBase.outputs]),
@@ -720,17 +739,17 @@ export function createImagesApi<TScopeHandle>(
   };
 
   const resume = async (
-    operation: ImageOperationRef,
-    resumeOptions: ImageOperationResumeOptions<TScopeHandle>,
-  ): Promise<DirectImageGenerationStream> => {
-    const record = inspectImageOperationRef(operation);
-    let claims: ImageOperationClaims;
+    operation: VideoOperationRef,
+    resumeOptions: VideoOperationResumeOptions<TScopeHandle>,
+  ): Promise<DirectVideoGenerationStream> => {
+    const record = inspectVideoOperationRef(operation);
+    let claims: VideoOperationClaims;
     if (record.kind === 'memory') {
       if (record.runtimeId !== options.runtimeId || !record.claims)
         throw new AiRuntimeError(
           'OPERATION_REF_RUNTIME_MISMATCH',
           'invalid_request',
-          'image operation belongs to another runtime; serialize it first',
+          'video operation belongs to another runtime; serialize it first',
         );
       claims = record.claims;
     } else {
@@ -748,16 +767,16 @@ export function createImagesApi<TScopeHandle>(
         throw new AiRuntimeError(
           'OPERATION_TOKEN_INVALID',
           'invalid_request',
-          'image operation token is invalid',
+          'video operation token is invalid',
         );
       if (opened.status === 'key_unavailable')
         throw new AiRuntimeError(
           'OPERATION_CODEC_KEY_UNAVAILABLE',
           'invalid_request',
-          'image operation codec key is unavailable',
+          'video operation codec key is unavailable',
           opened.retryable,
         );
-      claims = parseImageOperationEnvelope(
+      claims = parseVideoOperationEnvelope(
         validateGenerationOperationEnvelope(opened.envelope),
       );
     }
@@ -767,12 +786,12 @@ export function createImagesApi<TScopeHandle>(
       throw new AiRuntimeError(
         'OPERATION_TOKEN_INVALID',
         'invalid_request',
-        'image operation token timestamps are invalid',
+        'video operation token timestamps are invalid',
       );
     }
 
     const entry = options.registry.get(claims.providerInstanceId);
-    const definition = entry?.provider.images?.models.find(
+    const definition = entry?.provider.videos?.models.find(
       (candidate) => candidate.id === claims.modelId,
     );
     if (!entry || !definition)
@@ -785,7 +804,7 @@ export function createImagesApi<TScopeHandle>(
     )
       throw operationMismatch('operation provider or model changed');
     const binding = findBinding(
-      entry.provider.images!.protocols,
+      entry.provider.videos!.protocols,
       definition.protocol,
     );
     if (binding.operationMode !== 'resumable')
@@ -793,14 +812,14 @@ export function createImagesApi<TScopeHandle>(
     const adapter = await binding.loadAdapter();
     assertAdapter(binding, adapter);
     const profile = findProfile(binding, definition);
-    const profileFingerprint = fingerprintImageProtocolProfile({
+    const profileFingerprint = fingerprintVideoProtocolProfile({
       id: profile.id,
       compatibility: profile.compatibility,
       protocolDefaults: profile.protocolDefaults ?? null,
     });
     if (
       profileFingerprint !== claims.modelProtocolProfileFingerprint ||
-      fingerprintImageOperationBinding({
+      fingerprintVideoOperationBinding({
         providerKind: entry.snapshot.kind,
         providerInstanceId: entry.snapshot.id,
         providerConfigFingerprint: entry.snapshot.configFingerprint,
@@ -861,7 +880,7 @@ export function createImagesApi<TScopeHandle>(
       resumeOptions.signal,
     );
 
-    const resolvedOptions: ResolvedImageOperationResumeOptions = Object.freeze({
+    const resolvedOptions: ResolvedVideoOperationResumeOptions = Object.freeze({
       signal: resumeOptions.signal ?? new AbortController().signal,
       timeoutMs: resumeOptions.timeoutMs ?? 60_000,
       retry: resumeOptions.retry ?? false,
@@ -895,19 +914,19 @@ export function createImagesApi<TScopeHandle>(
         })
       : undefined;
 
-    const machine = new GenerationOperationMachine<ImageOperationRef>();
+    const machine = new GenerationOperationMachine<VideoOperationRef>();
     machine.setOperation(operation);
     let sequence = 0;
-    return new DirectImageGenerationStream(
+    return new DirectVideoGenerationStream(
       async (generationStream) => {
         const startedAt = now();
         const requestId = randomUUID();
-        const outputs: ImageGenerationOutput[] = [];
+        const outputs: VideoGenerationOutput[] = [];
         let timeout: ReturnType<typeof setTimeout> | undefined;
         let timedOut = false;
         const base = {
           requestId,
-          model: definition as Readonly<ImageModelDefinition>,
+          model: definition as Readonly<VideoModelDefinition>,
           outputs,
           startedAt,
         };
@@ -965,7 +984,7 @@ export function createImagesApi<TScopeHandle>(
           });
           timeout = setTimeout(() => {
             timedOut = true;
-            generationStream.abort('image operation resume timeout');
+            generationStream.abort('video operation resume timeout');
           }, resolvedOptions.timeoutMs);
           const terminal = await adapter.resume(
             {
@@ -983,7 +1002,7 @@ export function createImagesApi<TScopeHandle>(
                 if (event.type === 'generation_output')
                   outputs[event.outputIndex] = event.output;
                 await generationStream.publish(
-                  projectImageProtocolEvent(event, sequence++, operation),
+                  projectVideoProtocolEvent(event, sequence++, operation),
                 );
               },
             },
@@ -1033,9 +1052,9 @@ export function createImagesApi<TScopeHandle>(
           throw new AiRuntimeError(
             'OPERATION_NOT_AVAILABLE',
             'invalid_request',
-            'image generation operation is already terminal',
+            'video generation operation is already terminal',
           );
-        const result: Extract<ImageGenerationResult, { status: 'detached' }> =
+        const result: Extract<VideoGenerationResult, { status: 'detached' }> =
           Object.freeze({
             requestId: randomUUID(),
             model: definition,
@@ -1059,15 +1078,15 @@ export function createImagesApi<TScopeHandle>(
     models: Object.freeze(models),
     stream,
     generate: async <TProtocol extends string>(
-      model: ImageModelHandle<TProtocol>,
-      input: ImageGenerationInput,
-      callOptions?: ImageGenerationOptions<TProtocol>,
+      model: VideoModelHandle<TProtocol>,
+      input: VideoGenerationInput,
+      callOptions?: VideoGenerationOptions<TProtocol>,
     ) => stream(model, input, callOptions).result(),
     resume,
     serializeOperation: async (
-      operation: ImageOperationRef,
-    ): Promise<SerializedImageOperationRef> => {
-      const record = inspectImageOperationRef(operation);
+      operation: VideoOperationRef,
+    ): Promise<SerializedVideoOperationRef> => {
+      const record = inspectVideoOperationRef(operation);
       if (
         record.kind !== 'memory' ||
         record.runtimeId !== options.runtimeId ||
@@ -1097,33 +1116,33 @@ export function createImagesApi<TScopeHandle>(
           'operation scope identity is process-local',
         );
       const sealed = await options.generationOperationCodec.seal(
-        imageClaimsEnvelope(record.claims),
+        videoClaimsEnvelope(record.claims),
       );
       if (sealed.status === 'key_unavailable')
         throw new AiRuntimeError(
           'OPERATION_CODEC_KEY_UNAVAILABLE',
           'invalid_request',
-          'image operation codec key is unavailable',
+          'video operation codec key is unavailable',
           sealed.retryable,
         );
-      return asSerializedImageOperationRef(sealed.token);
+      return asSerializedVideoOperationRef(sealed.token);
     },
     parseOperation: async (serialized: string) =>
-      parseSerializedImageOperationRef(serialized),
+      parseSerializedVideoOperationRef(serialized),
   });
 }
 
 function makeHandle<TProtocol extends string>(
-  definition: Readonly<ImageModelDefinition<TProtocol>>,
+  definition: Readonly<VideoModelDefinition<TProtocol>>,
   snapshot: ProviderSnapshot,
   runtimeId: symbol,
   auth: Readonly<{
     credentialFingerprint?: string;
     requestCredential?: RequestCredentialOverride;
     assertCurrent?: (signal?: AbortSignal) => Promise<void>;
-    operationAuth?: BoundImageOperationAuth;
+    operationAuth?: BoundVideoOperationAuth;
   }>,
-): ImageModelHandle<TProtocol> {
+): VideoModelHandle<TProtocol> {
   const handle = Object.freeze({
     ref: Object.freeze({
       providerInstanceId: definition.providerInstanceId,
@@ -1145,15 +1164,15 @@ function makeHandle<TProtocol extends string>(
 }
 
 function assertHandle(
-  model: ImageModelHandle,
+  model: VideoModelHandle,
   runtimeId: symbol,
   registry: ProviderRegistry,
 ): void {
   if (handleRuntime.get(model as object) !== runtimeId)
     throw new AiRuntimeError(
-      'IMAGE_MODEL_HANDLE_RUNTIME_MISMATCH',
+      'VIDEO_MODEL_HANDLE_RUNTIME_MISMATCH',
       'invalid_request',
-      'image model handle belongs to another runtime',
+      'video model handle belongs to another runtime',
     );
   const entry = registry.get(model.ref.providerInstanceId);
   if (
@@ -1162,30 +1181,30 @@ function assertHandle(
       entry.snapshot.registrationGeneration
   )
     throw new AiRuntimeError(
-      'IMAGE_MODEL_HANDLE_STALE',
+      'VIDEO_MODEL_HANDLE_STALE',
       'invalid_request',
-      'image model handle is stale',
+      'video model handle is stale',
     );
 }
 
 function findBinding(
-  bindings: readonly ImageProtocolBinding[],
+  bindings: readonly VideoProtocolBinding[],
   protocol: string,
-): ImageProtocolBinding {
+): VideoProtocolBinding {
   const binding = bindings.find((candidate) => candidate.protocol === protocol);
   if (!binding)
     throw new AiRuntimeError(
-      'IMAGE_PROTOCOL_BINDING_NOT_FOUND',
+      'VIDEO_PROTOCOL_BINDING_NOT_FOUND',
       'invalid_request',
-      `image protocol binding not found: ${protocol}`,
+      `video protocol binding not found: ${protocol}`,
     );
   return binding;
 }
 
 function findProfile<TProtocol extends string>(
-  binding: ImageProtocolBinding<TProtocol>,
-  model: Readonly<ImageModelDefinition<TProtocol>>,
-): ImageProtocolProfile<TProtocol> {
+  binding: VideoProtocolBinding<TProtocol>,
+  model: Readonly<VideoModelDefinition<TProtocol>>,
+): VideoProtocolProfile<TProtocol> {
   const profile =
     binding.profiles?.[model.protocolProfileId] ??
     (binding.defaultProfile.id === model.protocolProfileId
@@ -1193,38 +1212,38 @@ function findProfile<TProtocol extends string>(
       : undefined);
   if (!profile)
     throw new AiRuntimeError(
-      'IMAGE_PROTOCOL_PROFILE_NOT_FOUND',
+      'VIDEO_PROTOCOL_PROFILE_NOT_FOUND',
       'invalid_request',
-      'image protocol profile is not registered',
+      'video protocol profile is not registered',
     );
   return profile;
 }
 
 function assertAdapter(
-  binding: ImageProtocolBinding,
-  adapter: ImageProtocolAdapter,
+  binding: VideoProtocolBinding,
+  adapter: VideoProtocolAdapter,
 ): void {
   if (
     adapter.id !== binding.protocol ||
     adapter.operationMode !== binding.operationMode
   )
-    throw protocolViolation('image protocol adapter does not match binding');
+    throw protocolViolation('video protocol adapter does not match binding');
 }
 
 async function authorizeOverride<TScopeHandle>(input: {
-  readonly binding: ImageProtocolBinding;
+  readonly binding: VideoProtocolBinding;
   readonly provider: ProviderSnapshot;
   readonly scope: TScopeHandle;
   readonly override?: RequestCredentialOverride;
   readonly policy?: CredentialOverridePolicy<TScopeHandle>;
   readonly scopeFingerprint: string;
-}): Promise<Readonly<ResolvedImageAuth>> {
+}): Promise<Readonly<ResolvedVideoAuth>> {
   if (!input.binding.credential) {
     if (input.override)
       throw new AiRuntimeError(
         'CREDENTIAL_OVERRIDE_MISMATCH',
         'auth',
-        'image provider does not accept a credential override',
+        'video provider does not accept a credential override',
       );
     return Object.freeze({});
   }
@@ -1232,7 +1251,7 @@ async function authorizeOverride<TScopeHandle>(input: {
     throw new AiRuntimeError(
       'CREDENTIAL_OVERRIDE_REQUIRED',
       'auth',
-      'a request credential override is required for this image provider',
+      'a request credential override is required for this video provider',
     );
   const allowed = await input.policy?.allow(input.scope, input.provider, {
     type: input.override.type,
@@ -1255,14 +1274,14 @@ async function authorizeOverride<TScopeHandle>(input: {
 }
 
 function bindHandleAuth(
-  auth: Readonly<ResolvedImageAuth>,
+  auth: Readonly<ResolvedVideoAuth>,
   key: Uint8Array,
   provider: ProviderSnapshot,
 ): Readonly<{
   credentialFingerprint?: string;
   requestCredential?: RequestCredentialOverride;
   assertCurrent?: (signal?: AbortSignal) => Promise<void>;
-  operationAuth?: BoundImageOperationAuth;
+  operationAuth?: BoundVideoOperationAuth;
 }> {
   const operationAuth = auth.authSource
     ? Object.freeze({
@@ -1295,8 +1314,8 @@ function bindHandleAuth(
 }
 
 function resolveTransport(input: {
-  readonly binding: ImageProtocolBinding;
-  readonly model: ImageModelHandle;
+  readonly binding: VideoProtocolBinding;
+  readonly model: VideoModelHandle;
   readonly override?: RequestCredentialOverride;
   readonly key: Uint8Array;
   readonly driver?: TransportDriver;
@@ -1309,7 +1328,7 @@ function resolveTransport(input: {
     throw new AiRuntimeError(
       'TRANSPORT_UNAVAILABLE',
       'invalid_request',
-      'transport and network policy are required for this image provider',
+      'transport and network policy are required for this video provider',
     );
   const expected = handleCredentialFingerprint.get(input.model as object);
   if (input.binding.credential) {
@@ -1317,20 +1336,20 @@ function resolveTransport(input: {
       throw new AiRuntimeError(
         'CREDENTIAL_OVERRIDE_MISMATCH',
         'auth',
-        'request credential override does not match the image model handle',
+        'request credential override does not match the video model handle',
       );
     const actual = fingerprintCredential(input.override, input.key);
     if (!fingerprintsEqual(actual, expected))
       throw new AiRuntimeError(
         'CREDENTIAL_OVERRIDE_MISMATCH',
         'auth',
-        'request credential override does not match the image model handle',
+        'request credential override does not match the video model handle',
       );
   } else if (input.override) {
     throw new AiRuntimeError(
       'CREDENTIAL_OVERRIDE_MISMATCH',
       'auth',
-      'image model handle is not bound to a credential override',
+      'video model handle is not bound to a credential override',
     );
   }
   const headers: Record<
@@ -1363,22 +1382,22 @@ function resolveTransport(input: {
 }
 
 async function resolveOperationTransport<TProtocol extends string>(input: {
-  readonly binding: ResumableImageProtocolBinding<TProtocol>;
+  readonly binding: ResumableVideoProtocolBinding<TProtocol>;
   readonly action: 'poll' | 'cancel';
-  readonly claims: ImageOperationClaims;
+  readonly claims: VideoOperationClaims;
   readonly provider: ProviderSnapshot;
-  readonly model: ImageModelHandle<TProtocol>;
-  readonly options: ResolvedImageOperationResumeOptions;
+  readonly model: VideoModelHandle<TProtocol>;
+  readonly options: ResolvedVideoOperationResumeOptions;
   readonly override?: RequestCredentialOverride;
   readonly key: Uint8Array;
   readonly driver?: TransportDriver;
   readonly networkPolicy?: NetworkPolicy;
 }) {
   if (!input.binding.operationActions.includes(input.action))
-    throw protocolViolation('undeclared image operation action');
+    throw protocolViolation('undeclared video operation action');
   const endpoint = await input.binding.resolveOperationEndpoint({
     action: input.action,
-    operation: input.claims as ImageOperationClaims & { protocol: TProtocol },
+    operation: input.claims as VideoOperationClaims & { protocol: TProtocol },
     provider: input.provider,
     model: input.model.definition,
     options: input.options,
@@ -1398,9 +1417,9 @@ async function resolveOperationTransport<TProtocol extends string>(input: {
 }
 
 function resolveOptions<TProtocol extends string>(
-  binding: ImageProtocolBinding<TProtocol>,
-  model: Readonly<ImageModelDefinition<TProtocol>>,
-  input: ImageGenerationOptions<TProtocol>,
+  binding: VideoProtocolBinding<TProtocol>,
+  model: Readonly<VideoModelDefinition<TProtocol>>,
+  input: VideoGenerationOptions<TProtocol>,
   signal: AbortSignal,
   runtimeDefaults:
     | Readonly<{
@@ -1409,14 +1428,14 @@ function resolveOptions<TProtocol extends string>(
         pollIntervalMs?: number;
       }>
     | undefined,
-  contract: import('./contracts.js').ImageProtocolContract<TProtocol>,
-): import('./contracts.js').ResolvedImageGenerationOptions<TProtocol> {
+  contract: import('./contracts.js').VideoProtocolContract<TProtocol>,
+): import('./contracts.js').ResolvedVideoGenerationOptions<TProtocol> {
   const profile = findProfile(binding, model);
   const protocolOptions = contract.mergeOptions([
     binding.requestDefaults?.protocolOptions as
-      import('./contracts.js').ImageProtocolOptions<TProtocol> | undefined,
+      import('./contracts.js').VideoProtocolOptions<TProtocol> | undefined,
     profile.protocolDefaults as
-      import('./contracts.js').ImageProtocolOptions<TProtocol> | undefined,
+      import('./contracts.js').VideoProtocolOptions<TProtocol> | undefined,
     input.protocolOptions,
   ]);
   const responseFormat =
@@ -1427,9 +1446,9 @@ function resolveOptions<TProtocol extends string>(
     'base64';
   if (!model.capabilities.outputFormats.includes(responseFormat))
     throw new AiRuntimeError(
-      'IMAGE_RESPONSE_FORMAT_UNSUPPORTED',
+      'VIDEO_RESPONSE_FORMAT_UNSUPPORTED',
       'invalid_request',
-      'image response format is not supported by this model',
+      'video response format is not supported by this model',
     );
   return {
     signal,
@@ -1457,25 +1476,25 @@ function resolveOptions<TProtocol extends string>(
 }
 
 async function completeTerminal(input: {
-  generationStream: DirectImageGenerationStream;
-  terminal: import('./contracts.js').ImageProtocolTerminal;
+  generationStream: DirectVideoGenerationStream;
+  terminal: import('./contracts.js').VideoProtocolTerminal;
   base: Readonly<{
     requestId: string;
-    model: Readonly<ImageModelDefinition>;
-    outputs: ImageGenerationOutput[];
+    model: Readonly<VideoModelDefinition>;
+    outputs: VideoGenerationOutput[];
     startedAt: number;
   }>;
-  outputs: readonly ImageGenerationOutput[];
-  operation?: ImageOperationRef;
+  outputs: readonly VideoGenerationOutput[];
+  operation?: VideoOperationRef;
   sequence(): number;
   now(): number;
 }): Promise<void> {
   const completedAt = input.now();
   const cost = input.terminal.usage
-    ? calculateImageCost(input.base.model, input.terminal.usage)
+    ? calculateVideoCost(input.base.model, input.terminal.usage)
     : undefined;
   if (input.terminal.status === 'completed') {
-    const result: Extract<ImageGenerationResult, { status: 'completed' }> =
+    const result: Extract<VideoGenerationResult, { status: 'completed' }> =
       Object.freeze({
         ...input.base,
         outputs: Object.freeze([...input.outputs]),
@@ -1544,18 +1563,18 @@ function fingerprintsEqual(left: string, right: string): boolean {
 
 function failureResult(input: {
   readonly requestId: string;
-  readonly model: Readonly<ImageModelDefinition>;
-  readonly outputs: readonly ImageGenerationOutput[];
+  readonly model: Readonly<VideoModelDefinition>;
+  readonly outputs: readonly VideoGenerationOutput[];
   readonly startedAt: number;
   readonly completedAt: number;
   readonly status: 'failed' | 'cancelled';
   readonly error: AiError;
-  readonly operation?: ImageOperationRef;
+  readonly operation?: VideoOperationRef;
   readonly responseId?: string;
-  readonly usage?: import('./cost.js').ImageUsage;
-  readonly cost?: import('./cost.js').ImageCost;
+  readonly usage?: import('./cost.js').VideoUsage;
+  readonly cost?: import('./cost.js').VideoCost;
   readonly diagnostics?: readonly import('../core/events.js').AiDiagnostic[];
-}): Extract<ImageGenerationResult, { status: 'failed' | 'cancelled' }> {
+}): Extract<VideoGenerationResult, { status: 'failed' | 'cancelled' }> {
   const common = {
     requestId: input.requestId,
     model: input.model,
@@ -1578,37 +1597,37 @@ function failureResult(input: {
           error: input.error as AiError & { category: 'cancelled' },
         }
       : { ...common, status: 'failed' },
-  ) as Extract<ImageGenerationResult, { status: 'failed' | 'cancelled' }>;
+  ) as Extract<VideoGenerationResult, { status: 'failed' | 'cancelled' }>;
 }
 
 function normalizeError(error: unknown, aborted: boolean): AiError {
   if (aborted)
     return new AiRuntimeError(
-      'IMAGE_GENERATION_CANCELLED',
+      'VIDEO_GENERATION_CANCELLED',
       'cancelled',
-      'image generation was cancelled',
+      'video generation was cancelled',
     );
   return error instanceof AiRuntimeError
     ? error
     : new AiRuntimeError(
-        'IMAGE_GENERATION_INTERNAL_ERROR',
+        'VIDEO_GENERATION_INTERNAL_ERROR',
         'internal',
-        error instanceof Error ? error.message : 'image generation failed',
+        error instanceof Error ? error.message : 'video generation failed',
       );
 }
 
 function timeoutError(): AiError & { readonly category: 'cancelled' } {
   return new AiRuntimeError(
-    'IMAGE_GENERATION_TIMEOUT',
+    'VIDEO_GENERATION_TIMEOUT',
     'cancelled',
-    'image generation timed out',
+    'video generation timed out',
   ) as AiError & { readonly category: 'cancelled' };
 }
 
 function protocolViolation(
-  message = 'image protocol violated the resumable operation contract',
+  message = 'video protocol violated the resumable operation contract',
 ): AiRuntimeError {
-  return new AiRuntimeError('IMAGE_PROTOCOL_VIOLATION', 'protocol', message);
+  return new AiRuntimeError('VIDEO_PROTOCOL_VIOLATION', 'protocol', message);
 }
 
 function operationMismatch(message: string): AiRuntimeError {
@@ -1623,7 +1642,7 @@ function validateOperationId(value: string): void {
     /[/?#]/u.test(value) ||
     hasAsciiControlCharacter(value)
   )
-    throw protocolViolation('image operation id is invalid');
+    throw protocolViolation('video operation id is invalid');
 }
 
 function hasAsciiControlCharacter(value: string): boolean {
@@ -1647,7 +1666,7 @@ function createRuntimeScopeFingerprinter<TScopeHandle>(): (
     const key = scope as object & TScopeHandle;
     const existing = map.get(key);
     if (existing) return existing;
-    const value = `runtime-image-scope-${++next}`;
+    const value = `runtime-video-scope-${++next}`;
     map.set(key, value);
     return value;
   };

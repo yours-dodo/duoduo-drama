@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "error": {
+    "code": "content_policy",
+    "message": "request rejected"
+  }
+}

@@ -6,6 +6,8 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 
 - `@duoduo/ai` exposes provider-neutral runtime, auth, model, stream, and response types.
 - `@duoduo/ai/images` owns provider-neutral image model, input/output, stream, cost, and direct-generation contracts; protocol-specific fields must remain typed through declaration merging.
+- `@duoduo/ai/videos` owns provider-neutral video model, input/output, stream, cost, direct/resumable generation, and strict operation-claim contracts.
+- `@duoduo/ai/protocols/xai-images` and `@duoduo/ai/protocols/xai-videos` own the official Grok Imagine image/video wire contracts. xAI video request IDs must be validated before route resolution, and generate/edit/extend routes must remain explicit rather than inferred.
 - `@duoduo/ai/generation` owns the domain-neutral resumable-operation state machine, sealed-envelope/credential-verifier ports, progress, artifact, and compute-usage types; image/video packages own strict claims and branded refs.
 - `@duoduo/ai/protocols/dashscope-images` and `@duoduo/ai/protocols/dashscope-image-tasks` own Qwen Wan direct and resumable image wire contracts; task IDs and operation routes must be validated before transport resolution.
 - `@duoduo/ai/protocols/ark-images` and the `@duoduo/ai/providers/doubao` image binding own explicit Seedream Model ID/Endpoint ID direct generation; Ark image identities belong only in the request body and must never become route segments.
@@ -57,6 +59,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run dashscope qwen`
 - `pnpm --filter @duoduo/ai test -- --run ark-responses doubao`
 - `pnpm --filter @duoduo/ai test -- --run images openrouter-images`
+- `pnpm --filter @duoduo/ai test -- --run generation images videos xai-imagine`
 - `pnpm --filter @duoduo/ai parity:check -- --pi-root vendor/pi`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`

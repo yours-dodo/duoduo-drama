@@ -16,7 +16,8 @@
     "pi-baseline.ts",
     "qwen.ts",
     "doubao.ts",
-    "images.ts"
+    "images.ts",
+    "videos.ts"
   ],
   "references": []
 }

@@ -12,6 +12,10 @@
       "types": "./dist/images/index.d.ts",
       "import": "./dist/images/index.js"
     },
+    "./videos": {
+      "types": "./dist/videos/index.d.ts",
+      "import": "./dist/videos/index.js"
+    },
     "./generation": {
       "types": "./dist/generation/index.d.ts",
       "import": "./dist/generation/index.js"
@@ -279,6 +283,14 @@
     "./providers/doubao": {
       "types": "./dist/providers/doubao/index.d.ts",
       "import": "./dist/providers/doubao/index.js"
+    },
+    "./protocols/xai-images": {
+      "types": "./dist/protocols/xai-images/index.d.ts",
+      "import": "./dist/protocols/xai-images/index.js"
+    },
+    "./protocols/xai-videos": {
+      "types": "./dist/protocols/xai-videos/index.d.ts",
+      "import": "./dist/protocols/xai-videos/index.js"
     }
   },
   "files": [
@@ -289,7 +301,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11','S12','S13','S14','S15']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11','S12','S13','S14','S15','S16']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test",
     "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check"

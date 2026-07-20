@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "invalid_prompt",
+    "message": "prompt is invalid"
+  }
+}

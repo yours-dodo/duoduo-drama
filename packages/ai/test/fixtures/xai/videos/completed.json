@@ -1,0 +1,13 @@
+{
+  "status": "done",
+  "video": {
+    "url": "https://cdn.x.ai/video/result.mp4?token=temporary",
+    "expires_at": "2026-07-20T12:00:00.000Z",
+    "duration": 6,
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "has_audio": true,
+    "mime_type": "video/mp4"
+  }
+}

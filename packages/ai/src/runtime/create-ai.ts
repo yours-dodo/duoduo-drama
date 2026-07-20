@@ -33,12 +33,14 @@ import type {
 } from '../core/models.js';
 import { createSessionManager } from '../session/manager.js';
 import { createImagesApi } from '../images/runtime.js';
+import { createVideosApi } from '../videos/runtime.js';
 import type {
   GenerationOperationCodec,
   GenerationOperationPolicy,
   OperationCredentialVerifier,
 } from '../generation/index.js';
 import type { ImagesApi } from '../images/contracts.js';
+import type { VideosApi } from '../videos/contracts.js';
 import type { SessionHandle } from '../session/lease.js';
 import { ResponseStream } from '../stream/response-stream.js';
 import type { RetryPolicy } from '../transport/retry.js';
@@ -146,6 +148,7 @@ export interface AiRuntime<TScopeHandle = unknown> {
   readonly auth: AuthApi<TScopeHandle>;
   readonly models: ModelsApi<TScopeHandle>;
   readonly images: ImagesApi<TScopeHandle>;
+  readonly videos: VideosApi<TScopeHandle>;
   readonly sessions: SessionsApi<TScopeHandle>;
   stream<TProtocol extends string>(
     model: ModelHandle<TProtocol>,
@@ -183,6 +186,11 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
   readonly auth?: AuthRuntimeOptions;
   readonly imageDefaults?: Readonly<{
+    timeoutMs?: number;
+    responseFormat?: 'url' | 'base64';
+    pollIntervalMs?: number;
+  }>;
+  readonly videoDefaults?: Readonly<{
     timeoutMs?: number;
     responseFormat?: 'url' | 'base64';
     pollIntervalMs?: number;
@@ -461,12 +469,94 @@ export function createAi<TScopeHandle = unknown>(
     },
   });
 
+  const videos = createVideosApi({
+    registry,
+    runtimeId,
+    transport: options.transport,
+    networkPolicy: options.networkPolicy,
+    credentialOverridePolicy: options.credentialOverridePolicy,
+    videoDefaults: options.videoDefaults,
+    generationOperationCodec: options.generationOperationCodec,
+    operationCredentialVerifier: options.operationCredentialVerifier,
+    generationOperationPolicy: options.generationOperationPolicy,
+    resolveAuth: async ({ provider, scope, override, signal }) => {
+      const entry = registry.get(provider.id);
+      const resolved = await resolveModelAuth({
+        chat: entry?.provider.chat,
+        auth: entry?.provider.auth,
+        provider,
+        scope,
+        override,
+        policy: options.credentialOverridePolicy,
+        ambientPolicy: options.ambientAuthPolicy,
+        key: credentialFingerprintKey,
+        coordinator: authCoordinator,
+        signal,
+      });
+      const credentialScopeFingerprint = await resolveSessionScopeFingerprint({
+        providerInstanceId: provider.id,
+        scope,
+        storedAuth: resolved.storedAuth,
+        ambientAuth: resolved.ambientAuth,
+        scopeAuthority: options.scopeAuthority,
+        runtimeScopeFingerprint,
+        signal,
+      });
+      const requestCredential = override ?? resolved.storedAuth?.override;
+      const authSource = override
+        ? ('override' as const)
+        : resolved.storedAuth
+          ? ('stored' as const)
+          : resolved.ambientAuth
+            ? ('ambient' as const)
+            : requestCredential
+              ? ('override' as const)
+              : undefined;
+      return Object.freeze({
+        ...(requestCredential ? { requestCredential } : {}),
+        ...(authSource ? { authSource } : {}),
+        ...(resolved.storedAuth
+          ? {
+              credentialInstanceId: resolved.storedAuth.credentialInstanceId,
+              credentialIdentityLifetime: resolved.storedAuth.identityLifetime,
+              authBindingFingerprint:
+                resolved.storedAuth.authBindingFingerprint,
+              assertCurrent: (currentSignal?: AbortSignal) =>
+                authCoordinator!.assertCurrent(
+                  resolved.storedAuth!,
+                  currentSignal,
+                ),
+            }
+          : resolved.ambientAuth
+            ? {
+                credentialInstanceId: resolved.ambientAuth.credentialInstanceId,
+                credentialIdentityLifetime:
+                  resolved.ambientAuth.credentialIdentityLifetime,
+                authBindingFingerprint: provider.authPolicyFingerprint,
+              }
+            : authSource === 'override'
+              ? {
+                  credentialIdentityLifetime:
+                    options.operationCredentialVerifier?.identityLifetime ??
+                    ('process-local' as const),
+                  authBindingFingerprint: provider.authPolicyFingerprint,
+                }
+              : {}),
+        credentialScopeFingerprint,
+        scopeIdentityLifetime:
+          options.scopeAuthority?.fingerprintLifetime ??
+          ('process-local' as const),
+      });
+    },
+  });
+
   const runtime: AiRuntime<TScopeHandle> = {
     providers: registry,
     inventory,
     auth: authCoordinator?.api ?? createUnavailableAuthApi(),
     models,
     images,
+    videos,
     sessions: Object.freeze({
       cleanup: async (
         providerInstanceId: string,

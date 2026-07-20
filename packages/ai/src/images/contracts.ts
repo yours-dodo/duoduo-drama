@@ -212,6 +212,15 @@ interface ImageProtocolBindingBase<TProtocol extends string = string> {
   }>;
   readonly limits?: Partial<TransportLimits>;
   readonly retrySafety: RetrySafety;
+  resolveEndpoint?(
+    context: Readonly<{
+      provider: Readonly<ProviderSnapshot>;
+      model: Readonly<ImageModelDefinition<TProtocol>>;
+      input: Readonly<ResolvedImageGenerationInput>;
+      options: Readonly<ResolvedImageGenerationOptions<TProtocol>>;
+      signal: AbortSignal;
+    }>,
+  ): Promise<string | URL> | string | URL;
   readonly requestDefaults?: Readonly<{
     timeoutMs?: number;
     retry?: false | RetryPolicy;

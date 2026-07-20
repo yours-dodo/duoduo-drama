@@ -14,6 +14,7 @@ import type { OAuthFlow } from '../auth/oauth.js';
 import type { AmbientAuth } from '../auth/ambient.js';
 import type { CredentialBindingFacts } from '../auth/api-key.js';
 import type { ImageProviderBinding } from '../images/contracts.js';
+import type { VideoProviderBinding } from '../videos/contracts.js';
 
 export interface ProtocolEventSink {
   publish(event: ProtocolContentEvent): Promise<void>;
@@ -99,6 +100,7 @@ export interface Provider {
   readonly contractManifest?: ProviderContractManifest;
   readonly chat?: ChatProvider;
   readonly images?: ImageProviderBinding;
+  readonly videos?: VideoProviderBinding;
 }
 
 export interface ProvidersApi {
@@ -118,6 +120,7 @@ export class ProviderRegistry implements ProvidersApi {
   register(provider: Provider): void {
     validateCredentialEndpointPolicy(provider.chat?.transport);
     validateImageBindings(provider);
+    validateVideoBindings(provider);
     if (this.providers.has(provider.id))
       throw new Error(`provider already registered: ${provider.id}`);
     const snapshot: ProviderSnapshot = Object.freeze({
@@ -152,6 +155,12 @@ export class ProviderRegistry implements ProvidersApi {
   imageModels(): readonly import('../images/models.js').ImageModelDefinition[] {
     return [...this.providers.values()].flatMap(
       ({ provider }) => provider.images?.models ?? [],
+    );
+  }
+
+  videoModels(): readonly import('../videos/models.js').VideoModelDefinition[] {
+    return [...this.providers.values()].flatMap(
+      ({ provider }) => provider.videos?.models ?? [],
     );
   }
 
@@ -285,6 +294,143 @@ function validateImageBindings(provider: Provider): void {
 function sameImageSize(
   left: import('../images/models.js').ImageSize,
   right: import('../images/models.js').ImageSize,
+): boolean {
+  if (typeof left === 'string' || typeof right === 'string')
+    return left === right;
+  return left.width === right.width && left.height === right.height;
+}
+
+function validateVideoBindings(provider: Provider): void {
+  const videos = provider.videos;
+  if (!videos) return;
+  if (videos.catalogCompatibilityVersion.trim() === '')
+    throw new Error('video catalog compatibility version must not be empty');
+
+  const protocols = new Set(
+    videos.protocols.map((binding) => binding.protocol),
+  );
+  if (protocols.size !== videos.protocols.length)
+    throw new Error('video protocol bindings must be unique');
+
+  for (const binding of videos.protocols) {
+    if (binding.operationMode === 'resumable') {
+      if (binding.operationCompatibilityVersion.trim() === '')
+        throw new Error(
+          'video operation compatibility version must not be empty',
+        );
+      const pollCount = binding.operationActions.filter(
+        (action) => action === 'poll',
+      ).length;
+      const cancelCount = binding.operationActions.filter(
+        (action) => action === 'cancel',
+      ).length;
+      if (
+        pollCount !== 1 ||
+        cancelCount > 1 ||
+        pollCount + cancelCount !== binding.operationActions.length
+      )
+        throw new Error(
+          'video operation actions must contain poll exactly once and cancel at most once',
+        );
+      if (typeof binding.resolveOperationEndpoint !== 'function')
+        throw new Error('video operation endpoint resolver must be a function');
+    }
+    const profiles = [
+      binding.defaultProfile,
+      ...Object.values(binding.profiles ?? {}),
+    ];
+    const profileIds = new Set(profiles.map((profile) => profile.id));
+    if (profileIds.size !== profiles.length)
+      throw new Error('video protocol profile ids must be unique');
+    if (profiles.some((profile) => profile.id.trim() === ''))
+      throw new Error('video protocol profile ids must not be empty');
+  }
+
+  const modelRefs = new Set<string>();
+  for (const model of videos.models) {
+    if (model.providerInstanceId !== provider.id)
+      throw new Error('video model providerInstanceId must match provider id');
+    const modelRef = `${model.providerInstanceId}\0${model.id}`;
+    if (modelRefs.has(modelRef))
+      throw new Error('video model references must be unique');
+    modelRefs.add(modelRef);
+
+    const binding = videos.protocols.find(
+      (candidate) => candidate.protocol === model.protocol,
+    );
+    if (!binding)
+      throw new Error(
+        `video model protocol binding not found: ${model.protocol}`,
+      );
+    const profiles = [
+      binding.defaultProfile,
+      ...Object.values(binding.profiles ?? {}),
+    ];
+    if (!profiles.some((profile) => profile.id === model.protocolProfileId))
+      throw new Error('video model protocol profile not found');
+    if (binding.operationMode === 'direct' && model.capabilities.asyncOperation)
+      throw new Error('direct video models must not enable asyncOperation');
+    if (
+      binding.operationMode === 'resumable' &&
+      !model.capabilities.asyncOperation
+    )
+      throw new Error('resumable video models must enable asyncOperation');
+
+    const limits = Object.values(model.limits);
+    if (limits.some((value) => !Number.isInteger(value) || value <= 0))
+      throw new Error('video model limits must be positive integers');
+    if (model.capabilities.operations.length === 0)
+      throw new Error('video model operations must not be empty');
+    if (model.capabilities.inputModalities.length === 0)
+      throw new Error('video model input modalities must not be empty');
+    if (model.capabilities.outputFormats.length === 0)
+      throw new Error('video model output formats must not be empty');
+    const count = model.inputDefaults.count ?? 1;
+    if (
+      !Number.isInteger(count) ||
+      count <= 0 ||
+      count > model.limits.maxOutputs ||
+      (model.inputDefaults.durationSeconds !== undefined &&
+        !supportsVideoDuration(
+          model.capabilities.durationsSeconds,
+          model.inputDefaults.durationSeconds,
+        )) ||
+      (model.inputDefaults.resolution !== undefined &&
+        !model.capabilities.resolutions.some((resolution) =>
+          sameVideoResolution(resolution, model.inputDefaults.resolution!),
+        )) ||
+      (model.inputDefaults.aspectRatio !== undefined &&
+        !model.capabilities.aspectRatios.includes(
+          model.inputDefaults.aspectRatio,
+        )) ||
+      (model.inputDefaults.fps !== undefined &&
+        !model.capabilities.frameRates.includes(model.inputDefaults.fps)) ||
+      (model.requestDefaults?.responseFormat !== undefined &&
+        !model.capabilities.outputFormats.includes(
+          model.requestDefaults.responseFormat,
+        ))
+    )
+      throw new Error('video model input defaults are invalid');
+  }
+}
+
+function supportsVideoDuration(
+  allowed: import('../videos/models.js').VideoModelCapabilities['durationsSeconds'],
+  value: number,
+): boolean {
+  if (Array.isArray(allowed)) return allowed.includes(value);
+  const range = allowed as import('../videos/models.js').VideoNumericRange;
+  return (
+    Number.isFinite(value) &&
+    value >= range.min &&
+    value <= range.max &&
+    (range.step === undefined || (value - range.min) % range.step === 0)
+  );
+}
+
+function sameVideoResolution(
+  left: import('../videos/models.js').VideoResolution,
+  right: import('../videos/models.js').VideoResolution,
 ): boolean {
   if (typeof left === 'string' || typeof right === 'string')
     return left === right;

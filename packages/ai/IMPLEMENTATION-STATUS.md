@@ -1,6 +1,6 @@
 # @duoduo/ai Implementation Status
 
-> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S15; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, and the remaining video, ecosystem, and productization slices are still in progress.
+> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S16; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, the Grok Imagine image/video tracer is complete, and the remaining video, ecosystem, and productization slices are still in progress.
 
 ## Slices
 
@@ -21,16 +21,17 @@
 | S13 OpenRouter direct image generation                | passed | 228 tests, including ordered text/reference input, text plus multiple image output, token/cache cost, partial failure, abort, timeout, stored-auth fencing, registry validation, and public-only consumer compilation, plus all package verification gates passed on July 20, 2026.                      |
 | S14 Resumable generation and Qwen images              | passed | 241 tests, including operation envelope policy, credential proof, detach/serialize/parse/resume, race arbitration, descriptor consistency, Qwen Wan direct/task request, poll, output, usage, task-ID, abort, and public consumer coverage, plus all package verification gates passed on July 20, 2026. |
 | S15 Doubao Seedream direct images                     | passed | 245 tests, including explicit Model ID/Endpoint ID body binding, direct-only Ark routing, URL/base64 output, usage/error normalization, Provider identity fencing, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                            |
+| S16 Grok Imagine images and videos                    | passed | 272 tests, including official image generation/edit and video generate/edit/extend/poll routes, validated request IDs, strict resumable claims, cross-domain rejection, usage/cost, temporary artifacts, and public consumer coverage, plus all package verification gates passed on July 20, 2026.      |
 
 ## Gates
 
-| Gate                 | Status      | Evidence                                                                                |
-| -------------------- | ----------- | --------------------------------------------------------------------------------------- |
-| Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates.     |
-| Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.          |
-| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.       |
-| Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.              |
-| Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.       |
-| Generation           | in-progress | S14 resumable operation kernel and Qwen direct/task images passed; video slices remain. |
-| Generation Ecosystem | not-started | —                                                                                       |
-| Productization       | not-started | —                                                                                       |
+| Gate                 | Status      | Evidence                                                                                                                              |
+| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates.                                                   |
+| Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.                                                        |
+| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.                                                     |
+| Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                            |
+| Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                     |
+| Generation           | passed      | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage. |
+| Generation Ecosystem | not-started | —                                                                                                                                     |
+| Productization       | not-started | —                                                                                                                                     |
