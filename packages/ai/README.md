@@ -163,6 +163,12 @@ pnpm --filter @duoduo/ai test
 pnpm --filter @duoduo/ai build
 pnpm --filter @duoduo/ai api:check
 pnpm --filter @duoduo/ai manifest:check
+pnpm --filter @duoduo/ai release:check
+pnpm --filter @duoduo/ai release:no-vendor
 ```
 
-All default tests are offline and deterministic.
+`api:check` compiles the public consumers and matches the design's protocol-subpath and runtime-symbol inventory. `manifest:check` dynamically constructs all 40 built-in Providers and requires every declared binding field, every runtime binding, every package export, and S01–S22 status evidence to be covered.
+
+`release:check` fences the production import graph, runs a secret redaction canary, scans fixtures for secret-shaped values and unredacted signed URLs, and proves the live runner is disabled by default. `release:no-vendor` copies a clean temporary checkout without `vendor`, reinstalls from the pnpm store with `--offline --frozen-lockfile`, and runs package typecheck, test, and build. All default verification is offline and deterministic; no paid live request is sent.
+
+The authoritative scope and evidence are recorded in the [design specification](../../docs/superpowers/specs/2026-07-19-duoduo-ai-design.md), [implementation plan](../../docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md), and [implementation status](./IMPLEMENTATION-STATUS.md).

@@ -201,6 +201,10 @@ async function verifyProviderCoverage(): Promise<{
     qwen: {
       region: 'cn-beijing',
     },
+    radius: {
+      models: [{ id: 'release-fixture' }],
+      oauth: false,
+    },
     'self-hosted-generation': {
       gateway,
       gatewayBaseUrl: 'https://generation.example/v1',
@@ -236,6 +240,10 @@ async function verifyProviderCoverage(): Promise<{
     if (!runtimeKinds.has(kind))
       failures.push(`provider ${kind} was not constructed`);
   }
+  if (coveredProviders !== catalogKinds.length)
+    failures.push(
+      `contract manifests cover ${coveredProviders}/${catalogKinds.length} providers; expected complete coverage`,
+    );
   return {
     coveredProviders,
     totalProviders: catalogKinds.length,

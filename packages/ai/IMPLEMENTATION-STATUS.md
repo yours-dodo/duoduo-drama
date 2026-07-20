@@ -1,6 +1,6 @@
 # @duoduo/ai Implementation Status
 
-> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S21. The Foundation, Runtime, Protocol, Baseline Provider, Extended Provider, Generation, and Generation Ecosystem gates are complete; CLI/catalog/live productization is complete, while the final S22 release-candidate verification remains.
+> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S22, and all eight gates are passed. The release candidate is verified without `vendor/pi`, with offline deterministic defaults and explicit opt-in protection for live execution.
 
 ## Slices
 
@@ -27,16 +27,28 @@
 | S19 Third-party aggregator extension contracts        | passed | 317 tests, including chat/images/videos capability composition, direct-versus-aggregator channel identity, remote catalog field fencing, transparent and aggregator-owned task protocols, Provider-local fallback validation, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                   |
 | S20 Self-hosted generation gateway seam               | passed | 334 tests, including dynamic image/video catalogs, resumable create/poll/cancel lifecycles, detach/resume, compute usage, temporary artifacts, gateway adapter substitution, and fail-closed dropping of GPU/container/host/IP extensions, plus all package verification gates passed on July 20, 2026.                                                    |
 | S21 CLI, catalog generator, and live harness          | passed | 345 tests, including 40-Provider inventory/availability, encrypted credential login/logout, JSON redaction, key-unavailable fencing, deterministic safe catalog generation, public consumers, import-graph isolation, and paid live-run opt-in budgets; package verification gates passed on July 20, 2026.                                                |
+| S22 Release candidate verification                    | passed | 345 tests across 69 files; 40/40 Providers and 63/63 manifest bindings at 100% coverage; 21 protocol subpaths and 54 runtime symbols matched the design inventory; package and repository gates, release fencing, live safety cases, and a no-vendor offline reinstall passed on July 20, 2026.                                                            |
 
 ## Gates
 
-| Gate                 | Status      | Evidence                                                                                                                                                                         |
-| -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates.                                                                                              |
-| Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.                                                                                                   |
-| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.                                                                                                |
-| Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                                                                       |
-| Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                                                                |
-| Generation           | passed      | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage.                                            |
-| Generation Ecosystem | passed      | S17–S20 passed with Seedance, Kling, aggregator isolation, and the owned self-hosted generation gateway seam.                                                                    |
-| Productization       | in-progress | S21 passed with CLI, deterministic catalog generation, public consumers, import-graph fencing, and the protected live harness; S22 final release-candidate verification remains. |
+| Gate                 | Status | Evidence                                                                                                                                                                                                                         |
+| -------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation           | passed | S01 and S02 passed with the package test, API, type, build, lint, and format gates.                                                                                                                                              |
+| Runtime              | passed | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.                                                                                                                                                   |
+| Protocol             | passed | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.                                                                                                                                                |
+| Baseline Provider    | passed | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                                                                                                                       |
+| Extended Provider    | passed | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                                                                                                                |
+| Generation           | passed | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage.                                                                                            |
+| Generation Ecosystem | passed | S17–S20 passed with Seedance, Kling, aggregator isolation, and the owned self-hosted generation gateway seam.                                                                                                                    |
+| Productization       | passed | S21 and S22 passed with CLI, deterministic catalog generation, public consumers, complete Provider/binding/API reports, import-graph and secret fencing, protected live execution, and no-vendor offline reinstall verification. |
+
+## Release candidate evidence
+
+- Verified implementation baseline: `518932e` (`feat(ai): add release candidate verification`), followed only by release-evidence documentation, manifest coverage hardening, and pnpm live-invocation separator handling.
+- Verification started at `2026-07-20T07:52:21Z` with Node.js `v22.16.0` and pnpm `10.28.1`.
+- Package gates exited `0`: `format:check`, `lint`, `typecheck`, `test`, `build`, `api:check`, `manifest:check`, and `release:check`.
+- Package reports: 69 test files / 345 tests passed; 21 protocol subpaths / 54 runtime symbols matched the design inventory; 40/40 Providers / 63/63 bindings / 80 public exports passed manifest coverage.
+- Repository gates exited `0`: `lint`, `format:check`, `typecheck`, `test`, and `build`; `git diff --check` also passed.
+- Live harness evidence remained offline: default-disabled returned `LIVE_DISABLED` / exit `3`, all opt-ins without an executor returned `LIVE_EXECUTOR_NOT_CONFIGURED` / exit `69`, and an injected fixture executor returned exit `0`. No paid or network request was sent.
+- `release:check` passed production import-graph fencing, secret-canary redaction, fixture sanitization, and default-disabled live execution.
+- `release:no-vendor` copied a clean temporary checkout without `vendor`, performed `pnpm install --offline --frozen-lockfile`, and passed package `typecheck`, `test`, and `build`.

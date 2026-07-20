@@ -339,7 +339,10 @@ pnpm --filter @duoduo/ai test
 pnpm --filter @duoduo/ai typecheck
 pnpm --filter @duoduo/ai build
 pnpm --filter @duoduo/ai catalog:update -- --check --offline
+pnpm --filter @duoduo/ai api:check
 pnpm --filter @duoduo/ai manifest:check
+pnpm --filter @duoduo/ai release:check
+pnpm --filter @duoduo/ai release:no-vendor
 ```
 
-CLI、鉴权、Provider 清单、自建生成网关和 live 安全开关详见 `packages/ai/README.md`。默认测试、构建和目录生成绝不运行付费 live 请求。
+S01–S22 和八个 gate 已全部通过。CLI、鉴权、Provider 清单、自建生成网关、live 安全开关与验证命令详见 [`packages/ai/README.md`](packages/ai/README.md)，逐切片证据见 [`packages/ai/IMPLEMENTATION-STATUS.md`](packages/ai/IMPLEMENTATION-STATUS.md)。权威范围和验收要求以 [`Duoduo AI 单包模块化设计`](docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)及其[`可执行实施计划`](docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)为准。默认测试、构建、目录生成和发布检查绝不运行付费 live 请求。

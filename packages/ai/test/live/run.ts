@@ -98,6 +98,7 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   let allowPaid = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]!;
+    if (argument === '--') continue;
     if (argument === '--allow-paid') {
       allowPaid = true;
       continue;
