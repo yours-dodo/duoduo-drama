@@ -87,6 +87,78 @@
     "./auth/ambient/aws": {
       "types": "./dist/auth/ambient/aws.d.ts",
       "import": "./dist/auth/ambient/aws.js"
+    },
+    "./protocols/openai-chat-completions": {
+      "types": "./dist/protocols/openai-chat-completions/index.d.ts",
+      "import": "./dist/protocols/openai-chat-completions/index.js"
+    },
+    "./providers/ant-ling": {
+      "types": "./dist/providers/ant-ling/index.d.ts",
+      "import": "./dist/providers/ant-ling/index.js"
+    },
+    "./providers/cerebras": {
+      "types": "./dist/providers/cerebras/index.d.ts",
+      "import": "./dist/providers/cerebras/index.js"
+    },
+    "./providers/cloudflare-workers-ai": {
+      "types": "./dist/providers/cloudflare-workers-ai/index.d.ts",
+      "import": "./dist/providers/cloudflare-workers-ai/index.js"
+    },
+    "./providers/deepseek": {
+      "types": "./dist/providers/deepseek/index.d.ts",
+      "import": "./dist/providers/deepseek/index.js"
+    },
+    "./providers/groq": {
+      "types": "./dist/providers/groq/index.d.ts",
+      "import": "./dist/providers/groq/index.js"
+    },
+    "./providers/huggingface": {
+      "types": "./dist/providers/huggingface/index.d.ts",
+      "import": "./dist/providers/huggingface/index.js"
+    },
+    "./providers/moonshotai": {
+      "types": "./dist/providers/moonshotai/index.d.ts",
+      "import": "./dist/providers/moonshotai/index.js"
+    },
+    "./providers/moonshotai-cn": {
+      "types": "./dist/providers/moonshotai-cn/index.d.ts",
+      "import": "./dist/providers/moonshotai-cn/index.js"
+    },
+    "./providers/nvidia": {
+      "types": "./dist/providers/nvidia/index.d.ts",
+      "import": "./dist/providers/nvidia/index.js"
+    },
+    "./providers/together": {
+      "types": "./dist/providers/together/index.d.ts",
+      "import": "./dist/providers/together/index.js"
+    },
+    "./providers/xai": {
+      "types": "./dist/providers/xai/index.d.ts",
+      "import": "./dist/providers/xai/index.js"
+    },
+    "./providers/xiaomi": {
+      "types": "./dist/providers/xiaomi/index.d.ts",
+      "import": "./dist/providers/xiaomi/index.js"
+    },
+    "./providers/xiaomi-token-plan-ams": {
+      "types": "./dist/providers/xiaomi-token-plan-ams/index.d.ts",
+      "import": "./dist/providers/xiaomi-token-plan-ams/index.js"
+    },
+    "./providers/xiaomi-token-plan-cn": {
+      "types": "./dist/providers/xiaomi-token-plan-cn/index.d.ts",
+      "import": "./dist/providers/xiaomi-token-plan-cn/index.js"
+    },
+    "./providers/xiaomi-token-plan-sgp": {
+      "types": "./dist/providers/xiaomi-token-plan-sgp/index.d.ts",
+      "import": "./dist/providers/xiaomi-token-plan-sgp/index.js"
+    },
+    "./providers/zai": {
+      "types": "./dist/providers/zai/index.d.ts",
+      "import": "./dist/providers/zai/index.js"
+    },
+    "./providers/zai-coding-cn": {
+      "types": "./dist/providers/zai-coding-cn/index.d.ts",
+      "import": "./dist/providers/zai-coding-cn/index.js"
     }
   },
   "files": [
@@ -97,7 +169,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test"
   },

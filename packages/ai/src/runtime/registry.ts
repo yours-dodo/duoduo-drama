@@ -48,6 +48,30 @@ export interface ChatProvider<TProtocol extends string = string> {
   ): Promise<ProtocolTerminal>;
 }
 
+export interface ProviderContractSource {
+  readonly kind: 'pi' | 'official' | 'fixture';
+  readonly locator: string;
+  readonly digest?: string;
+}
+
+export interface ProviderProtocolManifest {
+  readonly capability: 'chat' | 'images' | 'videos';
+  readonly protocol: string;
+  readonly profileIds: readonly string[];
+  readonly authSchemes: readonly string[];
+  readonly endpointBranchIds: readonly string[];
+  readonly requestFixtureIds: readonly string[];
+  readonly streamFixtureIds: readonly string[];
+  readonly errorFixtureIds: readonly string[];
+  readonly sources: readonly ProviderContractSource[];
+}
+
+export interface ProviderContractManifest {
+  readonly schemaVersion: 1;
+  readonly providerKind: string;
+  readonly bindings: readonly ProviderProtocolManifest[];
+}
+
 export interface ProviderAuth {
   readonly policyFingerprint?: string;
   readonly oauth?: OAuthFlow;
@@ -60,6 +84,7 @@ export interface Provider {
   readonly name: string;
   readonly identity?: Readonly<Record<string, string>>;
   readonly auth?: ProviderAuth;
+  readonly contractManifest?: ProviderContractManifest;
   readonly chat?: ChatProvider;
 }
 

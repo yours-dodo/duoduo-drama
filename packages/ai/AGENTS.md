@@ -18,6 +18,8 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/protocols/google-generative-ai` and `@duoduo/ai/providers/google` own the Gemini Developer API SSE path and explicit API-key binding.
 - `@duoduo/ai/protocols/google-vertex` and `@duoduo/ai/providers/google-vertex` own the Vertex API-key/ADC branches, project/location identity, and shared Google wire semantics.
 - `@duoduo/ai/protocols/bedrock-converse-stream` and `@duoduo/ai/providers/amazon-bedrock` own Bedrock Converse Stream mapping, event-stream parsing, regional endpoints, bearer auth, and AWS signing.
+- `@duoduo/ai/protocols/openai-chat-completions` owns OpenAI Chat request mapping, streaming parsing, replay metadata, and typed compatibility profiles for thinking, tools, cache, routing, and session affinity.
+- OpenAI-compatible Provider subpaths under `@duoduo/ai/providers/*` are thin explicit factories over the shared compatibility-profile boundary; add provider differences as descriptor/profile data rather than a provider-kind switch.
 - `@duoduo/ai/auth/ambient/google-adc` and `@duoduo/ai/auth/ambient/aws` expose explicit injected ambient capabilities; they must not read SDK state, profiles, metadata services, or process environment implicitly.
 - `@duoduo/ai/auth/oauth/anthropic` exposes the explicit Anthropic OAuth flow; provider-neutral OAuth ports remain exported from `@duoduo/ai`.
 - `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
@@ -38,6 +40,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run transport session azure-openai-responses`
 - `pnpm --filter @duoduo/ai test -- --run anthropic-messages anthropic oauth`
 - `pnpm --filter @duoduo/ai test -- --run google vertex bedrock ambient`
+- `pnpm --filter @duoduo/ai test -- --run openai-chat-completions providers-compatible`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`
 - `pnpm --filter @duoduo/ai build`

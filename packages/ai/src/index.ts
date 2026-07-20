@@ -69,6 +69,14 @@ export type {
   OAuthFlow,
   SecureRandom,
 } from './auth/oauth.js';
+export type {
+  Provider,
+  ProviderAuth,
+  ProviderContractManifest,
+  ProviderContractSource,
+  ProviderProtocolManifest,
+  ProvidersApi,
+} from './runtime/registry.js';
 export { createAi } from './runtime/create-ai.js';
 export type {
   AiRuntime,
