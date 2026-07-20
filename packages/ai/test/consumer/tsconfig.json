@@ -18,7 +18,8 @@
     "doubao.ts",
     "images.ts",
     "videos.ts",
-    "custom-aggregator.ts"
+    "custom-aggregator.ts",
+    "self-hosted-generation.ts"
   ],
   "references": []
 }

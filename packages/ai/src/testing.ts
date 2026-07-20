@@ -65,3 +65,8 @@ export type {
   AggregatorCapability,
   ChannelModelDefinition,
 } from './testing/contracts/channel-isolation.js';
+export { createFakeGenerationGateway } from './testing/fake-generation-gateway.js';
+export type {
+  FakeGenerationGateway,
+  FakeGenerationGatewayOptions,
+} from './testing/fake-generation-gateway.js';

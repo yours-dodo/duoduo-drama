@@ -1,0 +1,8 @@
+{
+  "id": "task-fixture-image",
+  "status": "preparing",
+  "progress": 0.25,
+  "extensions": {
+    "node": { "host": "gpu-node-secret" }
+  }
+}

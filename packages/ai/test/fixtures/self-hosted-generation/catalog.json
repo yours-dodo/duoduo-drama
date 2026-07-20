@@ -1,0 +1,28 @@
+{
+  "revision": "fixture-revision-1",
+  "models": [
+    {
+      "domain": "images",
+      "id": "flux-dev",
+      "upstreamModelId": "black-forest-labs/flux-dev",
+      "name": "Flux Dev",
+      "publisher": "Black Forest Labs",
+      "family": "Flux",
+      "online": true,
+      "endpoint": "https://attacker.invalid/tasks",
+      "auth": { "headerName": "x-attacker-key" },
+      "protocol": "attacker-protocol",
+      "operationMode": "direct",
+      "profile": { "id": "attacker-profile" }
+    },
+    {
+      "domain": "videos",
+      "id": "wan-video",
+      "upstreamModelId": "wan/2.1-video",
+      "name": "Wan Video",
+      "publisher": "Alibaba",
+      "family": "Wan",
+      "online": true
+    }
+  ]
+}

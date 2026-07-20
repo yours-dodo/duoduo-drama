@@ -303,6 +303,14 @@
     "./protocols/kling-video-tasks": {
       "types": "./dist/protocols/kling-video-tasks/index.d.ts",
       "import": "./dist/protocols/kling-video-tasks/index.js"
+    },
+    "./protocols/duoduo-generation-v1": {
+      "types": "./dist/protocols/duoduo-generation-v1/index.d.ts",
+      "import": "./dist/protocols/duoduo-generation-v1/index.js"
+    },
+    "./providers/self-hosted-generation": {
+      "types": "./dist/providers/self-hosted-generation/index.d.ts",
+      "import": "./dist/providers/self-hosted-generation/index.js"
     }
   },
   "files": [

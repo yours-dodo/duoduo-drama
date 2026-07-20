@@ -1,0 +1,28 @@
+{
+  "id": "task-fixture-image",
+  "status": "succeeded",
+  "responseId": "response-task-fixture-image",
+  "artifacts": [
+    {
+      "mediaType": "image/png",
+      "source": {
+        "type": "url",
+        "url": "https://artifacts.example/task-fixture-image.png",
+        "expiresAt": 4102444800000
+      }
+    }
+  ],
+  "compute": {
+    "acceleratorType": "L40S",
+    "acceleratorCount": 1,
+    "activeMilliseconds": 900,
+    "billedMilliseconds": 1000,
+    "queueMilliseconds": 50,
+    "modelLoadMilliseconds": 100
+  },
+  "extensions": {
+    "gpuInstanceId": "gpu-instance-secret",
+    "containerId": "container-secret",
+    "workerIp": "10.0.0.8"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "task-fixture-image",
+  "status": "queued",
+  "progress": 0,
+  "queuePosition": 2,
+  "estimatedWaitMs": 50,
+  "extensions": {
+    "gpuInstanceId": "gpu-instance-secret",
+    "containerId": "container-secret",
+    "workerIp": "10.0.0.8"
+  }
+}

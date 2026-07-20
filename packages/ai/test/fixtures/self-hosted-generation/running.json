@@ -1,0 +1,8 @@
+{
+  "id": "task-fixture-image",
+  "status": "running",
+  "progress": 0.5,
+  "extensions": {
+    "containerId": "container-secret"
+  }
+}

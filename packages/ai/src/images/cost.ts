@@ -1,3 +1,4 @@
+import type { GenerationComputeUsage } from '../generation/index.js';
 import type { ImageModelDefinition } from './models.js';
 
 export interface ImageUsage {
@@ -7,6 +8,7 @@ export interface ImageUsage {
   readonly outputTokens?: number;
   readonly cacheReadTokens?: number;
   readonly cacheWriteTokens?: number;
+  readonly compute?: GenerationComputeUsage;
   readonly serviceTier?: string;
   readonly providerReportedCost?: Readonly<{
     currency: string;
