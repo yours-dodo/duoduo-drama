@@ -1,0 +1,5 @@
+{
+  "request_id": "req-error",
+  "code": "InvalidParameter",
+  "message": "invalid model input"
+}

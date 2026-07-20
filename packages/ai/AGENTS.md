@@ -23,6 +23,7 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/auth/ambient/google-adc` and `@duoduo/ai/auth/ambient/aws` expose explicit injected ambient capabilities; they must not read SDK state, profiles, metadata services, or process environment implicitly.
 - `@duoduo/ai/auth/oauth/anthropic` exposes the explicit Anthropic OAuth flow; provider-neutral OAuth ports remain exported from `@duoduo/ai`.
 - `@duoduo/ai/protocols/openai-codex-responses`, `@duoduo/ai/protocols/mistral-conversations`, and `@duoduo/ai/protocols/pi-messages` own the remaining PI text protocol profiles, replay metadata, and stream normalization.
+- `@duoduo/ai/protocols/dashscope` and `@duoduo/ai/providers/qwen` own curated DashScope native routes, regional/workspace endpoint resolution, and explicit Qwen protocol preference binding.
 - `@duoduo/ai/providers/openai-codex`, `@duoduo/ai/providers/mistral`, and `@duoduo/ai/providers/radius` expose explicit factories; Radius-discovered endpoints must remain bound to the configured gateway DNS boundary.
 - `@duoduo/ai/auth/oauth/openai-codex`, `@duoduo/ai/auth/oauth/xai`, and `@duoduo/ai/auth/oauth/radius` expose explicit OAuth flows with abort-aware polling, refresh-token preservation, and optional remote revocation.
 - `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
@@ -46,6 +47,7 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai test -- --run openai-chat-completions providers-compatible`
 - `pnpm --filter @duoduo/ai test -- --run gateways github-copilot minimax kimi openrouter`
 - `pnpm --filter @duoduo/ai test -- --run protocols providers baseline-parity oauth radius`
+- `pnpm --filter @duoduo/ai test -- --run dashscope qwen`
 - `pnpm --filter @duoduo/ai parity:check -- --pi-root vendor/pi`
 - `pnpm --filter @duoduo/ai api:check`
 - `pnpm --filter @duoduo/ai typecheck`

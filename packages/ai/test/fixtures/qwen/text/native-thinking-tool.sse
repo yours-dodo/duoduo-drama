@@ -1,0 +1,7 @@
+data: {"request_id":"req-qwen","output":{"choices":[{"message":{"role":"assistant","reasoning_content":"plan"},"finish_reason":"null"}]},"usage":{"input_tokens":12,"output_tokens":1,"total_tokens":13}}
+
+data: {"request_id":"req-qwen","output":{"choices":[{"message":{"role":"assistant","content":"Answer "},"finish_reason":"null"}]},"usage":{"input_tokens":12,"output_tokens":2,"total_tokens":14}}
+
+data: {"request_id":"req-qwen","output":{"choices":[{"message":{"role":"assistant","tool_calls":[{"index":0,"id":"call_weather","type":"function","function":{"name":"weather","arguments":"{\"city\":"}}]},"finish_reason":"null"}]}}
+
+data: {"request_id":"req-qwen","output":{"choices":[{"message":{"role":"assistant","content":"done","tool_calls":[{"index":0,"id":"call_weather","type":"function","function":{"arguments":"\"Paris\"}"}}]},"finish_reason":"tool_calls"}]},"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}

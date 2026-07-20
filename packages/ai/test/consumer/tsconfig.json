@@ -13,7 +13,8 @@
     "anthropic-oauth.ts",
     "google-vertex-bedrock.ts",
     "gateways.ts",
-    "pi-baseline.ts"
+    "pi-baseline.ts",
+    "qwen.ts"
   ],
   "references": []
 }

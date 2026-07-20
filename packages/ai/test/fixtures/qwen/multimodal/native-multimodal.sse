@@ -1,0 +1,1 @@
+data: {"request_id":"req-qwen-vl","output":{"choices":[{"message":{"role":"assistant","content":[{"text":"A cat"}]},"finish_reason":"stop"}]},"usage":{"input_tokens":9,"output_tokens":2,"total_tokens":11}}

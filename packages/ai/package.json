@@ -239,6 +239,14 @@
     "./auth/oauth/radius": {
       "types": "./dist/auth/oauth/radius/index.d.ts",
       "import": "./dist/auth/oauth/radius/index.js"
+    },
+    "./protocols/dashscope": {
+      "types": "./dist/protocols/dashscope/index.d.ts",
+      "import": "./dist/protocols/dashscope/index.js"
+    },
+    "./providers/qwen": {
+      "types": "./dist/providers/qwen/index.d.ts",
+      "import": "./dist/providers/qwen/index.js"
     }
   },
   "files": [
@@ -249,7 +257,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test",
     "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check"
