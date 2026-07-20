@@ -3,6 +3,7 @@ import type { JsonValue } from '../core/content.js';
 import type { AiDiagnostic } from '../core/events.js';
 import type { AiError } from '../core/errors.js';
 import type { ProviderSnapshot } from '../core/models.js';
+import type { GenerationPhase } from '../generation/progress.js';
 import type { RetrySafety } from '../transport/dispatcher.js';
 import type { RetryPolicy } from '../transport/retry.js';
 import type { RequestTransport, TransportLimits } from '../transport/types.js';
@@ -23,6 +24,11 @@ import type {
 } from './output.js';
 import type { ImageUsage } from './cost.js';
 import type { ImageGenerationStream } from './stream.js';
+import type {
+  ImageOperationClaims,
+  ImageOperationRef,
+  SerializedImageOperationRef,
+} from './operation-claims.js';
 
 // These declaration-merging maps are intentionally empty until a protocol augments them.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -66,7 +72,7 @@ export interface ResolvedImageGenerationOptions<
 export type ImageProtocolProgressEvent =
   | Readonly<{
       type: 'generation_progress';
-      phase?: string;
+      phase?: GenerationPhase;
       progress?: number;
       queuePosition?: number;
       estimatedWaitMs?: number;
@@ -131,15 +137,73 @@ export interface DirectImageProtocolAdapter<TProtocol extends string = string> {
   ): Promise<ImageProtocolTerminal>;
 }
 
+export interface ResumableImageProtocolEventSink extends ImageProtocolEventSink {
+  setOperation(input: {
+    readonly operationId: string;
+    readonly operationState?: JsonValue;
+    readonly providerExpiresAt?: number;
+  }): Promise<void>;
+  operationTransport(action: 'poll' | 'cancel'): Promise<RequestTransport>;
+}
+
+export interface ResolvedImageOperationResumeOptions {
+  readonly signal: AbortSignal;
+  readonly timeoutMs: number;
+  readonly retry: false | RetryPolicy;
+  readonly pollIntervalMs: number;
+  readonly allowCatalogNetwork: boolean;
+}
+
+export interface ImageResumeRequest<TProtocol extends string = string> {
+  readonly operation: Readonly<ImageOperationClaims & { protocol: TProtocol }>;
+  readonly provider: Readonly<ProviderSnapshot>;
+  readonly model: Readonly<ImageModelDefinition<TProtocol>>;
+  readonly compatibility: Readonly<ImageProtocolCompatibility<TProtocol>>;
+  readonly options: Readonly<ResolvedImageOperationResumeOptions>;
+  readonly pollTransport: RequestTransport;
+  readonly cancelTransport?: RequestTransport;
+  readonly signal: AbortSignal;
+}
+
+export interface ImageCancelRequest<TProtocol extends string = string> {
+  readonly operation: Readonly<ImageOperationClaims & { protocol: TProtocol }>;
+  readonly provider: Readonly<ProviderSnapshot>;
+  readonly model: Readonly<ImageModelDefinition<TProtocol>>;
+  readonly compatibility: Readonly<ImageProtocolCompatibility<TProtocol>>;
+  readonly transport: RequestTransport;
+  readonly signal: AbortSignal;
+}
+
+export interface ResumableImageProtocolAdapter<
+  TProtocol extends string = string,
+> {
+  readonly id: TProtocol;
+  readonly operationMode: 'resumable';
+  readonly contract: ImageProtocolContract<TProtocol>;
+  parseOperationState(input: unknown): JsonValue | undefined;
+  run(
+    request: ImageProtocolRequest<TProtocol>,
+    sink: ResumableImageProtocolEventSink,
+  ): Promise<ImageProtocolTerminal>;
+  resume(
+    request: ImageResumeRequest<TProtocol>,
+    sink: ImageProtocolEventSink,
+  ): Promise<ImageProtocolTerminal>;
+  cancel?(request: ImageCancelRequest<TProtocol>): Promise<void>;
+}
+
+export type ImageProtocolAdapter<TProtocol extends string = string> =
+  | DirectImageProtocolAdapter<TProtocol>
+  | ResumableImageProtocolAdapter<TProtocol>;
+
 export interface ImageProtocolProfile<TProtocol extends string = string> {
   readonly id: string;
   readonly compatibility: Readonly<ImageProtocolCompatibility<TProtocol>>;
   readonly protocolDefaults?: Readonly<ImageProtocolOptions<TProtocol>>;
 }
 
-export interface DirectImageProtocolBinding<TProtocol extends string = string> {
+interface ImageProtocolBindingBase<TProtocol extends string = string> {
   readonly protocol: TProtocol;
-  readonly operationMode: 'direct';
   readonly endpoint: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly credential?: Readonly<{
@@ -157,13 +221,47 @@ export interface DirectImageProtocolBinding<TProtocol extends string = string> {
   }>;
   readonly defaultProfile: Readonly<ImageProtocolProfile<TProtocol>>;
   readonly profiles?: Readonly<Record<string, ImageProtocolProfile<TProtocol>>>;
+}
+
+export interface DirectImageProtocolBinding<
+  TProtocol extends string = string,
+> extends ImageProtocolBindingBase<TProtocol> {
+  readonly operationMode: 'direct';
   loadAdapter(): Promise<DirectImageProtocolAdapter<TProtocol>>;
 }
+
+export interface ImageOperationEndpointContext<
+  TProtocol extends string = string,
+> {
+  readonly action: 'poll' | 'cancel';
+  readonly operation: Readonly<ImageOperationClaims & { protocol: TProtocol }>;
+  readonly provider: Readonly<ProviderSnapshot>;
+  readonly model: Readonly<ImageModelDefinition<TProtocol>>;
+  readonly options: Readonly<ResolvedImageOperationResumeOptions>;
+  readonly signal: AbortSignal;
+}
+
+export interface ResumableImageProtocolBinding<
+  TProtocol extends string = string,
+> extends ImageProtocolBindingBase<TProtocol> {
+  readonly operationMode: 'resumable';
+  readonly operationCompatibilityVersion: string;
+  readonly operationActions: readonly ('poll' | 'cancel')[];
+  resolveOperationEndpoint(
+    context: ImageOperationEndpointContext<TProtocol>,
+  ): Promise<string | URL> | string | URL;
+  readonly operationHeaders?: Readonly<Record<string, string>>;
+  loadAdapter(): Promise<ResumableImageProtocolAdapter<TProtocol>>;
+}
+
+export type ImageProtocolBinding<TProtocol extends string = string> =
+  | DirectImageProtocolBinding<TProtocol>
+  | ResumableImageProtocolBinding<TProtocol>;
 
 export interface ImageProviderBinding {
   readonly catalogCompatibilityVersion: string;
   readonly models: readonly ImageModelDefinition[];
-  readonly protocols: readonly DirectImageProtocolBinding[];
+  readonly protocols: readonly ImageProtocolBinding[];
 }
 
 export interface ImageModelReadOptions {
@@ -189,6 +287,16 @@ export interface ImageModelsApi<TScopeHandle> {
   ): Promise<{ models: readonly ImageModelHandle[] }>;
 }
 
+export interface ImageOperationResumeOptions<TScopeHandle> {
+  readonly scope: TScopeHandle;
+  readonly signal?: AbortSignal;
+  readonly credentialOverride?: RequestCredentialOverride;
+  readonly timeoutMs?: number;
+  readonly retry?: false | RetryPolicy;
+  readonly pollIntervalMs?: number;
+  readonly allowCatalogNetwork?: boolean;
+}
+
 export interface ImagesApi<TScopeHandle> {
   readonly models: ImageModelsApi<TScopeHandle>;
   stream<TProtocol extends string>(
@@ -201,4 +309,12 @@ export interface ImagesApi<TScopeHandle> {
     input: ImageGenerationInput,
     options?: ImageGenerationOptions<TProtocol>,
   ): Promise<ImageGenerationResult>;
+  resume(
+    operation: ImageOperationRef,
+    options: ImageOperationResumeOptions<TScopeHandle>,
+  ): Promise<ImageGenerationStream>;
+  serializeOperation(
+    operation: ImageOperationRef,
+  ): Promise<SerializedImageOperationRef>;
+  parseOperation(serialized: string): Promise<ImageOperationRef>;
 }

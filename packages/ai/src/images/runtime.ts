@@ -12,7 +12,19 @@ import {
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
 import { revealSecret } from '../auth/secret-value.js';
 import { AiRuntimeError, type AiError } from '../core/errors.js';
-import type { ProviderSnapshot } from '../core/models.js';
+import type {
+  CredentialIdentityLifetime,
+  ProviderSnapshot,
+} from '../core/models.js';
+import {
+  GenerationOperationMachine,
+  resolveGenerationOperationPolicy,
+  validateGenerationOperationEnvelope,
+  validateGenerationOperationTimes,
+  type GenerationOperationCodec,
+  type GenerationOperationPolicy,
+  type OperationCredentialVerifier,
+} from '../generation/index.js';
 import type { ProviderRegistry } from '../runtime/registry.js';
 import {
   bindRequestTransport,
@@ -22,10 +34,16 @@ import {
 import type { NetworkPolicy, TransportDriver } from '../transport/types.js';
 import { calculateImageCost } from './cost.js';
 import type {
-  DirectImageProtocolBinding,
   ImageGenerationOptions,
   ImageModelsApi,
+  ImageOperationResumeOptions,
+  ImageProtocolAdapter,
+  ImageProtocolBinding,
+  ImageProtocolProfile,
   ImagesApi,
+  ResolvedImageOperationResumeOptions,
+  ResumableImageProtocolAdapter,
+  ResumableImageProtocolBinding,
 } from './contracts.js';
 import {
   resolveImageGenerationInput,
@@ -38,7 +56,21 @@ import {
   type ImageModelListFilter,
   type ImageModelRef,
 } from './models.js';
+import {
+  asSerializedImageOperationRef,
+  createImageOperationRef,
+  fingerprintImageOperationBinding,
+  fingerprintImageProtocolProfile,
+  imageClaimsEnvelope,
+  inspectImageOperationRef,
+  parseImageOperationEnvelope,
+  parseSerializedImageOperationRef,
+  type ImageOperationClaims,
+  type ImageOperationRef,
+  type SerializedImageOperationRef,
+} from './operation-claims.js';
 import type { ImageGenerationOutput, ImageGenerationResult } from './output.js';
+import { projectImageProtocolEvent } from './operation-projector.js';
 import { DirectImageGenerationStream } from './stream.js';
 
 const handleRuntime = new WeakMap<object, symbol>();
@@ -52,6 +84,27 @@ const handleAssertCredentialCurrent = new WeakMap<
   object,
   (signal?: AbortSignal) => Promise<void>
 >();
+const handleOperationAuth = new WeakMap<object, BoundImageOperationAuth>();
+
+interface ResolvedImageAuth {
+  readonly requestCredential?: RequestCredentialOverride;
+  readonly assertCurrent?: (signal?: AbortSignal) => Promise<void>;
+  readonly authSource?: 'stored' | 'ambient' | 'override';
+  readonly credentialInstanceId?: string;
+  readonly credentialIdentityLifetime?: CredentialIdentityLifetime;
+  readonly credentialScopeFingerprint?: string;
+  readonly scopeIdentityLifetime?: CredentialIdentityLifetime;
+  readonly authBindingFingerprint?: string;
+}
+
+interface BoundImageOperationAuth {
+  readonly authSource: 'stored' | 'ambient' | 'override';
+  readonly credentialInstanceId?: string;
+  readonly credentialIdentityLifetime: CredentialIdentityLifetime;
+  readonly credentialScopeFingerprint: string;
+  readonly scopeIdentityLifetime: CredentialIdentityLifetime;
+  readonly authBindingFingerprint: string;
+}
 
 export interface CreateImagesApiOptions<TScopeHandle> {
   readonly registry: ProviderRegistry;
@@ -64,23 +117,51 @@ export interface CreateImagesApiOptions<TScopeHandle> {
     responseFormat?: 'url' | 'base64';
     pollIntervalMs?: number;
   }>;
+  readonly generationOperationCodec?: GenerationOperationCodec;
+  readonly operationCredentialVerifier?: OperationCredentialVerifier;
+  readonly generationOperationPolicy?: GenerationOperationPolicy;
+  readonly now?: () => number;
   readonly resolveAuth?: (input: {
     readonly provider: ProviderSnapshot;
     readonly scope: TScopeHandle;
     readonly override?: RequestCredentialOverride;
     readonly signal?: AbortSignal;
-  }) => Promise<
-    Readonly<{
-      requestCredential?: RequestCredentialOverride;
-      assertCurrent?: (signal?: AbortSignal) => Promise<void>;
-    }>
-  >;
+  }) => Promise<Readonly<ResolvedImageAuth>>;
 }
 
 export function createImagesApi<TScopeHandle>(
   options: CreateImagesApiOptions<TScopeHandle>,
 ): ImagesApi<TScopeHandle> {
   const credentialKey = randomBytes(32);
+  const policy = resolveGenerationOperationPolicy(
+    options.generationOperationPolicy,
+  );
+  const now = options.now ?? Date.now;
+  const scopeFingerprint = createRuntimeScopeFingerprinter<TScopeHandle>();
+
+  const resolveAuth = async (input: {
+    binding: ImageProtocolBinding;
+    provider: ProviderSnapshot;
+    scope: TScopeHandle;
+    override?: RequestCredentialOverride;
+    signal?: AbortSignal;
+  }): Promise<Readonly<ResolvedImageAuth>> => {
+    if (options.resolveAuth)
+      return options.resolveAuth({
+        provider: input.provider,
+        scope: input.scope,
+        ...(input.override ? { override: input.override } : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+    return authorizeOverride({
+      binding: input.binding,
+      provider: input.provider,
+      scope: input.scope,
+      override: input.override,
+      policy: options.credentialOverridePolicy,
+      scopeFingerprint: scopeFingerprint(input.scope),
+    });
+  };
 
   const models: ImageModelsApi<TScopeHandle> = {
     find: async <TProtocol extends string>(
@@ -97,25 +178,18 @@ export function createImagesApi<TScopeHandle>(
         entry.provider.images!.protocols,
         definition.protocol,
       );
-      const resolvedAuth = options.resolveAuth
-        ? await options.resolveAuth({
-            provider: entry.snapshot,
-            scope,
-            override: readOptions?.credentialOverride,
-            signal: readOptions?.signal,
-          })
-        : await authorizeOverride({
-            binding,
-            provider: entry.snapshot,
-            scope,
-            override: readOptions?.credentialOverride,
-            policy: options.credentialOverridePolicy,
-          });
+      const auth = await resolveAuth({
+        binding,
+        provider: entry.snapshot,
+        scope,
+        override: readOptions?.credentialOverride,
+        signal: readOptions?.signal,
+      });
       return makeHandle(
         definition as ImageModelDefinition<TProtocol>,
         entry.snapshot,
         options.runtimeId,
-        bindHandleAuth(resolvedAuth, credentialKey),
+        bindHandleAuth(auth, credentialKey, entry.snapshot),
       );
     },
     require: async <TProtocol extends string>(
@@ -159,26 +233,19 @@ export function createImagesApi<TScopeHandle>(
             entry.provider.images.protocols,
             definition.protocol,
           );
-          const resolvedAuth = options.resolveAuth
-            ? await options.resolveAuth({
-                provider: snapshot,
-                scope,
-                override: readOptions?.credentialOverride,
-                signal: readOptions?.signal,
-              })
-            : await authorizeOverride({
-                binding,
-                provider: snapshot,
-                scope,
-                override: readOptions?.credentialOverride,
-                policy: options.credentialOverridePolicy,
-              });
+          const auth = await resolveAuth({
+            binding,
+            provider: snapshot,
+            scope,
+            override: readOptions?.credentialOverride,
+            signal: readOptions?.signal,
+          });
           handles.push(
             makeHandle(
               definition,
               snapshot,
               options.runtimeId,
-              bindHandleAuth(resolvedAuth, credentialKey),
+              bindHandleAuth(auth, credentialKey, snapshot),
             ),
           );
         }
@@ -191,79 +258,198 @@ export function createImagesApi<TScopeHandle>(
     model: ImageModelHandle<TProtocol>,
     input: ImageGenerationInput,
     callOptions: ImageGenerationOptions<TProtocol> = {},
-  ) =>
-    new DirectImageGenerationStream(async (generationStream) => {
-      const startedAt = Date.now();
-      const requestId = randomUUID();
-      const outputs: ImageGenerationOutput[] = [];
-      let sequence = 0;
-      let timeout: ReturnType<typeof setTimeout> | undefined;
-      let timedOut = false;
-      const base = {
-        requestId,
-        model: model.definition as Readonly<ImageModelDefinition>,
-        outputs,
-        startedAt,
-      };
-      try {
-        assertHandle(model, options.runtimeId, options.registry);
-        const entry = options.registry.get(model.ref.providerInstanceId)!;
-        const binding = findBinding(
-          entry.provider.images!.protocols,
-          model.definition.protocol,
+  ): DirectImageGenerationStream => {
+    const machine = new GenerationOperationMachine<ImageOperationRef>();
+    let sequence = 0;
+    let detachedBase:
+      | Readonly<{
+          requestId: string;
+          model: Readonly<ImageModelDefinition>;
+          outputs: ImageGenerationOutput[];
+          startedAt: number;
+        }>
+      | undefined;
+
+    return new DirectImageGenerationStream(
+      async (generationStream) => {
+        const startedAt = now();
+        const requestId = randomUUID();
+        const outputs: ImageGenerationOutput[] = [];
+        detachedBase = {
+          requestId,
+          model: model.definition as Readonly<ImageModelDefinition>,
+          outputs,
+          startedAt,
+        };
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        let resumableContext:
+          | {
+              binding: ResumableImageProtocolBinding<TProtocol>;
+              adapter: ResumableImageProtocolAdapter<TProtocol>;
+              claims: ImageOperationClaims;
+              override?: RequestCredentialOverride;
+              entry: NonNullable<ReturnType<ProviderRegistry['get']>>;
+              profile: ImageProtocolProfile<TProtocol>;
+              resolvedOptions: import('./contracts.js').ResolvedImageGenerationOptions<TProtocol>;
+            }
+          | undefined;
+        const base = detachedBase;
+
+        const finishAbort = async () => {
+          if (!machine.tryWin('abort')) return;
+          const snapshot = machine.snapshot();
+          if (
+            snapshot.operation &&
+            resumableContext &&
+            resumableContext.binding.operationActions.includes('cancel') &&
+            resumableContext.adapter.cancel &&
+            machine.requestRemoteCancel()
+          ) {
+            try {
+              const transport = await resolveOperationTransport({
+                binding: resumableContext.binding,
+                action: 'cancel',
+                claims: resumableContext.claims,
+                provider: resumableContext.entry.snapshot,
+                model,
+                options: {
+                  signal: generationStream.signal,
+                  timeoutMs: resumableContext.resolvedOptions.timeoutMs,
+                  retry: resumableContext.resolvedOptions.retry,
+                  pollIntervalMs:
+                    resumableContext.resolvedOptions.pollIntervalMs,
+                  allowCatalogNetwork: false,
+                },
+                override: resumableContext.override,
+                key: credentialKey,
+                driver: options.transport,
+                networkPolicy: options.networkPolicy,
+              });
+              await resumableContext.adapter.cancel({
+                operation: resumableContext.claims as ImageOperationClaims & {
+                  protocol: TProtocol;
+                },
+                provider: resumableContext.entry.snapshot,
+                model: model.definition,
+                compatibility: resumableContext.profile.compatibility,
+                transport,
+                signal: generationStream.signal,
+              });
+            } catch {
+              // Cancellation is best-effort; the local terminal still wins.
+            }
+          }
+          const error = timedOut
+            ? timeoutError()
+            : (normalizeError(undefined, true) as AiError & {
+                readonly category: 'cancelled';
+              });
+          const result = failureResult({
+            ...base,
+            outputs: Object.freeze([...outputs]),
+            completedAt: now(),
+            status: 'cancelled',
+            error,
+            operation: snapshot.operation,
+          });
+          await generationStream.complete(result, {
+            type: 'generation_error',
+            sequence: sequence++,
+            result,
+          });
+        };
+
+        generationStream.signal.addEventListener(
+          'abort',
+          () => void finishAbort(),
+          { once: true },
         );
-        const adapter = await binding.loadAdapter();
-        const resolvedOptions = resolveOptions(
-          binding,
-          model.definition,
-          callOptions,
-          generationStream.signal,
-          options.imageDefaults,
-          adapter.contract,
-        );
-        timeout = setTimeout(() => {
-          timedOut = true;
-          generationStream.abort('image generation timeout');
-        }, resolvedOptions.timeoutMs);
-        await handleAssertCredentialCurrent.get(model as object)?.(
-          generationStream.signal,
-        );
-        const resolvedInput = await resolveImageGenerationInput({
-          model: model.definition,
-          value: input,
-          driver: options.transport,
-          networkPolicy: options.networkPolicy,
-          signal: generationStream.signal,
-        });
-        const transport = resolveTransport({
-          binding,
-          model,
-          override:
-            callOptions.credentialOverride ??
-            handleCredentialOverride.get(model as object),
-          key: credentialKey,
-          driver: options.transport,
-          networkPolicy: options.networkPolicy,
-          retry: resolvedOptions.retry,
-        });
-        await generationStream.publish({
-          type: 'generation_start',
-          sequence: sequence++,
-          model: model.definition,
-        });
-        const profile =
-          binding.profiles?.[model.definition.protocolProfileId] ??
-          (binding.defaultProfile.id === model.definition.protocolProfileId
-            ? binding.defaultProfile
-            : undefined);
-        if (!profile)
-          throw new AiRuntimeError(
-            'IMAGE_PROTOCOL_PROFILE_NOT_FOUND',
-            'invalid_request',
-            'image protocol profile is not registered',
+
+        try {
+          assertHandle(model, options.runtimeId, options.registry);
+          const entry = options.registry.get(model.ref.providerInstanceId)!;
+          const binding = findBinding(
+            entry.provider.images!.protocols,
+            model.definition.protocol,
+          ) as ImageProtocolBinding<TProtocol>;
+          const adapter =
+            (await binding.loadAdapter()) as ImageProtocolAdapter<TProtocol>;
+          assertAdapter(binding, adapter);
+          const profile = findProfile(binding, model.definition);
+          const resolvedOptions = resolveOptions(
+            binding,
+            model.definition,
+            callOptions,
+            generationStream.signal,
+            options.imageDefaults,
+            adapter.contract,
           );
-        const adapterTerminal = await adapter.run(
-          {
+          timeout = setTimeout(() => {
+            timedOut = true;
+            generationStream.abort('image generation timeout');
+          }, resolvedOptions.timeoutMs);
+          await handleAssertCredentialCurrent.get(model as object)?.(
+            generationStream.signal,
+          );
+          const effectiveOverride =
+            callOptions.credentialOverride ??
+            handleCredentialOverride.get(model as object);
+          const operationAuth = handleOperationAuth.get(model as object);
+          let overrideProof:
+            | import('../generation/index.js').OperationCredentialProof
+            | undefined;
+          if (binding.operationMode === 'resumable') {
+            if (!operationAuth)
+              throw new AiRuntimeError(
+                'OPERATION_AUTH_UNAVAILABLE',
+                'auth',
+                'operation authentication identity is unavailable',
+              );
+            if (operationAuth.authSource === 'override') {
+              if (!effectiveOverride || !options.operationCredentialVerifier)
+                throw new AiRuntimeError(
+                  'OPERATION_CREDENTIAL_VERIFIER_REQUIRED',
+                  'auth',
+                  'an operation credential verifier is required for resumable credential overrides',
+                );
+              const proof = await options.operationCredentialVerifier.create(
+                effectiveOverride,
+                generationStream.signal,
+              );
+              if (proof.status === 'key_unavailable')
+                throw new AiRuntimeError(
+                  'OPERATION_CREDENTIAL_KEY_UNAVAILABLE',
+                  'auth',
+                  'operation credential proof key is unavailable',
+                  proof.retryable,
+                );
+              overrideProof = proof.proof;
+            }
+          }
+          const resolvedInput = await resolveImageGenerationInput({
+            model: model.definition,
+            value: input,
+            driver: options.transport,
+            networkPolicy: options.networkPolicy,
+            signal: generationStream.signal,
+          });
+          const transport = resolveTransport({
+            binding,
+            model,
+            override: effectiveOverride,
+            key: credentialKey,
+            driver: options.transport,
+            networkPolicy: options.networkPolicy,
+            retry: resolvedOptions.retry,
+          });
+          await generationStream.publish({
+            type: 'generation_start',
+            sequence: sequence++,
+            model: model.definition,
+          });
+
+          const request = {
             provider: entry.snapshot,
             model: model.definition,
             input: resolvedInput,
@@ -271,85 +457,593 @@ export function createImagesApi<TScopeHandle>(
             options: resolvedOptions,
             transport,
             signal: generationStream.signal,
-          },
-          {
-            publish: async (event) => {
-              if (event.type === 'generation_output')
-                outputs[event.outputIndex] = event.output;
-              await generationStream.publish({
-                ...event,
-                sequence: sequence++,
+          };
+
+          let adapterTerminal: import('./contracts.js').ImageProtocolTerminal;
+          if (binding.operationMode === 'direct') {
+            if (adapter.operationMode !== 'direct') throw protocolViolation();
+            adapterTerminal = await adapter.run(request, {
+              publish: async (event) => {
+                if (event.type === 'generation_output')
+                  outputs[event.outputIndex] = event.output;
+                await generationStream.publish(
+                  projectImageProtocolEvent(event, sequence++),
+                );
+              },
+            });
+          } else {
+            if (adapter.operationMode !== 'resumable' || !operationAuth)
+              throw protocolViolation();
+            let claims: ImageOperationClaims | undefined;
+            const setOperation = async (operationInput: {
+              readonly operationId: string;
+              readonly operationState?: import('../core/content.js').JsonValue;
+              readonly providerExpiresAt?: number;
+            }) => {
+              validateOperationId(operationInput.operationId);
+              const operationState = adapter.parseOperationState(
+                operationInput.operationState,
+              );
+              if (
+                operationInput.operationState !== undefined &&
+                operationState === undefined
+              )
+                throw protocolViolation('image operation state was rejected');
+              if (
+                operationState !== undefined &&
+                JSON.stringify(operationState).length > 16_384
+              )
+                throw protocolViolation('image operation state is too large');
+              const issuedAt = now();
+              const providerExpiresAt = operationInput.providerExpiresAt;
+              if (
+                providerExpiresAt !== undefined &&
+                (!Number.isInteger(providerExpiresAt) ||
+                  providerExpiresAt <= issuedAt)
+              )
+                throw protocolViolation('image operation expiry is invalid');
+              const expiresAt = Math.min(
+                providerExpiresAt ?? Number.MAX_SAFE_INTEGER,
+                issuedAt + policy.maxTtlMs,
+              );
+              const profileFingerprint = fingerprintImageProtocolProfile({
+                id: profile.id,
+                compatibility: profile.compatibility,
+                protocolDefaults: profile.protocolDefaults ?? null,
               });
-            },
-          },
-        );
-        const terminal = timedOut
-          ? ({ status: 'cancelled', error: timeoutError() } as const)
-          : adapterTerminal;
-        const completedAt = Date.now();
-        const cost = terminal.usage
-          ? calculateImageCost(model.definition, terminal.usage)
-          : undefined;
-        if (terminal.status === 'completed') {
-          const result: Extract<
-            ImageGenerationResult,
-            { status: 'completed' }
-          > = Object.freeze({
+              const common = {
+                providerInstanceId: entry.snapshot.id,
+                protocol: model.definition.protocol,
+                modelId: model.definition.id,
+                upstreamModelId: model.definition.upstreamModelId,
+                protocolProfileId: model.definition.protocolProfileId,
+                modelProtocolProfileFingerprint: profileFingerprint,
+                providerOperationBindingFingerprint:
+                  fingerprintImageOperationBinding({
+                    providerKind: entry.snapshot.kind,
+                    providerInstanceId: entry.snapshot.id,
+                    providerConfigFingerprint: entry.snapshot.configFingerprint,
+                    protocol: binding.protocol,
+                    operationCompatibilityVersion:
+                      binding.operationCompatibilityVersion,
+                    modelId: model.definition.id,
+                    upstreamModelId: model.definition.upstreamModelId,
+                    modelProtocolProfileFingerprint: profileFingerprint,
+                  }),
+                providerConfigFingerprint: entry.snapshot.configFingerprint,
+                authBindingFingerprint: operationAuth.authBindingFingerprint,
+                credentialScopeFingerprint:
+                  operationAuth.credentialScopeFingerprint,
+                operationId: operationInput.operationId,
+                ...(operationState === undefined ? {} : { operationState }),
+                issuedAt,
+                expiresAt,
+                credentialIdentityLifetime:
+                  operationAuth.credentialIdentityLifetime,
+              };
+              claims = Object.freeze(
+                operationAuth.authSource === 'override'
+                  ? {
+                      ...common,
+                      authSource: 'override' as const,
+                      overrideCredentialProof: overrideProof!,
+                    }
+                  : {
+                      ...common,
+                      authSource: operationAuth.authSource,
+                      credentialInstanceId: operationAuth.credentialInstanceId!,
+                    },
+              ) as ImageOperationClaims;
+              const operation = createImageOperationRef({
+                kind: 'memory',
+                runtimeId: options.runtimeId,
+                claims,
+                authIdentityLifetime: operationAuth.credentialIdentityLifetime,
+                scopeIdentityLifetime: operationAuth.scopeIdentityLifetime,
+                ...(effectiveOverride
+                  ? { requestCredential: effectiveOverride }
+                  : {}),
+              });
+              try {
+                machine.setOperation(operation);
+              } catch {
+                throw protocolViolation(
+                  'image operation was set more than once',
+                );
+              }
+              generationStream.setOperation(operation);
+              resumableContext = {
+                binding,
+                adapter,
+                claims,
+                ...(effectiveOverride ? { override: effectiveOverride } : {}),
+                entry,
+                profile,
+                resolvedOptions,
+              };
+              await generationStream.publish({
+                type: 'generation_progress',
+                phase: 'queued',
+                sequence: sequence++,
+                operation,
+              });
+            };
+            adapterTerminal = await adapter.run(request, {
+              setOperation,
+              operationTransport: async (action) => {
+                if (!claims)
+                  throw protocolViolation(
+                    'operation transport requested before setOperation',
+                  );
+                if (!binding.operationActions.includes(action))
+                  throw protocolViolation('undeclared image operation action');
+                return resolveOperationTransport({
+                  binding,
+                  action,
+                  claims,
+                  provider: entry.snapshot,
+                  model,
+                  options: {
+                    signal: generationStream.signal,
+                    timeoutMs: resolvedOptions.timeoutMs,
+                    retry: resolvedOptions.retry,
+                    pollIntervalMs: resolvedOptions.pollIntervalMs,
+                    allowCatalogNetwork: false,
+                  },
+                  override: effectiveOverride,
+                  key: credentialKey,
+                  driver: options.transport,
+                  networkPolicy: options.networkPolicy,
+                });
+              },
+              publish: async (event) => {
+                if (!claims)
+                  throw protocolViolation(
+                    'image protocol emitted before setOperation',
+                  );
+                if (event.type === 'generation_output')
+                  outputs[event.outputIndex] = event.output;
+                await generationStream.publish(
+                  projectImageProtocolEvent(
+                    event,
+                    sequence++,
+                    machine.snapshot().operation,
+                  ),
+                );
+              },
+            });
+            if (!claims)
+              throw protocolViolation(
+                'image protocol completed before setOperation',
+              );
+          }
+
+          if (generationStream.signal.aborted) {
+            await finishAbort();
+            return;
+          }
+          if (!machine.tryWin('remote_terminal')) return;
+          await completeTerminal({
+            generationStream,
+            terminal: adapterTerminal,
+            base,
+            outputs,
+            operation: machine.snapshot().operation,
+            sequence: () => sequence++,
+            now,
+          });
+        } catch (error) {
+          if (generationStream.signal.aborted) {
+            await finishAbort();
+            return;
+          }
+          if (!machine.tryWin('remote_terminal')) return;
+          const normalized = normalizeError(error, false);
+          const result = failureResult({
             ...base,
             outputs: Object.freeze([...outputs]),
-            status: 'completed',
-            partial: false,
-            ...(terminal.responseId ? { responseId: terminal.responseId } : {}),
-            ...(terminal.usage ? { usage: terminal.usage } : {}),
-            ...(cost ? { cost } : {}),
-            ...(terminal.diagnostics
-              ? { diagnostics: terminal.diagnostics }
-              : {}),
-            completedAt,
+            completedAt: now(),
+            status:
+              normalized.category === 'cancelled' ? 'cancelled' : 'failed',
+            error: normalized,
+            operation: machine.snapshot().operation,
           });
           await generationStream.complete(result, {
-            type: 'generation_end',
+            type: 'generation_error',
             sequence: sequence++,
             result,
           });
-          return;
+        } finally {
+          if (timeout !== undefined) clearTimeout(timeout);
         }
-        const result = failureResult({
-          ...base,
-          outputs: Object.freeze([...outputs]),
-          completedAt,
-          status: terminal.status,
-          error: terminal.error,
-          responseId: terminal.responseId,
-          usage: terminal.usage,
-          cost,
-          diagnostics: terminal.diagnostics,
-        });
+      },
+      callOptions.signal,
+      async (generationStream, operation) => {
+        if (!machine.tryWin('detach'))
+          throw new AiRuntimeError(
+            'OPERATION_NOT_AVAILABLE',
+            'invalid_request',
+            'image generation operation is already terminal',
+          );
+        if (!detachedBase)
+          throw new AiRuntimeError(
+            'OPERATION_NOT_AVAILABLE',
+            'invalid_request',
+            'image generation operation is not initialized',
+          );
+        const result: Extract<ImageGenerationResult, { status: 'detached' }> =
+          Object.freeze({
+            ...detachedBase,
+            outputs: Object.freeze([...detachedBase.outputs]),
+            status: 'detached',
+            partial: detachedBase.outputs.length > 0,
+            operation,
+            completedAt: now(),
+          });
         await generationStream.complete(result, {
-          type: 'generation_error',
+          type: 'generation_detached',
           sequence: sequence++,
           result,
         });
-      } catch (error) {
-        const normalized = timedOut
-          ? timeoutError()
-          : normalizeError(error, generationStream.signal.aborted);
-        const result = failureResult({
-          ...base,
-          outputs: Object.freeze([...outputs]),
-          completedAt: Date.now(),
-          status: normalized.category === 'cancelled' ? 'cancelled' : 'failed',
-          error: normalized,
-        });
+      },
+    );
+  };
+
+  const resume = async (
+    operation: ImageOperationRef,
+    resumeOptions: ImageOperationResumeOptions<TScopeHandle>,
+  ): Promise<DirectImageGenerationStream> => {
+    const record = inspectImageOperationRef(operation);
+    let claims: ImageOperationClaims;
+    if (record.kind === 'memory') {
+      if (record.runtimeId !== options.runtimeId || !record.claims)
+        throw new AiRuntimeError(
+          'OPERATION_REF_RUNTIME_MISMATCH',
+          'invalid_request',
+          'image operation belongs to another runtime; serialize it first',
+        );
+      claims = record.claims;
+    } else {
+      if (!options.generationOperationCodec || !record.sealedToken)
+        throw new AiRuntimeError(
+          'OPERATION_NOT_PERSISTABLE',
+          'invalid_request',
+          'no operation codec is configured',
+        );
+      const opened = await options.generationOperationCodec.open(
+        record.sealedToken,
+        resumeOptions.signal,
+      );
+      if (opened.status === 'invalid')
+        throw new AiRuntimeError(
+          'OPERATION_TOKEN_INVALID',
+          'invalid_request',
+          'image operation token is invalid',
+        );
+      if (opened.status === 'key_unavailable')
+        throw new AiRuntimeError(
+          'OPERATION_CODEC_KEY_UNAVAILABLE',
+          'invalid_request',
+          'image operation codec key is unavailable',
+          opened.retryable,
+        );
+      claims = parseImageOperationEnvelope(
+        validateGenerationOperationEnvelope(opened.envelope),
+      );
+    }
+    try {
+      validateGenerationOperationTimes(claims, policy, now());
+    } catch {
+      throw new AiRuntimeError(
+        'OPERATION_TOKEN_INVALID',
+        'invalid_request',
+        'image operation token timestamps are invalid',
+      );
+    }
+
+    const entry = options.registry.get(claims.providerInstanceId);
+    const definition = entry?.provider.images?.models.find(
+      (candidate) => candidate.id === claims.modelId,
+    );
+    if (!entry || !definition)
+      throw operationMismatch('operation provider or model is unavailable');
+    if (
+      entry.snapshot.configFingerprint !== claims.providerConfigFingerprint ||
+      definition.protocol !== claims.protocol ||
+      definition.upstreamModelId !== claims.upstreamModelId ||
+      definition.protocolProfileId !== claims.protocolProfileId
+    )
+      throw operationMismatch('operation provider or model changed');
+    const binding = findBinding(
+      entry.provider.images!.protocols,
+      definition.protocol,
+    );
+    if (binding.operationMode !== 'resumable')
+      throw operationMismatch('operation protocol is no longer resumable');
+    const adapter = await binding.loadAdapter();
+    assertAdapter(binding, adapter);
+    const profile = findProfile(binding, definition);
+    const profileFingerprint = fingerprintImageProtocolProfile({
+      id: profile.id,
+      compatibility: profile.compatibility,
+      protocolDefaults: profile.protocolDefaults ?? null,
+    });
+    if (
+      profileFingerprint !== claims.modelProtocolProfileFingerprint ||
+      fingerprintImageOperationBinding({
+        providerKind: entry.snapshot.kind,
+        providerInstanceId: entry.snapshot.id,
+        providerConfigFingerprint: entry.snapshot.configFingerprint,
+        protocol: binding.protocol,
+        operationCompatibilityVersion: binding.operationCompatibilityVersion,
+        modelId: definition.id,
+        upstreamModelId: definition.upstreamModelId,
+        modelProtocolProfileFingerprint: profileFingerprint,
+      }) !== claims.providerOperationBindingFingerprint
+    )
+      throw operationMismatch('operation protocol profile changed');
+
+    const effectiveOverride =
+      resumeOptions.credentialOverride ?? record.requestCredential;
+    const model = await models.require(
+      {
+        providerInstanceId: definition.providerInstanceId,
+        modelId: definition.id,
+        protocol: definition.protocol,
+      },
+      resumeOptions.scope,
+      {
+        ...(resumeOptions.signal ? { signal: resumeOptions.signal } : {}),
+        ...(effectiveOverride ? { credentialOverride: effectiveOverride } : {}),
+      },
+    );
+    const auth = handleOperationAuth.get(model as object);
+    if (
+      !auth ||
+      auth.credentialScopeFingerprint !== claims.credentialScopeFingerprint ||
+      auth.authBindingFingerprint !== claims.authBindingFingerprint ||
+      auth.authSource !== claims.authSource
+    )
+      throw operationMismatch('operation scope or authentication changed');
+    if (claims.authSource === 'override') {
+      if (!effectiveOverride || !options.operationCredentialVerifier)
+        throw operationMismatch(
+          'operation credential proof cannot be verified',
+        );
+      const verified = await options.operationCredentialVerifier.verify(
+        effectiveOverride,
+        claims.overrideCredentialProof,
+        resumeOptions.signal,
+      );
+      if (verified.status === 'key_unavailable')
+        throw new AiRuntimeError(
+          'OPERATION_CREDENTIAL_KEY_UNAVAILABLE',
+          'auth',
+          'operation credential proof key is unavailable',
+          verified.retryable,
+        );
+      if (verified.status !== 'match')
+        throw operationMismatch('operation credential changed');
+    } else if (auth.credentialInstanceId !== claims.credentialInstanceId) {
+      throw operationMismatch('operation credential identity changed');
+    }
+    await handleAssertCredentialCurrent.get(model as object)?.(
+      resumeOptions.signal,
+    );
+
+    const resolvedOptions: ResolvedImageOperationResumeOptions = Object.freeze({
+      signal: resumeOptions.signal ?? new AbortController().signal,
+      timeoutMs: resumeOptions.timeoutMs ?? 60_000,
+      retry: resumeOptions.retry ?? false,
+      pollIntervalMs: resumeOptions.pollIntervalMs ?? 1_000,
+      allowCatalogNetwork: resumeOptions.allowCatalogNetwork ?? false,
+    });
+    const pollTransport = await resolveOperationTransport({
+      binding,
+      action: 'poll',
+      claims,
+      provider: entry.snapshot,
+      model,
+      options: resolvedOptions,
+      override: effectiveOverride,
+      key: credentialKey,
+      driver: options.transport,
+      networkPolicy: options.networkPolicy,
+    });
+    const cancelTransport = binding.operationActions.includes('cancel')
+      ? await resolveOperationTransport({
+          binding,
+          action: 'cancel',
+          claims,
+          provider: entry.snapshot,
+          model,
+          options: resolvedOptions,
+          override: effectiveOverride,
+          key: credentialKey,
+          driver: options.transport,
+          networkPolicy: options.networkPolicy,
+        })
+      : undefined;
+
+    const machine = new GenerationOperationMachine<ImageOperationRef>();
+    machine.setOperation(operation);
+    let sequence = 0;
+    return new DirectImageGenerationStream(
+      async (generationStream) => {
+        const startedAt = now();
+        const requestId = randomUUID();
+        const outputs: ImageGenerationOutput[] = [];
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        const base = {
+          requestId,
+          model: definition as Readonly<ImageModelDefinition>,
+          outputs,
+          startedAt,
+        };
+        const finishAbort = async () => {
+          if (!machine.tryWin('abort')) return;
+          if (
+            cancelTransport &&
+            adapter.cancel &&
+            machine.requestRemoteCancel()
+          ) {
+            try {
+              await adapter.cancel({
+                operation: claims,
+                provider: entry.snapshot,
+                model: definition,
+                compatibility: profile.compatibility,
+                transport: cancelTransport,
+                signal: generationStream.signal,
+              });
+            } catch {
+              // Best effort only.
+            }
+          }
+          const error = timedOut
+            ? timeoutError()
+            : (normalizeError(undefined, true) as AiError & {
+                readonly category: 'cancelled';
+              });
+          const result = failureResult({
+            ...base,
+            outputs: Object.freeze([...outputs]),
+            completedAt: now(),
+            status: 'cancelled',
+            error,
+            operation,
+          });
+          await generationStream.complete(result, {
+            type: 'generation_error',
+            sequence: sequence++,
+            result,
+          });
+        };
+        generationStream.signal.addEventListener(
+          'abort',
+          () => void finishAbort(),
+          { once: true },
+        );
+        try {
+          generationStream.setOperation(operation);
+          await generationStream.publish({
+            type: 'generation_start',
+            sequence: sequence++,
+            model: definition,
+            operation,
+          });
+          timeout = setTimeout(() => {
+            timedOut = true;
+            generationStream.abort('image operation resume timeout');
+          }, resolvedOptions.timeoutMs);
+          const terminal = await adapter.resume(
+            {
+              operation: claims,
+              provider: entry.snapshot,
+              model: definition,
+              compatibility: profile.compatibility,
+              options: resolvedOptions,
+              pollTransport,
+              ...(cancelTransport ? { cancelTransport } : {}),
+              signal: generationStream.signal,
+            },
+            {
+              publish: async (event) => {
+                if (event.type === 'generation_output')
+                  outputs[event.outputIndex] = event.output;
+                await generationStream.publish(
+                  projectImageProtocolEvent(event, sequence++, operation),
+                );
+              },
+            },
+          );
+          if (generationStream.signal.aborted) {
+            await finishAbort();
+            return;
+          }
+          if (!machine.tryWin('remote_terminal')) return;
+          await completeTerminal({
+            generationStream,
+            terminal,
+            base,
+            outputs,
+            operation,
+            sequence: () => sequence++,
+            now,
+          });
+        } catch (error) {
+          if (generationStream.signal.aborted) {
+            await finishAbort();
+            return;
+          }
+          if (!machine.tryWin('remote_terminal')) return;
+          const normalized = normalizeError(error, false);
+          const result = failureResult({
+            ...base,
+            outputs: Object.freeze([...outputs]),
+            completedAt: now(),
+            status:
+              normalized.category === 'cancelled' ? 'cancelled' : 'failed',
+            error: normalized,
+            operation,
+          });
+          await generationStream.complete(result, {
+            type: 'generation_error',
+            sequence: sequence++,
+            result,
+          });
+        } finally {
+          if (timeout !== undefined) clearTimeout(timeout);
+        }
+      },
+      resumeOptions.signal,
+      async (generationStream) => {
+        if (!machine.tryWin('detach'))
+          throw new AiRuntimeError(
+            'OPERATION_NOT_AVAILABLE',
+            'invalid_request',
+            'image generation operation is already terminal',
+          );
+        const result: Extract<ImageGenerationResult, { status: 'detached' }> =
+          Object.freeze({
+            requestId: randomUUID(),
+            model: definition,
+            outputs: Object.freeze([]),
+            status: 'detached',
+            partial: false,
+            operation,
+            startedAt: now(),
+            completedAt: now(),
+          });
         await generationStream.complete(result, {
-          type: 'generation_error',
+          type: 'generation_detached',
           sequence: sequence++,
           result,
         });
-      } finally {
-        if (timeout !== undefined) clearTimeout(timeout);
-      }
-    }, callOptions.signal);
+      },
+    );
+  };
 
   return Object.freeze({
     models: Object.freeze(models),
@@ -359,6 +1053,53 @@ export function createImagesApi<TScopeHandle>(
       input: ImageGenerationInput,
       callOptions?: ImageGenerationOptions<TProtocol>,
     ) => stream(model, input, callOptions).result(),
+    resume,
+    serializeOperation: async (
+      operation: ImageOperationRef,
+    ): Promise<SerializedImageOperationRef> => {
+      const record = inspectImageOperationRef(operation);
+      if (
+        record.kind !== 'memory' ||
+        record.runtimeId !== options.runtimeId ||
+        !record.claims
+      )
+        throw new AiRuntimeError(
+          'OPERATION_REF_RUNTIME_MISMATCH',
+          'invalid_request',
+          'only a memory operation from this runtime can be serialized',
+        );
+      if (!options.generationOperationCodec)
+        throw new AiRuntimeError(
+          'OPERATION_NOT_PERSISTABLE',
+          'invalid_request',
+          'no operation codec is configured',
+        );
+      if (record.authIdentityLifetime !== 'cross-runtime')
+        throw new AiRuntimeError(
+          'OPERATION_AUTH_NOT_PERSISTABLE',
+          'auth',
+          'operation authentication identity is process-local',
+        );
+      if (record.scopeIdentityLifetime !== 'cross-runtime')
+        throw new AiRuntimeError(
+          'OPERATION_SCOPE_NOT_PERSISTABLE',
+          'auth',
+          'operation scope identity is process-local',
+        );
+      const sealed = await options.generationOperationCodec.seal(
+        imageClaimsEnvelope(record.claims),
+      );
+      if (sealed.status === 'key_unavailable')
+        throw new AiRuntimeError(
+          'OPERATION_CODEC_KEY_UNAVAILABLE',
+          'invalid_request',
+          'image operation codec key is unavailable',
+          sealed.retryable,
+        );
+      return asSerializedImageOperationRef(sealed.token);
+    },
+    parseOperation: async (serialized: string) =>
+      parseSerializedImageOperationRef(serialized),
   });
 }
 
@@ -370,6 +1111,7 @@ function makeHandle<TProtocol extends string>(
     credentialFingerprint?: string;
     requestCredential?: RequestCredentialOverride;
     assertCurrent?: (signal?: AbortSignal) => Promise<void>;
+    operationAuth?: BoundImageOperationAuth;
   }>,
 ): ImageModelHandle<TProtocol> {
   const handle = Object.freeze({
@@ -388,6 +1130,7 @@ function makeHandle<TProtocol extends string>(
     handleCredentialOverride.set(handle, auth.requestCredential);
   if (auth.assertCurrent)
     handleAssertCredentialCurrent.set(handle, auth.assertCurrent);
+  if (auth.operationAuth) handleOperationAuth.set(handle, auth.operationAuth);
   return handle;
 }
 
@@ -416,9 +1159,9 @@ function assertHandle(
 }
 
 function findBinding(
-  bindings: readonly DirectImageProtocolBinding[],
+  bindings: readonly ImageProtocolBinding[],
   protocol: string,
-): DirectImageProtocolBinding {
+): ImageProtocolBinding {
   const binding = bindings.find((candidate) => candidate.protocol === protocol);
   if (!binding)
     throw new AiRuntimeError(
@@ -429,13 +1172,43 @@ function findBinding(
   return binding;
 }
 
+function findProfile<TProtocol extends string>(
+  binding: ImageProtocolBinding<TProtocol>,
+  model: Readonly<ImageModelDefinition<TProtocol>>,
+): ImageProtocolProfile<TProtocol> {
+  const profile =
+    binding.profiles?.[model.protocolProfileId] ??
+    (binding.defaultProfile.id === model.protocolProfileId
+      ? binding.defaultProfile
+      : undefined);
+  if (!profile)
+    throw new AiRuntimeError(
+      'IMAGE_PROTOCOL_PROFILE_NOT_FOUND',
+      'invalid_request',
+      'image protocol profile is not registered',
+    );
+  return profile;
+}
+
+function assertAdapter(
+  binding: ImageProtocolBinding,
+  adapter: ImageProtocolAdapter,
+): void {
+  if (
+    adapter.id !== binding.protocol ||
+    adapter.operationMode !== binding.operationMode
+  )
+    throw protocolViolation('image protocol adapter does not match binding');
+}
+
 async function authorizeOverride<TScopeHandle>(input: {
-  readonly binding: DirectImageProtocolBinding;
+  readonly binding: ImageProtocolBinding;
   readonly provider: ProviderSnapshot;
   readonly scope: TScopeHandle;
   readonly override?: RequestCredentialOverride;
   readonly policy?: CredentialOverridePolicy<TScopeHandle>;
-}): Promise<Readonly<{ requestCredential?: RequestCredentialOverride }>> {
+  readonly scopeFingerprint: string;
+}): Promise<Readonly<ResolvedImageAuth>> {
   if (!input.binding.credential) {
     if (input.override)
       throw new AiRuntimeError(
@@ -461,20 +1234,41 @@ async function authorizeOverride<TScopeHandle>(input: {
       'auth',
       'request credential override is not allowed',
     );
-  return Object.freeze({ requestCredential: input.override });
+  return Object.freeze({
+    requestCredential: input.override,
+    authSource: 'override',
+    credentialIdentityLifetime: 'cross-runtime',
+    credentialScopeFingerprint: input.scopeFingerprint,
+    scopeIdentityLifetime: 'process-local',
+    authBindingFingerprint: input.provider.authPolicyFingerprint,
+  });
 }
 
 function bindHandleAuth(
-  auth: Readonly<{
-    requestCredential?: RequestCredentialOverride;
-    assertCurrent?: (signal?: AbortSignal) => Promise<void>;
-  }>,
+  auth: Readonly<ResolvedImageAuth>,
   key: Uint8Array,
+  provider: ProviderSnapshot,
 ): Readonly<{
   credentialFingerprint?: string;
   requestCredential?: RequestCredentialOverride;
   assertCurrent?: (signal?: AbortSignal) => Promise<void>;
+  operationAuth?: BoundImageOperationAuth;
 }> {
+  const operationAuth = auth.authSource
+    ? Object.freeze({
+        authSource: auth.authSource,
+        ...(auth.credentialInstanceId
+          ? { credentialInstanceId: auth.credentialInstanceId }
+          : {}),
+        credentialIdentityLifetime:
+          auth.credentialIdentityLifetime ?? 'process-local',
+        credentialScopeFingerprint:
+          auth.credentialScopeFingerprint ?? 'process-local-scope',
+        scopeIdentityLifetime: auth.scopeIdentityLifetime ?? 'process-local',
+        authBindingFingerprint:
+          auth.authBindingFingerprint ?? provider.authPolicyFingerprint,
+      })
+    : undefined;
   return Object.freeze({
     ...(auth.requestCredential
       ? {
@@ -486,17 +1280,20 @@ function bindHandleAuth(
         }
       : {}),
     ...(auth.assertCurrent ? { assertCurrent: auth.assertCurrent } : {}),
+    ...(operationAuth ? { operationAuth } : {}),
   });
 }
 
 function resolveTransport(input: {
-  readonly binding: DirectImageProtocolBinding;
+  readonly binding: ImageProtocolBinding;
   readonly model: ImageModelHandle;
   readonly override?: RequestCredentialOverride;
   readonly key: Uint8Array;
   readonly driver?: TransportDriver;
   readonly networkPolicy?: NetworkPolicy;
   readonly retry: false | import('../transport/retry.js').RetryPolicy;
+  readonly endpoint?: string | URL;
+  readonly headers?: Readonly<Record<string, string>>;
 }) {
   if (!input.driver || !input.networkPolicy)
     throw new AiRuntimeError(
@@ -529,7 +1326,7 @@ function resolveTransport(input: {
   const headers: Record<
     string,
     string | ReturnType<typeof createSecretHeaderValue>
-  > = { ...(input.binding.headers ?? {}) };
+  > = { ...(input.binding.headers ?? {}), ...(input.headers ?? {}) };
   if (input.binding.credential && input.override) {
     headers[input.binding.credential.headerName] = createSecretHeaderValue(
       input.override.secret,
@@ -540,7 +1337,10 @@ function resolveTransport(input: {
   }
   return bindRequestTransport({
     target: createFinalRequestTarget({
-      endpoint: new URL(input.binding.endpoint),
+      endpoint:
+        input.endpoint instanceof URL
+          ? input.endpoint
+          : new URL(input.endpoint ?? input.binding.endpoint),
       headers: Object.freeze(headers),
       limits: input.binding.limits,
     }),
@@ -552,8 +1352,43 @@ function resolveTransport(input: {
   });
 }
 
+async function resolveOperationTransport<TProtocol extends string>(input: {
+  readonly binding: ResumableImageProtocolBinding<TProtocol>;
+  readonly action: 'poll' | 'cancel';
+  readonly claims: ImageOperationClaims;
+  readonly provider: ProviderSnapshot;
+  readonly model: ImageModelHandle<TProtocol>;
+  readonly options: ResolvedImageOperationResumeOptions;
+  readonly override?: RequestCredentialOverride;
+  readonly key: Uint8Array;
+  readonly driver?: TransportDriver;
+  readonly networkPolicy?: NetworkPolicy;
+}) {
+  if (!input.binding.operationActions.includes(input.action))
+    throw protocolViolation('undeclared image operation action');
+  const endpoint = await input.binding.resolveOperationEndpoint({
+    action: input.action,
+    operation: input.claims as ImageOperationClaims & { protocol: TProtocol },
+    provider: input.provider,
+    model: input.model.definition,
+    options: input.options,
+    signal: input.options.signal,
+  });
+  return resolveTransport({
+    binding: input.binding,
+    model: input.model,
+    override: input.override,
+    key: input.key,
+    driver: input.driver,
+    networkPolicy: input.networkPolicy,
+    retry: input.options.retry,
+    endpoint,
+    headers: input.binding.operationHeaders,
+  });
+}
+
 function resolveOptions<TProtocol extends string>(
-  binding: DirectImageProtocolBinding<TProtocol>,
+  binding: ImageProtocolBinding<TProtocol>,
   model: Readonly<ImageModelDefinition<TProtocol>>,
   input: ImageGenerationOptions<TProtocol>,
   signal: AbortSignal,
@@ -565,16 +1400,12 @@ function resolveOptions<TProtocol extends string>(
       }>
     | undefined,
   contract: import('./contracts.js').ImageProtocolContract<TProtocol>,
-) {
-  const profile =
-    binding.profiles?.[model.protocolProfileId] ??
-    (binding.defaultProfile.id === model.protocolProfileId
-      ? binding.defaultProfile
-      : undefined);
+): import('./contracts.js').ResolvedImageGenerationOptions<TProtocol> {
+  const profile = findProfile(binding, model);
   const protocolOptions = contract.mergeOptions([
     binding.requestDefaults?.protocolOptions as
       import('./contracts.js').ImageProtocolOptions<TProtocol> | undefined,
-    profile?.protocolDefaults as
+    profile.protocolDefaults as
       import('./contracts.js').ImageProtocolOptions<TProtocol> | undefined,
     input.protocolOptions,
   ]);
@@ -612,7 +1443,69 @@ function resolveOptions<TProtocol extends string>(
       1_000,
     protocolOptions,
     ...(input.metadata ? { metadata: input.metadata } : {}),
-  } as unknown as import('./contracts.js').ResolvedImageGenerationOptions<TProtocol>;
+  };
+}
+
+async function completeTerminal(input: {
+  generationStream: DirectImageGenerationStream;
+  terminal: import('./contracts.js').ImageProtocolTerminal;
+  base: Readonly<{
+    requestId: string;
+    model: Readonly<ImageModelDefinition>;
+    outputs: ImageGenerationOutput[];
+    startedAt: number;
+  }>;
+  outputs: readonly ImageGenerationOutput[];
+  operation?: ImageOperationRef;
+  sequence(): number;
+  now(): number;
+}): Promise<void> {
+  const completedAt = input.now();
+  const cost = input.terminal.usage
+    ? calculateImageCost(input.base.model, input.terminal.usage)
+    : undefined;
+  if (input.terminal.status === 'completed') {
+    const result: Extract<ImageGenerationResult, { status: 'completed' }> =
+      Object.freeze({
+        ...input.base,
+        outputs: Object.freeze([...input.outputs]),
+        status: 'completed',
+        partial: false,
+        ...(input.operation ? { operation: input.operation } : {}),
+        ...(input.terminal.responseId
+          ? { responseId: input.terminal.responseId }
+          : {}),
+        ...(input.terminal.usage ? { usage: input.terminal.usage } : {}),
+        ...(cost ? { cost } : {}),
+        ...(input.terminal.diagnostics
+          ? { diagnostics: input.terminal.diagnostics }
+          : {}),
+        completedAt,
+      });
+    await input.generationStream.complete(result, {
+      type: 'generation_end',
+      sequence: input.sequence(),
+      result,
+    });
+    return;
+  }
+  const result = failureResult({
+    ...input.base,
+    outputs: Object.freeze([...input.outputs]),
+    completedAt,
+    status: input.terminal.status,
+    error: input.terminal.error,
+    operation: input.operation,
+    responseId: input.terminal.responseId,
+    usage: input.terminal.usage,
+    cost,
+    diagnostics: input.terminal.diagnostics,
+  });
+  await input.generationStream.complete(result, {
+    type: 'generation_error',
+    sequence: input.sequence(),
+    result,
+  });
 }
 
 function fingerprintCredential(
@@ -647,6 +1540,7 @@ function failureResult(input: {
   readonly completedAt: number;
   readonly status: 'failed' | 'cancelled';
   readonly error: AiError;
+  readonly operation?: ImageOperationRef;
   readonly responseId?: string;
   readonly usage?: import('./cost.js').ImageUsage;
   readonly cost?: import('./cost.js').ImageCost;
@@ -660,6 +1554,7 @@ function failureResult(input: {
     error: input.error,
     startedAt: input.startedAt,
     completedAt: input.completedAt,
+    ...(input.operation ? { operation: input.operation } : {}),
     ...(input.responseId ? { responseId: input.responseId } : {}),
     ...(input.usage ? { usage: input.usage } : {}),
     ...(input.cost ? { cost: input.cost } : {}),
@@ -698,4 +1593,52 @@ function timeoutError(): AiError & { readonly category: 'cancelled' } {
     'cancelled',
     'image generation timed out',
   ) as AiError & { readonly category: 'cancelled' };
+}
+
+function protocolViolation(
+  message = 'image protocol violated the resumable operation contract',
+): AiRuntimeError {
+  return new AiRuntimeError('IMAGE_PROTOCOL_VIOLATION', 'protocol', message);
+}
+
+function operationMismatch(message: string): AiRuntimeError {
+  return new AiRuntimeError('OPERATION_CONTEXT_MISMATCH', 'auth', message);
+}
+
+function validateOperationId(value: string): void {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 1024 ||
+    /[/?#]/u.test(value) ||
+    hasAsciiControlCharacter(value)
+  )
+    throw protocolViolation('image operation id is invalid');
+}
+
+function hasAsciiControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
+}
+
+function createRuntimeScopeFingerprinter<TScopeHandle>(): (
+  scope: TScopeHandle,
+) => string {
+  const objects = new WeakMap<object, string>();
+  const primitives = new Map<unknown, string>();
+  let next = 0;
+  return (scope) => {
+    const isObject =
+      (typeof scope === 'object' && scope !== null) ||
+      typeof scope === 'function';
+    const map = isObject ? objects : primitives;
+    const key = scope as object & TScopeHandle;
+    const existing = map.get(key);
+    if (existing) return existing;
+    const value = `runtime-image-scope-${++next}`;
+    map.set(key, value);
+    return value;
+  };
 }

@@ -3,7 +3,11 @@ import {
   imagePrompt,
   type ImageGenerationResult,
   type ImageModelHandle,
+  type ImageOperationRef,
 } from '@duoduo/ai/images';
+import { type GenerationOperationCodec } from '@duoduo/ai/generation';
+import { createDashScopeImagesAdapter } from '@duoduo/ai/protocols/dashscope-images';
+import { createDashScopeImageTasksAdapter } from '@duoduo/ai/protocols/dashscope-image-tasks';
 import {
   openRouterImageModelRef,
   openRouterProvider,
@@ -34,3 +38,8 @@ async function generateImage(): Promise<ImageGenerationResult> {
 }
 
 void generateImage;
+
+void (undefined as unknown as ImageOperationRef);
+void (undefined as unknown as GenerationOperationCodec);
+void createDashScopeImagesAdapter;
+void createDashScopeImageTasksAdapter;

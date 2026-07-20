@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   qwenProvider,
+  qwenImageModelRef,
   qwenModelRef,
   type QwenProtocolPreference,
   type QwenRegion,
@@ -131,6 +132,31 @@ describe('Qwen provider', () => {
         'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
       ],
     ]);
+  });
+
+  it('binds stable Wan direct/task image ids to one upstream model', () => {
+    const provider = qwenProvider({ region: 'cn-beijing' });
+    expect(
+      provider.images?.models.map((model) => [
+        model.id,
+        model.upstreamModelId,
+        model.protocol,
+        model.capabilities.asyncOperation,
+      ]),
+    ).toEqual([
+      ['wan2.6-image', 'wan2.6-image', 'dashscope-images', false],
+      ['wan2.6-image@task', 'wan2.6-image', 'dashscope-image-tasks', true],
+    ]);
+    expect(qwenImageModelRef('wan2.6-image@task')).toEqual({
+      providerInstanceId: 'qwen',
+      modelId: 'wan2.6-image@task',
+      protocol: 'dashscope-image-tasks',
+    });
+    expect(
+      provider.contractManifest?.bindings
+        .filter(({ capability }) => capability === 'images')
+        .map(({ protocol }) => protocol),
+    ).toEqual(['dashscope-images', 'dashscope-image-tasks']);
   });
 
   it('only accepts curated native route ids and never caller paths', () => {

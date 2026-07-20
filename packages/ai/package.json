@@ -12,6 +12,18 @@
       "types": "./dist/images/index.d.ts",
       "import": "./dist/images/index.js"
     },
+    "./generation": {
+      "types": "./dist/generation/index.d.ts",
+      "import": "./dist/generation/index.js"
+    },
+    "./protocols/dashscope-images": {
+      "types": "./dist/protocols/dashscope-images/index.d.ts",
+      "import": "./dist/protocols/dashscope-images/index.js"
+    },
+    "./protocols/dashscope-image-tasks": {
+      "types": "./dist/protocols/dashscope-image-tasks/index.d.ts",
+      "import": "./dist/protocols/dashscope-image-tasks/index.js"
+    },
     "./protocols/openrouter-images": {
       "types": "./dist/protocols/openrouter-images/index.d.ts",
       "import": "./dist/protocols/openrouter-images/index.js"
@@ -273,7 +285,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11','S12','S13']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09','S10','S11','S12','S13','S14']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test",
     "parity:check": "node --experimental-strip-types scripts/parity/extract-pi.ts --check"

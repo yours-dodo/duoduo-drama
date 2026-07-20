@@ -33,6 +33,11 @@ import type {
 } from '../core/models.js';
 import { createSessionManager } from '../session/manager.js';
 import { createImagesApi } from '../images/runtime.js';
+import type {
+  GenerationOperationCodec,
+  GenerationOperationPolicy,
+  OperationCredentialVerifier,
+} from '../generation/index.js';
 import type { ImagesApi } from '../images/contracts.js';
 import type { SessionHandle } from '../session/lease.js';
 import { ResponseStream } from '../stream/response-stream.js';
@@ -182,6 +187,9 @@ export interface CreateAiOptions<TScopeHandle = unknown> {
     responseFormat?: 'url' | 'base64';
     pollIntervalMs?: number;
   }>;
+  readonly generationOperationCodec?: GenerationOperationCodec;
+  readonly operationCredentialVerifier?: OperationCredentialVerifier;
+  readonly generationOperationPolicy?: GenerationOperationPolicy;
 }
 
 interface BlockState {
@@ -379,6 +387,9 @@ export function createAi<TScopeHandle = unknown>(
     networkPolicy: options.networkPolicy,
     credentialOverridePolicy: options.credentialOverridePolicy,
     imageDefaults: options.imageDefaults,
+    generationOperationCodec: options.generationOperationCodec,
+    operationCredentialVerifier: options.operationCredentialVerifier,
+    generationOperationPolicy: options.generationOperationPolicy,
     resolveAuth: async ({ provider, scope, override, signal }) => {
       const entry = registry.get(provider.id);
       const resolved = await resolveModelAuth({
@@ -393,19 +404,59 @@ export function createAi<TScopeHandle = unknown>(
         coordinator: authCoordinator,
         signal,
       });
+      const credentialScopeFingerprint = await resolveSessionScopeFingerprint({
+        providerInstanceId: provider.id,
+        scope,
+        storedAuth: resolved.storedAuth,
+        ambientAuth: resolved.ambientAuth,
+        scopeAuthority: options.scopeAuthority,
+        runtimeScopeFingerprint,
+        signal,
+      });
+      const requestCredential = override ?? resolved.storedAuth?.override;
+      const authSource = override
+        ? ('override' as const)
+        : resolved.storedAuth
+          ? ('stored' as const)
+          : resolved.ambientAuth
+            ? ('ambient' as const)
+            : requestCredential
+              ? ('override' as const)
+              : undefined;
       return Object.freeze({
-        ...((override ?? resolved.storedAuth?.override)
-          ? { requestCredential: override ?? resolved.storedAuth!.override }
-          : {}),
+        ...(requestCredential ? { requestCredential } : {}),
+        ...(authSource ? { authSource } : {}),
         ...(resolved.storedAuth
           ? {
+              credentialInstanceId: resolved.storedAuth.credentialInstanceId,
+              credentialIdentityLifetime: resolved.storedAuth.identityLifetime,
+              authBindingFingerprint:
+                resolved.storedAuth.authBindingFingerprint,
               assertCurrent: (currentSignal?: AbortSignal) =>
                 authCoordinator!.assertCurrent(
                   resolved.storedAuth!,
                   currentSignal,
                 ),
             }
-          : {}),
+          : resolved.ambientAuth
+            ? {
+                credentialInstanceId: resolved.ambientAuth.credentialInstanceId,
+                credentialIdentityLifetime:
+                  resolved.ambientAuth.credentialIdentityLifetime,
+                authBindingFingerprint: provider.authPolicyFingerprint,
+              }
+            : authSource === 'override'
+              ? {
+                  credentialIdentityLifetime:
+                    options.operationCredentialVerifier?.identityLifetime ??
+                    ('process-local' as const),
+                  authBindingFingerprint: provider.authPolicyFingerprint,
+                }
+              : {}),
+        credentialScopeFingerprint,
+        scopeIdentityLifetime:
+          options.scopeAuthority?.fingerprintLifetime ??
+          ('process-local' as const),
       });
     },
   });

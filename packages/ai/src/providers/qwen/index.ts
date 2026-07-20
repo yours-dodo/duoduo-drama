@@ -17,3 +17,11 @@ export {
   type QwenProtocolProfile,
 } from './profiles.js';
 export { qwenContractManifest } from './manifest.js';
+
+export {
+  createQwenImagesBinding,
+  qwenDefaultImageModelId,
+  qwenDefaultTaskImageModelId,
+  qwenImageModelRef,
+} from './images.js';
+export type { QwenAdditionalImageModelInput } from './images.js';

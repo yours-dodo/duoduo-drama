@@ -194,6 +194,28 @@ function validateImageBindings(provider: Provider): void {
     throw new Error('image protocol bindings must be unique');
 
   for (const binding of images.protocols) {
+    if (binding.operationMode === 'resumable') {
+      if (binding.operationCompatibilityVersion.trim() === '')
+        throw new Error(
+          'image operation compatibility version must not be empty',
+        );
+      const pollCount = binding.operationActions.filter(
+        (action) => action === 'poll',
+      ).length;
+      const cancelCount = binding.operationActions.filter(
+        (action) => action === 'cancel',
+      ).length;
+      if (
+        pollCount !== 1 ||
+        cancelCount > 1 ||
+        pollCount + cancelCount !== binding.operationActions.length
+      )
+        throw new Error(
+          'image operation actions must contain poll exactly once and cancel at most once',
+        );
+      if (typeof binding.resolveOperationEndpoint !== 'function')
+        throw new Error('image operation endpoint resolver must be a function');
+    }
     const profiles = [
       binding.defaultProfile,
       ...Object.values(binding.profiles ?? {}),
@@ -229,6 +251,11 @@ function validateImageBindings(provider: Provider): void {
       throw new Error('image model protocol profile not found');
     if (binding.operationMode === 'direct' && model.capabilities.asyncOperation)
       throw new Error('direct image models must not enable asyncOperation');
+    if (
+      binding.operationMode === 'resumable' &&
+      !model.capabilities.asyncOperation
+    )
+      throw new Error('resumable image models must enable asyncOperation');
 
     const limits = Object.values(model.limits);
     if (limits.some((value) => !Number.isInteger(value) || value <= 0))

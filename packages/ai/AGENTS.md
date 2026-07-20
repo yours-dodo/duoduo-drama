@@ -6,6 +6,8 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 
 - `@duoduo/ai` exposes provider-neutral runtime, auth, model, stream, and response types.
 - `@duoduo/ai/images` owns provider-neutral image model, input/output, stream, cost, and direct-generation contracts; protocol-specific fields must remain typed through declaration merging.
+- `@duoduo/ai/generation` owns the domain-neutral resumable-operation state machine, sealed-envelope/credential-verifier ports, progress, artifact, and compute-usage types; image/video packages own strict claims and branded refs.
+- `@duoduo/ai/protocols/dashscope-images` and `@duoduo/ai/protocols/dashscope-image-tasks` own Qwen Wan direct and resumable image wire contracts; task IDs and operation routes must be validated before transport resolution.
 - `@duoduo/ai/protocols/openrouter-images` owns OpenRouter ordered multimodal request mapping and text/image response normalization; application consumers should use the Provider facade rather than importing the protocol adapter.
 - `@duoduo/ai/providers/openrouter` owns the explicit OpenRouter chat and direct-image bindings, including public image model references and catalog descriptors.
 - `@duoduo/ai/auth/node` exposes Node-only credential persistence, key-source, and local scope-authority factories. Keep these implementations out of provider-neutral modules.
@@ -61,3 +63,4 @@ Run from the repository root:
 - `pnpm --filter @duoduo/ai manifest:check`
 
 Tests are offline and deterministic.
+Resumable generation references are runtime-owned and redacted. Only cross-runtime authentication identity, scope authority, and an injected `GenerationOperationCodec` may produce serialized operation tokens. Resume must fail closed on domain/version/TTL, scope, credential, Provider config, model, profile, or operation-binding mismatch; adapters never receive credential proofs or sealed tokens.

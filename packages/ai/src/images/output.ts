@@ -3,6 +3,7 @@ import type { AiError } from '../core/errors.js';
 import type { JsonValue } from '../core/content.js';
 import type { ImageModelDefinition } from './models.js';
 import type { ImageCost, ImageUsage } from './cost.js';
+import type { ImageOperationRef } from './operation-claims.js';
 
 export interface GeneratedImage {
   readonly mediaType: string;
@@ -21,7 +22,7 @@ interface ImageGenerationResultBase {
   readonly requestId: string;
   readonly model: Readonly<ImageModelDefinition>;
   readonly outputs: readonly ImageGenerationOutput[];
-  readonly operation?: never;
+  readonly operation?: ImageOperationRef;
   readonly responseId?: string;
   readonly usage?: ImageUsage;
   readonly cost?: ImageCost;
@@ -45,4 +46,10 @@ export type ImageGenerationResult =
       readonly status: 'cancelled';
       readonly partial: boolean;
       readonly error: AiError & { readonly category: 'cancelled' };
+    })
+  | (ImageGenerationResultBase & {
+      readonly status: 'detached';
+      readonly partial: boolean;
+      readonly operation: ImageOperationRef;
+      readonly error?: never;
     });

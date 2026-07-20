@@ -1,5 +1,6 @@
 import { AiRuntimeError } from '../core/errors.js';
 import type { ImageGenerationResult } from './output.js';
+import type { ImageOperationRef } from './operation-claims.js';
 import type { GeneratedImage, ImageGenerationOutput } from './output.js';
 
 export type ImageGenerationEvent =
@@ -7,6 +8,7 @@ export type ImageGenerationEvent =
       type: 'generation_start';
       sequence: number;
       model: ImageGenerationResult['model'];
+      operation?: ImageOperationRef;
     }>
   | Readonly<{
       type: 'generation_progress';
@@ -15,6 +17,7 @@ export type ImageGenerationEvent =
       progress?: number;
       queuePosition?: number;
       estimatedWaitMs?: number;
+      operation?: ImageOperationRef;
     }>
   | Readonly<{
       type: 'generation_preview';
@@ -40,12 +43,17 @@ export type ImageGenerationEvent =
         ImageGenerationResult,
         { status: 'failed' | 'cancelled' }
       >;
+    }>
+  | Readonly<{
+      type: 'generation_detached';
+      sequence: number;
+      result: Extract<ImageGenerationResult, { status: 'detached' }>;
     }>;
 
 export interface ImageGenerationStream extends AsyncIterable<ImageGenerationEvent> {
   result(): Promise<ImageGenerationResult>;
   abort(reason?: string): void;
-  detach(): Promise<never>;
+  detach(): Promise<ImageOperationRef>;
 }
 
 interface Waiter {
@@ -63,12 +71,18 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
   private readonly waiters: Waiter[] = [];
   private readonly resultPromise: Promise<ImageGenerationResult>;
   private resolveResult!: (result: ImageGenerationResult) => void;
+  private operation?: ImageOperationRef;
+  private detachPromise?: Promise<ImageOperationRef>;
 
   constructor(
     private readonly producer: (
       stream: DirectImageGenerationStream,
     ) => Promise<void>,
     signal?: AbortSignal,
+    private readonly onDetach?: (
+      stream: DirectImageGenerationStream,
+      operation: ImageOperationRef,
+    ) => Promise<void>,
   ) {
     this.resultPromise = new Promise((resolve) => {
       this.resolveResult = resolve;
@@ -126,12 +140,29 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
     this.start();
   }
 
-  async detach(): Promise<never> {
-    throw new AiRuntimeError(
-      'OPERATION_NOT_AVAILABLE',
-      'invalid_request',
-      'direct image generation has no operation to detach',
-    );
+  setOperation(operation: ImageOperationRef): void {
+    if (this.operation && this.operation !== operation)
+      throw new AiRuntimeError(
+        'IMAGE_PROTOCOL_VIOLATION',
+        'protocol',
+        'image operation was set more than once',
+      );
+    this.operation = operation;
+  }
+
+  async detach(): Promise<ImageOperationRef> {
+    if (!this.operation || !this.onDetach || this.terminal)
+      throw new AiRuntimeError(
+        'OPERATION_NOT_AVAILABLE',
+        'invalid_request',
+        'image generation has no active operation to detach',
+      );
+    if (!this.detachPromise)
+      this.detachPromise = (async () => {
+        await this.onDetach!(this, this.operation!);
+        return this.operation!;
+      })();
+    return this.detachPromise;
   }
 
   [Symbol.asyncIterator](): AsyncIterator<ImageGenerationEvent> {

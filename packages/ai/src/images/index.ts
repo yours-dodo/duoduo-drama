@@ -39,3 +39,21 @@ export type {
   ResolvedImageGenerationOptions,
 } from './contracts.js';
 export type { ImageGenerationEvent, ImageGenerationStream } from './stream.js';
+export type {
+  ImageOperationClaims,
+  ImageOperationClaimsBase,
+  ImageOperationRef,
+  SerializedImageOperationRef,
+} from './operation-claims.js';
+export type {
+  ImageCancelRequest,
+  ImageOperationEndpointContext,
+  ImageOperationResumeOptions,
+  ImageProtocolAdapter,
+  ImageProtocolBinding,
+  ImageResumeRequest,
+  ResolvedImageOperationResumeOptions,
+  ResumableImageProtocolAdapter,
+  ResumableImageProtocolBinding,
+  ResumableImageProtocolEventSink,
+} from './contracts.js';

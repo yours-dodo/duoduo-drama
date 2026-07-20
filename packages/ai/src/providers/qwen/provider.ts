@@ -12,6 +12,10 @@ import {
 import { buildQwenCatalog, type QwenAdditionalModelInput } from './catalog.js';
 import { qwenContractManifest } from './manifest.js';
 import {
+  createQwenImagesBinding,
+  type QwenAdditionalImageModelInput,
+} from './images.js';
+import {
   createQwenProtocolRunners,
   requireQwenProfile,
   type QwenProtocolPreference,
@@ -25,6 +29,7 @@ export interface QwenProviderOptions {
   readonly baseUrl?: URL | string;
   readonly protocolPreference?: QwenProtocolPreference;
   readonly additionalModels?: readonly QwenAdditionalModelInput[];
+  readonly additionalImageModels?: readonly QwenAdditionalImageModelInput[];
 }
 
 export function qwenProvider(options: QwenProviderOptions): Provider {
@@ -38,6 +43,13 @@ export function qwenProvider(options: QwenProviderOptions): Provider {
     additionalModels: options.additionalModels,
   });
   const runners = createQwenProtocolRunners();
+  const images = createQwenImagesBinding({
+    providerInstanceId: id,
+    endpoints,
+    ...(options.additionalImageModels
+      ? { additionalModels: options.additionalImageModels }
+      : {}),
+  });
   const endpointForModel = (model: Readonly<ModelDefinition>): string => {
     switch (model.protocol as QwenProtocolPreference) {
       case 'openai-chat-completions':
@@ -94,6 +106,7 @@ export function qwenProvider(options: QwenProviderOptions): Provider {
           .digest('base64url') + ':DASHSCOPE_API_KEY',
     }),
     contractManifest: qwenContractManifest,
+    images,
     chat: Object.freeze({
       models,
       transport: Object.freeze({
