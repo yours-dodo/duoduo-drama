@@ -12,6 +12,7 @@ import type { RetrySafety } from '../transport/dispatcher.js';
 import type { TransportLimits } from '../transport/types.js';
 import type { OAuthFlow } from '../auth/oauth.js';
 import type { AmbientAuth } from '../auth/ambient.js';
+import type { CredentialBindingFacts } from '../auth/api-key.js';
 
 export interface ProtocolEventSink {
   publish(event: ProtocolContentEvent): Promise<void>;
@@ -20,6 +21,16 @@ export interface ProtocolEventSink {
 export interface ChatTransportBinding {
   readonly endpoint: string;
   readonly endpointForModel?: (model: Readonly<ModelDefinition>) => string;
+  readonly endpointForCredential?: (
+    model: Readonly<ModelDefinition>,
+    facts: CredentialBindingFacts | undefined,
+  ) => string;
+  readonly derivedOriginPolicy?: Readonly<{
+    id: string;
+    version: number;
+    configuration: Readonly<Record<string, string>>;
+    resolve(facts: CredentialBindingFacts | undefined): readonly string[];
+  }>;
   readonly headers?: Readonly<Record<string, string>>;
   readonly credential?: Readonly<{
     readonly headerName: string;
@@ -103,6 +114,7 @@ export class ProviderRegistry implements ProvidersApi {
   >();
 
   register(provider: Provider): void {
+    validateCredentialEndpointPolicy(provider.chat?.transport);
     if (this.providers.has(provider.id))
       throw new Error(`provider already registered: ${provider.id}`);
     const snapshot: ProviderSnapshot = Object.freeze({
@@ -139,4 +151,23 @@ export class ProviderRegistry implements ProvidersApi {
       ({ provider }) => provider.chat?.models ?? [],
     );
   }
+}
+
+function validateCredentialEndpointPolicy(
+  transport: ChatTransportBinding | undefined,
+): void {
+  const hasResolver = transport?.endpointForCredential !== undefined;
+  const hasPolicy = transport?.derivedOriginPolicy !== undefined;
+  if (hasResolver !== hasPolicy)
+    throw new Error(
+      'credential endpoint resolver and derived origin policy must be declared together',
+    );
+  const policy = transport?.derivedOriginPolicy;
+  if (!policy) return;
+  if (
+    !policy.id.trim() ||
+    !Number.isInteger(policy.version) ||
+    policy.version < 1
+  )
+    throw new Error('derived origin policy descriptor is invalid');
 }

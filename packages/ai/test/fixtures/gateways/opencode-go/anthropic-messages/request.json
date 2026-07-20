@@ -1,0 +1,11 @@
+{
+  "provider": "opencode-go",
+  "protocol": "anthropic-messages",
+  "model": "fixture-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ]
+}

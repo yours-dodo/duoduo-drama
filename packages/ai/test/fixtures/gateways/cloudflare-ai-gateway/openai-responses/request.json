@@ -1,0 +1,11 @@
+{
+  "provider": "cloudflare-ai-gateway",
+  "protocol": "openai-responses",
+  "model": "fixture-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ]
+}

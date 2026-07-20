@@ -154,7 +154,6 @@ export function createAuthCoordinator<TScopeHandle>(options: {
       callOptions,
     ) => {
       const provider = requireProvider(options.getProvider(providerInstanceId));
-      const binding = makeAuthBinding(provider);
       const scope = await resolveScope(
         providerInstanceId,
         handle,
@@ -187,6 +186,10 @@ export function createAuthCoordinator<TScopeHandle>(options: {
           'auth',
           `auth method is not supported: ${method}`,
         );
+      const binding = makeAuthBinding(
+        provider,
+        credentialMetadata(nextCredential.credential),
+      );
       for (let attempt = 0; attempt < 4; attempt += 1) {
         const current = await options.store.read(scope, signal);
         const result = await options.store.compareAndSet(
@@ -273,7 +276,6 @@ export function createAuthCoordinator<TScopeHandle>(options: {
   const coordinator: AuthCoordinator<TScopeHandle> = {
     api,
     resolveStoredAuth: async (provider, handle, signal) => {
-      const binding = makeAuthBinding(provider);
       const scope = await resolveScope(
         provider.snapshot.id,
         handle,
@@ -281,15 +283,12 @@ export function createAuthCoordinator<TScopeHandle>(options: {
         signal,
       );
       let active = requireReadyRecord(await options.store.read(scope, signal));
-      assertAuthBinding(active, binding);
+      assertAuthBinding(
+        active,
+        makeAuthBinding(provider, credentialMetadata(active.credential)),
+      );
       if (active.credential.type === 'oauth')
-        active = await resolveOAuthCredential(
-          provider,
-          scope,
-          active,
-          binding,
-          signal,
-        );
+        active = await resolveOAuthCredential(provider, scope, active, signal);
       const override = requestOverride(provider, active);
       return Object.freeze({
         override,
@@ -327,14 +326,16 @@ export function createAuthCoordinator<TScopeHandle>(options: {
     provider: ProviderAuthDescription,
     scope: CredentialScopeKey,
     initial: ActiveCredentialRecord,
-    binding: AuthBinding,
     signal?: AbortSignal,
   ): Promise<ActiveCredentialRecord> {
     const flow = requireOAuthFlow(provider);
     let current: CredentialRecord = initial;
     for (;;) {
       const active = requireReadyRecord(current);
-      assertAuthBinding(active, binding);
+      assertAuthBinding(
+        active,
+        makeAuthBinding(provider, credentialMetadata(active.credential)),
+      );
       if (active.credential.type !== 'oauth') return active;
       const now = await options.store.now(signal);
       if (active.credential.expiresAt > now + flow.refreshSkewMs) return active;
@@ -404,6 +405,10 @@ export function createAuthCoordinator<TScopeHandle>(options: {
         {
           credential: refreshed.credential,
           catalogAuth: refreshed.catalogAuth,
+          authBinding: makeAuthBinding(
+            provider,
+            credentialMetadata(refreshed.credential),
+          ),
           authState: { status: 'ready' },
         },
         signal,
@@ -445,9 +450,17 @@ export function createAuthCoordinator<TScopeHandle>(options: {
 
 export function makeAuthBinding(
   provider: ProviderAuthDescription,
+  bindingFacts?: Readonly<
+    Record<string, import('../core/content.js').JsonValue>
+  >,
 ): AuthBinding {
   const endpoint = provider.transport?.endpoint;
-  const allowedOrigins = endpoint ? [new URL(endpoint).origin] : [];
+  const origins = endpoint ? [new URL(endpoint).origin] : [];
+  const policy = provider.transport?.derivedOriginPolicy;
+  if (policy) origins.push(...policy.resolve(bindingFacts));
+  const allowedOrigins = Object.freeze(
+    [...new Set(origins.map(normalizeAuthOrigin))].sort(),
+  );
   const canonical = JSON.stringify([
     '@duoduo/ai/auth-binding',
     1,
@@ -458,14 +471,54 @@ export function makeAuthBinding(
     provider.transport?.credential?.headerName.toLowerCase() ?? null,
     provider.transport?.credential?.defaultScheme ?? null,
     provider.transport?.credential?.variants ?? null,
+    policy
+      ? [policy.id, policy.version, canonicalRecord(policy.configuration)]
+      : null,
     allowedOrigins,
   ]);
   return Object.freeze({
     version: 1,
     fingerprint: createHash('sha256').update(canonical).digest('base64url'),
     providerKind: provider.snapshot.kind,
-    allowedOrigins: Object.freeze(allowedOrigins),
+    allowedOrigins,
   });
+}
+
+function credentialMetadata(
+  credential: ActiveCredentialRecord['credential'],
+):
+  Readonly<Record<string, import('../core/content.js').JsonValue>> | undefined {
+  return credential.type === 'api_key' || credential.type === 'oauth'
+    ? credential.metadata
+    : undefined;
+}
+
+function normalizeAuthOrigin(value: string): string {
+  const url = new URL(value);
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  )
+    throw new AiRuntimeError(
+      'INVALID_AUTH_BINDING_ORIGIN',
+      'invalid_request',
+      'derived authentication origin must be a plain HTTPS origin',
+    );
+  return url.origin;
+}
+
+function canonicalRecord(value: Readonly<Record<string, string>>): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(value).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    ),
+  );
 }
 
 async function promptApiKey(

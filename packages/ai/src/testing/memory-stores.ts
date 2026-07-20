@@ -150,6 +150,7 @@ export function createMemoryCredentialStore(
           revision: nextRevision(),
           ...(next.credential ? { credential: next.credential } : {}),
           ...(next.catalogAuth ? { catalogAuth: next.catalogAuth } : {}),
+          ...(next.authBinding ? { authBinding: next.authBinding } : {}),
           authState: next.authState,
           refreshLease: undefined,
         }),

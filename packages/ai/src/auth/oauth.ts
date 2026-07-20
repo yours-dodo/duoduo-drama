@@ -1,4 +1,5 @@
 import type { JsonValue } from '../core/content.js';
+import type { RequestCredentialOverride } from './api-key.js';
 import type { ProviderSnapshot } from '../core/models.js';
 import type { CatalogAuthView, Credential } from './credential-store.js';
 import type { AuthInteraction } from './login.js';
@@ -110,11 +111,7 @@ export interface OAuthFlow {
     credential: OAuthCredential,
     context: AuthFlowContext,
   ): Promise<OAuthCredentialResult>;
-  toRequestAuth(credential: OAuthCredential): Readonly<{
-    type: 'bearer_token';
-    secret: SecretValue;
-    scheme: 'Bearer';
-  }>;
+  toRequestAuth(credential: OAuthCredential): RequestCredentialOverride;
   readonly revoke?: (
     credential: OAuthCredential,
     context: AuthFlowContext,

@@ -736,6 +736,8 @@ function fingerprintCredential(
     .update('\0')
     .update(credentialScheme(override))
     .update('\0')
+    .update(JSON.stringify(override.bindingFacts ?? null))
+    .update('\0')
     .update(revealSecret(override.secret))
     .digest('base64url');
 }
@@ -802,23 +804,35 @@ function resolveRequestTransport(input: {
       'invalid_request',
       'transport and network policy are required for this provider',
     );
-  const endpoint =
-    binding.endpointForModel?.(input.model.definition) ?? binding.endpoint;
   let endpointUrl: URL;
+  let allowedOrigins: readonly string[];
   try {
+    const endpoint = binding.endpointForCredential
+      ? binding.endpointForCredential(
+          input.model.definition,
+          override?.bindingFacts,
+        )
+      : (binding.endpointForModel?.(input.model.definition) ??
+        binding.endpoint);
     endpointUrl = new URL(endpoint);
+    allowedOrigins = binding.derivedOriginPolicy
+      ? [
+          new URL(binding.endpoint).origin,
+          ...binding.derivedOriginPolicy.resolve(override?.bindingFacts),
+        ]
+      : [new URL(binding.endpoint).origin];
   } catch {
     return new AiRuntimeError(
       'INVALID_REQUEST_TARGET',
       'invalid_request',
-      'provider model endpoint is not a valid URL',
+      'provider model endpoint or credential binding facts are invalid',
     );
   }
-  if (endpointUrl.origin !== new URL(binding.endpoint).origin)
+  if (!allowedOrigins.includes(endpointUrl.origin))
     return new AiRuntimeError(
       'MODEL_ENDPOINT_ORIGIN_MISMATCH',
       'invalid_request',
-      'provider model endpoint must keep the configured origin',
+      'provider model endpoint is outside the authorized origin policy',
     );
   const headers: Record<
     string,

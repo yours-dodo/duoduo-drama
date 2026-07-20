@@ -159,6 +159,50 @@
     "./providers/zai-coding-cn": {
       "types": "./dist/providers/zai-coding-cn/index.d.ts",
       "import": "./dist/providers/zai-coding-cn/index.js"
+    },
+    "./providers/cloudflare-ai-gateway": {
+      "types": "./dist/providers/cloudflare-ai-gateway/index.d.ts",
+      "import": "./dist/providers/cloudflare-ai-gateway/index.js"
+    },
+    "./providers/fireworks": {
+      "types": "./dist/providers/fireworks/index.d.ts",
+      "import": "./dist/providers/fireworks/index.js"
+    },
+    "./providers/github-copilot": {
+      "types": "./dist/providers/github-copilot/index.d.ts",
+      "import": "./dist/providers/github-copilot/index.js"
+    },
+    "./providers/kimi-coding": {
+      "types": "./dist/providers/kimi-coding/index.d.ts",
+      "import": "./dist/providers/kimi-coding/index.js"
+    },
+    "./providers/minimax": {
+      "types": "./dist/providers/minimax/index.d.ts",
+      "import": "./dist/providers/minimax/index.js"
+    },
+    "./providers/minimax-cn": {
+      "types": "./dist/providers/minimax-cn/index.d.ts",
+      "import": "./dist/providers/minimax-cn/index.js"
+    },
+    "./providers/opencode": {
+      "types": "./dist/providers/opencode/index.d.ts",
+      "import": "./dist/providers/opencode/index.js"
+    },
+    "./providers/opencode-go": {
+      "types": "./dist/providers/opencode-go/index.d.ts",
+      "import": "./dist/providers/opencode-go/index.js"
+    },
+    "./providers/openrouter": {
+      "types": "./dist/providers/openrouter/index.d.ts",
+      "import": "./dist/providers/openrouter/index.js"
+    },
+    "./providers/vercel-ai-gateway": {
+      "types": "./dist/providers/vercel-ai-gateway/index.d.ts",
+      "import": "./dist/providers/vercel-ai-gateway/index.js"
+    },
+    "./auth/oauth/github-copilot": {
+      "types": "./dist/auth/oauth/github-copilot/index.d.ts",
+      "import": "./dist/auth/oauth/github-copilot/index.js"
     }
   },
   "files": [
@@ -169,7 +213,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src",
     "api:check": "tsc -p test/consumer/tsconfig.json --noEmit",
-    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
+    "manifest:check": "node -e \"const s=require('node:fs').readFileSync('IMPLEMENTATION-STATUS.md','utf8'); for (const id of ['S01','S02','S03','S04','S05','S06','S07','S08','S09']) if (!new RegExp('^\\\\| '+id+' .+\\\\| passed\\\\s+\\\\|','m').test(s)) process.exit(1)\"",
     "format:check": "prettier --check src test package.json tsconfig.json AGENTS.md IMPLEMENTATION-STATUS.md",
     "lint": "eslint src test"
   },

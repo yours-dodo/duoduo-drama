@@ -280,6 +280,7 @@ export function createFileCredentialStore(
             revision: randomUUID(),
             ...(next.credential ? { credential: next.credential } : {}),
             ...(next.catalogAuth ? { catalogAuth: next.catalogAuth } : {}),
+            ...(next.authBinding ? { authBinding: next.authBinding } : {}),
             authState: next.authState,
           }) as ActiveCredentialRecord;
           await replaceUnderLock(scope, record);

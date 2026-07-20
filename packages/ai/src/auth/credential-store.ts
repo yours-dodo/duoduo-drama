@@ -136,6 +136,7 @@ export type RefreshLeaseRenewResult =
 export interface RefreshRecordUpdate {
   readonly credential?: Extract<Credential, { type: 'oauth' }>;
   readonly catalogAuth?: CatalogAuthView;
+  readonly authBinding?: AuthBinding;
   readonly authState: CredentialAuthState;
 }
 

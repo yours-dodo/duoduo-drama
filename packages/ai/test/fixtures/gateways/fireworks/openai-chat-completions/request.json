@@ -1,0 +1,11 @@
+{
+  "provider": "fireworks",
+  "protocol": "openai-chat-completions",
+  "model": "fixture-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ]
+}

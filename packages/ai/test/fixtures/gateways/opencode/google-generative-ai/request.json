@@ -1,0 +1,11 @@
+{
+  "provider": "opencode",
+  "protocol": "google-generative-ai",
+  "model": "fixture-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ]
+}

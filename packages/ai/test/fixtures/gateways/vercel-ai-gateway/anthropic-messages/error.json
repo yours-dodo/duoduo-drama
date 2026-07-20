@@ -1,0 +1,9 @@
+{
+  "provider": "vercel-ai-gateway",
+  "protocol": "anthropic-messages",
+  "status": 400,
+  "error": {
+    "type": "invalid_request",
+    "message": "fixture request rejected"
+  }
+}

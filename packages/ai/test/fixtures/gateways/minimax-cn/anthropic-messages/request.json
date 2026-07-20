@@ -1,0 +1,11 @@
+{
+  "provider": "minimax-cn",
+  "protocol": "anthropic-messages",
+  "model": "fixture-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ]
+}
