@@ -37,7 +37,7 @@ This package owns the provider-neutral AI runtime boundary used by the Agent ser
 - `@duoduo/ai/protocols/ark-responses` and `@duoduo/ai/providers/doubao` own Ark v3 reasoning-event normalization, explicit Model ID/Endpoint ID body binding, and the Beijing Ark endpoint boundary.
 - `@duoduo/ai/providers/openai-codex`, `@duoduo/ai/providers/mistral`, and `@duoduo/ai/providers/radius` expose explicit factories; Radius-discovered endpoints must remain bound to the configured gateway DNS boundary.
 - `@duoduo/ai/auth/oauth/openai-codex`, `@duoduo/ai/auth/oauth/xai`, and `@duoduo/ai/auth/oauth/radius` expose explicit OAuth flows with abort-aware polling, refresh-token preservation, and optional remote revocation.
-- `@duoduo/ai/testing` is the only public entrypoint for Faux and fixture transport helpers. Production exports must not include them.
+- `@duoduo/ai/testing` is the only public entrypoint for Faux, fixture transport, and third-party aggregator contract helpers. Aggregator remote catalogs may publish model facts only; trusted code must own endpoint, auth, protocol, operation mode, and compatibility profiles, and fallback targets must remain inside one Provider instance. Production exports must not include these testing helpers.
 
 Adapters receive only a request-scoped, already-bound `RequestTransport`; they must not choose or mutate the final URL or protected authentication headers. Provider-specific wire details stay outside provider-neutral core modules.
 

@@ -1,6 +1,6 @@
 # @duoduo/ai Implementation Status
 
-> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S18; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, the Grok Imagine, Seedance, and Kling video tracers are complete, and the remaining generation ecosystem and productization slices are still in progress.
+> Evidence is recorded only after the corresponding commands pass. The current implementation has completed S01–S19; the Protocol and Baseline Provider gates are complete, the resumable Generation operation core is complete, and the Extended Provider gate is complete, the Grok Imagine, Seedance, and Kling video tracers and aggregator extension contracts are complete, and the remaining generation ecosystem and productization slices are still in progress.
 
 ## Slices
 
@@ -24,16 +24,17 @@
 | S16 Grok Imagine images and videos                    | passed | 272 tests, including official image generation/edit and video generate/edit/extend/poll routes, validated request IDs, strict resumable claims, cross-domain rejection, usage/cost, temporary artifacts, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                                        |
 | S17 Doubao Seedance 2.0 videos                        | passed | 284 tests, including official Ark task creation/polling, text/image/video/audio references, lifecycle normalization, validated task IDs, temporary artifacts, failure/expiry handling, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                                                          |
 | S18 Kling VIDEO 3.0 Omni videos                       | passed | 295 tests, including official Bearer authentication, Omni text/image create and task-query routes, first/last/reference image roles, submitted/processing/succeeded lifecycle normalization, validated task IDs, 30-day artifact retention, local cancellation, and public consumer coverage, plus all package verification gates passed on July 20, 2026. |
+| S19 Third-party aggregator extension contracts        | passed | 317 tests, including chat/images/videos capability composition, direct-versus-aggregator channel identity, remote catalog field fencing, transparent and aggregator-owned task protocols, Provider-local fallback validation, and public consumer coverage, plus all package verification gates passed on July 20, 2026.                                   |
 
 ## Gates
 
-| Gate                 | Status      | Evidence                                                                                                                              |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates.                                                   |
-| Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.                                                        |
-| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.                                                     |
-| Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                            |
-| Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                     |
-| Generation           | passed      | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage. |
-| Generation Ecosystem | in-progress | S17–S18 passed with Seedance and Kling task lifecycles, multimodal image roles, and retention guards; S19–S20 remain.                 |
-| Productization       | not-started | —                                                                                                                                     |
+| Gate                 | Status      | Evidence                                                                                                                               |
+| -------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation           | passed      | S01 and S02 passed with the package test, API, type, build, lint, and format gates.                                                    |
+| Runtime              | passed      | S03–S05 passed with auth, catalog, transport, session, and isolation coverage.                                                         |
+| Protocol             | passed      | S03 and S05–S12 passed with all required protocol adapters and Provider bindings.                                                      |
+| Baseline Provider    | passed      | PI text baseline passed in S10 and OpenRouter direct images passed in S13.                                                             |
+| Extended Provider    | passed      | S15 completed the built-in Qwen and Doubao direct/resumable image Provider paths.                                                      |
+| Generation           | passed      | S14–S16 passed with the resumable kernel, Qwen/Doubao/xAI image paths, and Grok Imagine video generation/edit/extend/resume coverage.  |
+| Generation Ecosystem | in-progress | S17–S19 passed with Seedance and Kling task lifecycles plus third-party aggregator channel isolation and catalog fencing; S20 remains. |
+| Productization       | not-started | —                                                                                                                                      |

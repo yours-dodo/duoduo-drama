@@ -17,7 +17,8 @@
     "qwen.ts",
     "doubao.ts",
     "images.ts",
-    "videos.ts"
+    "videos.ts",
+    "custom-aggregator.ts"
   ],
   "references": []
 }
