@@ -12,7 +12,8 @@
     "anthropic-messages.ts",
     "anthropic-oauth.ts",
     "google-vertex-bedrock.ts",
-    "gateways.ts"
+    "gateways.ts",
+    "pi-baseline.ts"
   ],
   "references": []
 }
