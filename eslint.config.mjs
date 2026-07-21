@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       'vendor/**',
+      'skill-vendor/**',
     ],
   },
   eslint.configs.recommended,

@@ -7,7 +7,12 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+.idea/
 
 vendor/*
 !vendor/AGENTS.md
 !vendor/README.md
+
+skill-vendor/*
+!skill-vendor/AGENTS.md
+!skill-vendor/README.md
