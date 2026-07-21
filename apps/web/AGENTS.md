@@ -1,5 +1,9 @@
 # Web Project Guidelines
 
+## Current Status
+
+The current implementation is a minimal Nuxt 4 application with `app/app.vue` and no business routes, API adapters, state library, or component system yet. Add those structures only when a real feature requires them.
+
 ## Scope and Responsibilities
 
 This project is the Nuxt Web workspace for the full creator workbench. It owns pages, layouts, components, composables, client-side state, accessibility, and presentation-oriented adapters for the Server API. It does not own core business rules, persistence, authentication policy, or Agent orchestration.

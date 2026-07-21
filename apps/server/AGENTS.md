@@ -1,8 +1,12 @@
 # Server Project Guidelines
 
+## Current Status
+
+The current implementation is a minimal NestJS service with one `/health` controller test. Authentication, business modules, persistence, and Agent integration have not been introduced, and no database or queue technology has been selected.
+
 ## Scope and Responsibilities
 
-This project is the NestJS business Server. It owns authentication and authorization, teams, projects, domain rules, persistence, client-facing APIs, and integration with the Agent service. It does not own model prompting, Agent tools, context assembly, or Agent workflow implementation.
+The target boundary of this NestJS business Server owns authentication and authorization, teams, projects, domain rules, authoritative business persistence, client-facing APIs, and integration with the Agent service. It does not own model prompting, Agent tools, context assembly, Provider wire adapters, or Agent workflow implementation.
 
 Never import code from `agent/`. Communicate with Agent through an explicit integration boundary. The Agent must not be given direct access to the Server database.
 
@@ -23,10 +27,11 @@ Keep Server and Agent protocol types near their respective adapters until a real
 
 Run from the repository root:
 
-- `pnpm --filter @duoduo/server dev` — start NestJS on port 3001.
+- `pnpm --filter @duoduo/server dev` — start NestJS on port 3001 by default; `PORT` may override it.
 - `pnpm --filter @duoduo/server typecheck` — type-check the Server.
 - `pnpm --filter @duoduo/server test` — run Server tests.
 - `pnpm --filter @duoduo/server build` — compile production JavaScript.
+- `pnpm --filter @duoduo/server start` — run the compiled `dist/main.js` output.
 
 Also run root `pnpm lint` and `pnpm format:check` before submitting changes.
 

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-This directory is reserved for the mobile client. No mobile framework, runtime, package manifest, or build system has been approved, so this directory is not a pnpm workspace.
+This directory is reserved for the mobile client. No mobile framework, runtime, package manifest, or build system has been approved, so it is not currently an installable or runnable pnpm workspace package.
 
 Do not initialize React Native, Expo, native Android/iOS, HarmonyOS, or another framework without an approved design that defines the target platforms, ownership model, build commands, test strategy, and Server API integration.
 
