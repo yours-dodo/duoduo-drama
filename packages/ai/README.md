@@ -1,10 +1,12 @@
 # `@duoduo/ai`
 
-`@duoduo/ai` is the provider-neutral AI runtime used by Duoduo Drama. It exposes explicit chat, image, video, authentication, catalog, session, transport, resumable-operation, CLI, and testing boundaries without importing provider SDKs or reading credentials during module import.
+`@duoduo/ai` 是多多短剧使用的供应商中立 AI 运行时。它在模块导入期间不引入供应商 SDK，也不读取凭证，并明确划分了聊天、图像、视频、认证、目录、会话、传输、可恢复操作、CLI 和测试边界。
 
-## Quick start
+如果要维护或扩展本包，请先阅读[目录结构与模块职责](./docs/directory-structure.md)。
 
-Import only the Provider subpaths the application actually needs:
+## 快速开始
+
+只导入应用实际需要的 Provider 子路径：
 
 ```ts
 import { createAi } from '@duoduo/ai';
@@ -14,7 +16,7 @@ const ai = createAi();
 ai.providers.register(createOpenAiProvider());
 ```
 
-To opt into the full built-in inventory, import the dedicated all-provider entry. It is asynchronous because a self-hosted generation Provider discovers its injected gateway catalog during construction.
+如果需要启用完整的内置 Provider 清单，请导入专用的全 Provider 入口。该入口是异步的，因为自托管生成 Provider 会在构建期间发现注入的网关目录。
 
 ```ts
 import { createAi } from '@duoduo/ai';
@@ -28,60 +30,60 @@ ai.providers.registerAll(result.providers);
 console.log(result.unconfigured);
 ```
 
-The root `@duoduo/ai` entry never discovers or registers Providers. `@duoduo/ai/providers/all` is the only entry that statically imports all built-ins.
+根入口 `@duoduo/ai` 永远不会发现或注册 Provider。`@duoduo/ai/providers/all` 是唯一会静态导入全部内置 Provider 的入口。
 
-## Built-in Provider inventory
+## 内置 Provider 清单
 
-The generated catalog and package export map must contain the same 40 Provider kinds. Blank configuration means that the Provider has safe package defaults; credentials are still supplied through an explicit credential store, ambient capability, OAuth flow, or request override.
+生成的目录和包导出映射必须包含相同的 40 种 Provider。空白配置表示该 Provider 具备安全的包级默认值；凭证仍须通过显式凭证存储、环境能力、OAuth 流程或请求级覆盖提供。
 
-| Provider kind            | Required non-secret configuration before `builtinProviders()` registers it |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `amazon-bedrock`         | None                                                                       |
-| `ant-ling`               | None                                                                       |
-| `anthropic`              | None                                                                       |
-| `azure-openai-responses` | `baseUrl                                                                   | resourceName`, `deploymentName | deploymentMap` |
-| `cerebras`               | None                                                                       |
-| `cloudflare-ai-gateway`  | `accountId`, `gatewayId`                                                   |
-| `cloudflare-workers-ai`  | `accountId`                                                                |
-| `deepseek`               | None                                                                       |
-| `doubao`                 | None                                                                       |
-| `fireworks`              | None                                                                       |
-| `github-copilot`         | None                                                                       |
-| `google`                 | None                                                                       |
-| `google-vertex`          | None                                                                       |
-| `groq`                   | None                                                                       |
-| `huggingface`            | None                                                                       |
-| `kimi-coding`            | None                                                                       |
-| `kling`                  | None                                                                       |
-| `minimax`                | None                                                                       |
-| `minimax-cn`             | None                                                                       |
-| `mistral`                | None                                                                       |
-| `moonshotai`             | None                                                                       |
-| `moonshotai-cn`          | None                                                                       |
-| `nvidia`                 | None                                                                       |
-| `openai`                 | None                                                                       |
-| `openai-codex`           | None                                                                       |
-| `opencode`               | None                                                                       |
-| `opencode-go`            | None                                                                       |
-| `openrouter`             | None                                                                       |
-| `qwen`                   | `region`                                                                   |
-| `radius`                 | None                                                                       |
-| `self-hosted-generation` | `gateway`, `gatewayBaseUrl`                                                |
-| `together`               | None                                                                       |
-| `vercel-ai-gateway`      | None                                                                       |
-| `xai`                    | None                                                                       |
-| `xiaomi`                 | None                                                                       |
-| `xiaomi-token-plan-ams`  | None                                                                       |
-| `xiaomi-token-plan-cn`   | None                                                                       |
-| `xiaomi-token-plan-sgp`  | None                                                                       |
-| `zai`                    | None                                                                       |
-| `zai-coding-cn`          | None                                                                       |
+| Provider 类型            | `builtinProviders()` 注册前要求的非敏感配置                      |
+| ------------------------ | ---------------------------------------------------------------- |
+| `amazon-bedrock`         | 无                                                               |
+| `ant-ling`               | 无                                                               |
+| `anthropic`              | 无                                                               |
+| `azure-openai-responses` | `baseUrl` 或 `resourceName`；`deploymentName` 或 `deploymentMap` |
+| `cerebras`               | 无                                                               |
+| `cloudflare-ai-gateway`  | `accountId`、`gatewayId`                                         |
+| `cloudflare-workers-ai`  | `accountId`                                                      |
+| `deepseek`               | 无                                                               |
+| `doubao`                 | 无                                                               |
+| `fireworks`              | 无                                                               |
+| `github-copilot`         | 无                                                               |
+| `google`                 | 无                                                               |
+| `google-vertex`          | 无                                                               |
+| `groq`                   | 无                                                               |
+| `huggingface`            | 无                                                               |
+| `kimi-coding`            | 无                                                               |
+| `kling`                  | 无                                                               |
+| `minimax`                | 无                                                               |
+| `minimax-cn`             | 无                                                               |
+| `mistral`                | 无                                                               |
+| `moonshotai`             | 无                                                               |
+| `moonshotai-cn`          | 无                                                               |
+| `nvidia`                 | 无                                                               |
+| `openai`                 | 无                                                               |
+| `openai-codex`           | 无                                                               |
+| `opencode`               | 无                                                               |
+| `opencode-go`            | 无                                                               |
+| `openrouter`             | 无                                                               |
+| `qwen`                   | `region`                                                         |
+| `radius`                 | 无                                                               |
+| `self-hosted-generation` | `gateway`、`gatewayBaseUrl`                                      |
+| `together`               | 无                                                               |
+| `vercel-ai-gateway`      | 无                                                               |
+| `xai`                    | 无                                                               |
+| `xiaomi`                 | 无                                                               |
+| `xiaomi-token-plan-ams`  | 无                                                               |
+| `xiaomi-token-plan-cn`   | 无                                                               |
+| `xiaomi-token-plan-sgp`  | 无                                                               |
+| `zai`                    | 无                                                               |
+| `zai-coding-cn`          | 无                                                               |
 
-`self-hosted-generation` always requires an injected `DuoduoGenerationGateway`. A `gatewayBaseUrl` only supplies the public task-binding identity and cannot be used by the CLI to invent a gateway adapter. Missing non-secret options appear in `result.unconfigured`; the runtime never guesses regions, accounts, deployments, or gateway implementations.
+`self-hosted-generation` 始终要求注入 `DuoduoGenerationGateway`。`gatewayBaseUrl` 只提供公开的任务绑定标识，CLI 不能据此虚构网关适配器。缺失的非敏感选项会出现在 `result.unconfigured` 中；运行时绝不会猜测区域、账号、部署或网关实现。
 
-## Authentication and local CLI
+## 认证与本地 CLI
 
-The Node CLI is available after build as `duoduo-ai` and through the public `@duoduo/ai/cli` API.
+构建完成后，可以通过 `duoduo-ai` 命令或公开的 `@duoduo/ai/cli` API 使用 Node CLI。
 
 ```bash
 pnpm --filter @duoduo/ai build
@@ -90,41 +92,41 @@ pnpm --filter @duoduo/ai exec duoduo-ai models openai --available
 pnpm --filter @duoduo/ai exec duoduo-ai auth status openai --json
 ```
 
-Supported commands are `providers`, `models`, `models refresh`, `auth status`, `auth login`, `auth logout`, and `diagnose`. Inventory commands distinguish statically known models from models available in the configured runtime. Machine-readable output uses `--json` and passes through a second redaction layer.
+支持的命令包括 `providers`、`models`、`models refresh`、`auth status`、`auth login`、`auth logout` 和 `diagnose`。清单命令会区分静态已知模型和已配置运行时中实际可用的模型。使用 `--json` 输出机器可读结果时，还会经过第二层脱敏处理。
 
-Credential persistence is fail-closed. Set `DUODUO_AI_MASTER_KEY` to a base64url-encoded 32-byte key to enable the encrypted file store. Without a usable key, credential-mutating commands return `CREDENTIAL_CODEC_KEY_UNAVAILABLE` with exit code 69. `DUODUO_AI_HOME` overrides the local state directory. `config.json` may contain only non-secret Provider options; secret-shaped fields are rejected rather than persisted.
+凭证持久化采用故障关闭策略。将 `DUODUO_AI_MASTER_KEY` 设置为经过 base64url 编码的 32 字节密钥，才能启用加密文件存储。如果没有可用密钥，修改凭证的命令会返回 `CREDENTIAL_CODEC_KEY_UNAVAILABLE`，退出码为 69。`DUODUO_AI_HOME` 可以覆盖本地状态目录。`config.json` 只能包含非敏感的 Provider 选项；疑似敏感字段会被拒绝，而不是持久化。
 
-## Images, videos, and resumable generation
+## 图像、视频与可恢复生成
 
-Use `@duoduo/ai/images` and `@duoduo/ai/videos` for channel-specific model handles and generation calls. Resumable Providers return strict, runtime-owned operation references that can be detached, serialized through an injected operation codec, parsed, resumed, and cancelled. Operation tokens and credential proofs are never projected into public catalog metadata or CLI logs.
+通过 `@duoduo/ai/images` 和 `@duoduo/ai/videos` 使用对应通道的模型句柄和生成调用。支持恢复的 Provider 会返回由运行时严格拥有的操作引用；这些引用可以分离，通过注入的操作编解码器进行序列化、解析、恢复和取消。操作令牌和凭证证明绝不会投射到公共目录元数据或 CLI 日志中。
 
-Self-hosted image/video generation uses:
+自托管图像/视频生成使用：
 
-- `@duoduo/ai/protocols/duoduo-generation-v1` for the owned catalog/task contract;
-- `@duoduo/ai/providers/self-hosted-generation` for the Provider binding;
-- an application-injected `DuoduoGenerationGateway` implementation for real infrastructure.
+- `@duoduo/ai/protocols/duoduo-generation-v1`：项目自有的目录/任务协议；
+- `@duoduo/ai/providers/self-hosted-generation`：Provider 绑定；
+- 由应用注入的 `DuoduoGenerationGateway` 实现：对接真实基础设施。
 
-The public seam does not expose cloud GPU drivers, schedulers, cloud SDKs, or a business artifact store.
+公共边界不会暴露云 GPU 驱动、调度器、云 SDK 或业务制品存储。
 
-## Aggregators and extensions
+## 聚合器与扩展
 
-Third-party aggregators compose chat, image, and video capabilities behind one Provider instance. Trusted code owns endpoints, authentication, protocol selection, operation mode, compatibility profiles, and fallback targets. Remote catalog shards may add safe model facts only; endpoint, auth, protocol, route, operation, profile, URL, token, or secret fields are rejected.
+第三方聚合器在单个 Provider 实例后组合聊天、图像和视频能力。受信任代码负责端点、认证、协议选择、操作模式、兼容性配置和回退目标。远程目录分片只能添加安全的模型事实；包含端点、认证、协议、路由、操作、配置、URL、令牌或密钥的字段会被拒绝。
 
-When adding a Provider:
+添加 Provider 时：
 
-1. Create `src/providers/<kind>/index.ts` with an explicit factory and no environment reads at import time.
-2. Add `./providers/<kind>` to `package.json`.
-3. Add its factory to `src/providers/all/index.ts`; declare required non-secret options rather than guessing defaults.
-4. Run `pnpm --filter @duoduo/ai catalog:update`, tests, API check, and manifest check.
+1. 创建 `src/providers/<kind>/index.ts`，提供显式工厂，并且导入时不得读取环境变量。
+2. 在 `package.json` 中添加 `./providers/<kind>`。
+3. 将工厂添加到 `src/providers/all/index.ts`；声明必需的非敏感选项，不要猜测默认值。
+4. 运行 `pnpm --filter @duoduo/ai catalog:update`、测试、API 检查和清单检查。
 
-When adding a protocol:
+添加协议时：
 
-1. Keep wire types, validation, mapping, and streaming normalization in `src/protocols/<protocol>/`.
-2. Extend protocol option/compatibility maps through declaration merging.
-3. Bind it from a Provider; adapters receive a request-scoped transport and must not choose final URLs or protected auth headers.
-4. Add offline fixtures for normal, edge, failure, abort, replay, and redaction behavior.
+1. 将线协议类型、校验、映射和流式归一化保留在 `src/protocols/<protocol>/` 中。
+2. 通过声明合并扩展协议选项和兼容性映射。
+3. 从 Provider 绑定协议；适配器只接收请求级传输，不得选择最终 URL 或受保护的认证请求头。
+4. 为正常、边界、失败、中止、重放和脱敏行为添加离线夹具。
 
-## Catalog generation
+## 目录生成
 
 ```bash
 pnpm --filter @duoduo/ai catalog:update
@@ -132,11 +134,11 @@ pnpm --filter @duoduo/ai catalog:update -- --check --offline
 pnpm --filter @duoduo/ai manifest:check
 ```
 
-The semantic catalog digest excludes timestamps and is stable across input order. Reviewed remote shards may contain only `id`, `name`, `capabilities`, `limits`, `pricing`, `region`, and `deprecated` model fields. The manifest checker fences the 40 Provider exports, generated catalog, public entrypoints, build targets, CLI binary, and implementation status.
+语义目录摘要不包含时间戳，并且不受输入顺序影响。经过审查的远程分片只能包含模型的 `id`、`name`、`capabilities`、`limits`、`pricing`、`region` 和 `deprecated` 字段。清单检查器会约束 40 个 Provider 导出、生成目录、公共入口、构建目标、CLI 二进制文件和实现状态。
 
-## Live harness safety
+## 在线测试安全机制
 
-Normal tests, builds, installation, and catalog generation never import the live runner. The only entry is explicit:
+常规测试、构建、安装和目录生成绝不会导入在线测试运行器。唯一入口必须显式调用：
 
 ```bash
 DUODUO_AI_LIVE=1 \
@@ -149,11 +151,11 @@ pnpm --filter @duoduo/ai test:live -- \
   --allow-paid
 ```
 
-The runner requires all four independent opt-ins: `DUODUO_AI_LIVE=1`, an allowlisted Provider, a positive USD budget, and `--allow-paid`. It never guesses a Provider or model. Image runs additionally require `DUODUO_AI_LIVE_MAX_IMAGES` and `--images`; video runs require `DUODUO_AI_LIVE_MAX_VIDEO_SECONDS` and `--video-seconds`. Unknown or over-budget cost is skipped with a dedicated non-success code.
+运行器要求四项相互独立的显式许可全部满足：`DUODUO_AI_LIVE=1`、Provider 位于允许列表、美元预算为正数，以及传入 `--allow-paid`。它绝不会猜测 Provider 或模型。图像运行还要求 `DUODUO_AI_LIVE_MAX_IMAGES` 和 `--images`；视频运行要求 `DUODUO_AI_LIVE_MAX_VIDEO_SECONDS` 和 `--video-seconds`。成本未知或超过预算时，会跳过执行并返回专用的非成功代码。
 
-This repository intentionally ships no default network executor. Passing every safety gate still returns `LIVE_EXECUTOR_NOT_CONFIGURED` until an application injects an audited Provider-specific executor with bounded origins, deadlines, concurrency, synthetic inputs, and redacted output. OAuth live flows remain outside the automatic suite and require a dedicated test account and interactive command.
+本仓库有意不提供默认网络执行器。即使通过全部安全门槛，在应用注入经过审计的 Provider 专用执行器之前，仍会返回 `LIVE_EXECUTOR_NOT_CONFIGURED`。该执行器必须限制来源、截止时间和并发，使用合成输入，并对输出进行脱敏。OAuth 在线流程不属于自动测试套件，必须使用专用测试账号和交互式命令。
 
-## Verification
+## 验证
 
 ```bash
 pnpm --filter @duoduo/ai format:check
@@ -167,8 +169,8 @@ pnpm --filter @duoduo/ai release:check
 pnpm --filter @duoduo/ai release:no-vendor
 ```
 
-`api:check` compiles the public consumers and matches the design's protocol-subpath and runtime-symbol inventory. `manifest:check` dynamically constructs all 40 built-in Providers and requires every declared binding field, every runtime binding, every package export, and S01–S22 status evidence to be covered.
+`api:check` 会编译公共消费者，并核对设计中的协议子路径和运行时符号清单。`manifest:check` 会动态构建全部 40 个内置 Provider，并要求所有声明的绑定字段、运行时绑定、包导出以及 S01–S22 状态证据均被覆盖。
 
-`release:check` fences the production import graph, runs a secret redaction canary, scans fixtures for secret-shaped values and unredacted signed URLs, and proves the live runner is disabled by default. `release:no-vendor` copies a clean temporary checkout without `vendor`, reinstalls from the pnpm store with `--offline --frozen-lockfile`, and runs package typecheck, test, and build. All default verification is offline and deterministic; no paid live request is sent.
+`release:check` 会约束生产导入图、运行密钥脱敏金丝雀测试、扫描夹具中的疑似密钥值和未脱敏签名 URL，并证明在线测试运行器默认关闭。`release:no-vendor` 会复制一份不含 `vendor` 的干净临时检出，从 pnpm 存储中使用 `--offline --frozen-lockfile` 重新安装，并运行包的类型检查、测试和构建。所有默认验证都离线且确定性执行，不会发送任何付费在线请求。
 
-The authoritative scope and evidence are recorded in the [design specification](../../docs/superpowers/specs/2026-07-19-duoduo-ai-design.md), [implementation plan](../../docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md), and [implementation status](./IMPLEMENTATION-STATUS.md).
+权威范围和证据记录在[设计规范](../../docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)、[实施计划](../../docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)和[实施状态](./IMPLEMENTATION-STATUS.md)中。
