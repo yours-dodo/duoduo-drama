@@ -330,7 +330,7 @@ docs: refine short drama workflow
 
 ## AI Runtime 包
 
-`packages/ai` 提供 `@duoduo/ai` 的 Provider-neutral runtime、40 个显式 Provider 子路径、聊天/图片/视频能力、密封凭据、可恢复生成任务、目录生成器和本地 CLI。应用应按需导入单个 `@duoduo/ai/providers/<kind>`；只有明确导入 `@duoduo/ai/providers/all` 时才会把全部内建 Provider 纳入依赖图。
+`packages/ai` 提供 `@duoduo/ai` 的 Provider-neutral runtime、39 个显式 Provider 子路径、聊天/图片/视频能力、密封凭据、可恢复生成任务、目录生成器和本地 CLI。应用应按需导入单个 `@duoduo/ai/providers/<kind>`；只有明确导入 `@duoduo/ai/providers/all` 时才会把全部内建 Provider 纳入依赖图。
 
 常用离线命令：
 

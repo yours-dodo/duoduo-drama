@@ -37,11 +37,11 @@
 - `@duoduo/ai/providers/*` 下兼容 OpenAI 的 Provider 子路径是共享兼容配置边界之上的轻量显式工厂；Provider 差异应作为描述符/配置数据添加，而不是通过 Provider 类型分支实现。
 - `@duoduo/ai/auth/ambient/google-adc` 和 `@duoduo/ai/auth/ambient/aws` 暴露显式注入的环境能力；它们不得隐式读取 SDK 状态、配置文件、元数据服务或进程环境。
 - `@duoduo/ai/auth/oauth/anthropic` 暴露显式 Anthropic OAuth 流程；供应商中立的 OAuth 端口继续从 `@duoduo/ai` 导出。
-- `@duoduo/ai/protocols/openai-codex-responses`、`@duoduo/ai/protocols/mistral-conversations` 和 `@duoduo/ai/protocols/pi-messages` 负责其余 PI 文本协议配置、重放元数据和流归一化。
+- `@duoduo/ai/protocols/openai-codex-responses` 和 `@duoduo/ai/protocols/mistral-conversations` 负责其余保留的 PI 文本协议配置、重放元数据和流归一化。
 - `@duoduo/ai/protocols/dashscope` 和 `@duoduo/ai/providers/qwen` 负责经过整理的 DashScope 原生路由、区域/工作空间端点解析和显式 Qwen 协议偏好绑定。
 - `@duoduo/ai/protocols/ark-responses` 和 `@duoduo/ai/providers/doubao` 负责 Ark v3 推理事件归一化、显式模型 ID/端点 ID 请求体绑定，以及北京 Ark 端点边界。
-- `@duoduo/ai/providers/openai-codex`、`@duoduo/ai/providers/mistral` 和 `@duoduo/ai/providers/radius` 暴露显式工厂；Radius 发现的端点必须始终绑定在已配置的网关 DNS 边界内。
-- `@duoduo/ai/auth/oauth/openai-codex`、`@duoduo/ai/auth/oauth/xai` 和 `@duoduo/ai/auth/oauth/radius` 暴露显式 OAuth 流程，支持中止感知轮询、保留刷新令牌以及可选的远程撤销。
+- `@duoduo/ai/providers/openai-codex` 和 `@duoduo/ai/providers/mistral` 暴露显式工厂。
+- `@duoduo/ai/auth/oauth/openai-codex` 和 `@duoduo/ai/auth/oauth/xai` 暴露显式 OAuth 流程，支持中止感知轮询、保留刷新令牌以及可选的远程撤销。
 - `@duoduo/ai/testing` 是 Faux、夹具传输和第三方聚合器协议辅助工具的唯一公共入口。聚合器远程目录只能发布模型事实；受信任代码必须负责端点、认证、协议、操作模式和兼容性配置，回退目标必须保留在同一个 Provider 实例内。生产导出不得包含这些测试辅助工具。
 
 适配器只接收请求级、已完成绑定的 `RequestTransport`；它们不得选择或修改最终 URL 或受保护的认证请求头。Provider 专用线协议细节必须保留在供应商中立核心模块之外。
@@ -62,7 +62,7 @@
 - `pnpm --filter @duoduo/ai test -- --run google vertex bedrock ambient`
 - `pnpm --filter @duoduo/ai test -- --run openai-chat-completions providers-compatible`
 - `pnpm --filter @duoduo/ai test -- --run gateways github-copilot minimax kimi openrouter`
-- `pnpm --filter @duoduo/ai test -- --run protocols providers baseline-parity oauth radius`
+- `pnpm --filter @duoduo/ai test -- --run protocols providers baseline-parity oauth`
 - `pnpm --filter @duoduo/ai test -- --run dashscope qwen`
 - `pnpm --filter @duoduo/ai test -- --run ark-responses doubao`
 - `pnpm --filter @duoduo/ai test -- --run images openrouter-images`
@@ -88,7 +88,7 @@
 - `@duoduo/ai/providers/all` 是唯一显式启用全部内置 Provider 的入口。`builtinProviders()` 是异步函数，通过 `unconfigured` 报告缺失的必需非敏感配置，并且绝不能猜测区域、端点、账号 ID、部署或网关适配器。
 - `@duoduo/ai/cli` 暴露 Node CLI 组装和可测试运行器。疑似敏感配置必须被拒绝；凭证持久化要求显式提供可用的主密钥，否则必须采用故障关闭策略。
 - `scripts/catalog` 负责确定性的离线目录生成。远程分片只能包含安全的模型事实，不能控制端点、认证、协议、配置、操作或路由行为。
-- `scripts/manifest` 约束生成的 40 Provider 目录、公共导出映射、源码/构建路径、CLI 二进制文件以及已通过的实现切片。
+- `scripts/manifest` 约束生成的 39 Provider 目录、公共导出映射、源码/构建路径、CLI 二进制文件以及已通过的实现切片。
 - `test/live/run.ts` 是唯一的在线测试入口。不得从常规测试、构建、安装钩子、源码入口或目录脚本导入它。它要求环境启用标志、Provider 允许列表、正数美元预算、显式 Provider/模型和 `--allow-paid`；媒体运行还要求数量/时长预算。
 - 自托管生成 Provider 要求注入 `DuoduoGenerationGateway`。基础 URL 只代表标识/配置，绝不足以据此合成适配器。
 

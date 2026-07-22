@@ -33,7 +33,7 @@ function capture(): { writer: CliWriter; text: () => string } {
 }
 
 describe('cli inventory and auth', () => {
-  it('lists all 40 builtin kinds and marks missing non-secret config', async () => {
+  it('lists all 39 builtin kinds and marks missing non-secret config', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'duoduo-ai-cli-'));
     const stdout = capture();
     const stderr = capture();
@@ -45,7 +45,7 @@ describe('cli inventory and auth', () => {
       stderr: stderr.writer,
     });
     try {
-      expect(builtinProviderKinds).toHaveLength(40);
+      expect(builtinProviderKinds).toHaveLength(39);
       expect(await runCli(['providers', '--json'], dependencies)).toBe(0);
       const output = JSON.parse(stdout.text()) as {
         providers: Array<{
@@ -54,7 +54,7 @@ describe('cli inventory and auth', () => {
           missingOptions?: string[];
         }>;
       };
-      expect(output.providers).toHaveLength(40);
+      expect(output.providers).toHaveLength(39);
       expect(output.providers).toContainEqual({
         kind: 'qwen',
         status: 'unconfigured',

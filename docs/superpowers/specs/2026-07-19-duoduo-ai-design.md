@@ -1,5 +1,7 @@
 # Duoduo AI 单包模块化设计
 
+> 后续决策（2026-07-22）：Radius Provider、Radius OAuth 和 PI Messages 私有协议因无产品消费者而按 YAGNI 原则从当前发布面移除。本文中的相关章节仅保留为初始设计历史，不再是当前产品合同；当前事实以 `packages/ai/package.json`、生成目录和 `packages/ai/IMPLEMENTATION-STATUS.md` 为准。
+
 ## 文档状态、读者与使用方式
 
 | 项目         | 当前结论                                                                                                              |

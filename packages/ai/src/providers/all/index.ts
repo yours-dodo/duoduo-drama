@@ -27,7 +27,6 @@ import { openCodeProvider } from '../opencode/index.js';
 import { openCodeGoProvider } from '../opencode-go/index.js';
 import { openRouterProvider } from '../openrouter/index.js';
 import { qwenProvider } from '../qwen/index.js';
-import { radiusProvider } from '../radius/index.js';
 import { selfHostedGenerationProvider } from '../self-hosted-generation/index.js';
 import { togetherProvider } from '../together/index.js';
 import { vercelAiGatewayProvider } from '../vercel-ai-gateway/index.js';
@@ -78,7 +77,6 @@ export interface ProviderFactoryOptionsMap {
   'opencode-go': FirstOption<typeof openCodeGoProvider>;
   openrouter: FirstOption<typeof openRouterProvider>;
   qwen: FirstOption<typeof qwenProvider>;
-  radius: FirstOption<typeof radiusProvider>;
   'self-hosted-generation': FirstOption<typeof selfHostedGenerationProvider>;
   together: FirstOption<typeof togetherProvider>;
   'vercel-ai-gateway': FirstOption<typeof vercelAiGatewayProvider>;
@@ -134,7 +132,6 @@ export const builtinProviderKinds = Object.freeze([
   'opencode-go',
   'openrouter',
   'qwen',
-  'radius',
   'self-hosted-generation',
   'together',
   'vercel-ai-gateway',
@@ -279,8 +276,6 @@ async function createBuiltinProvider(
       return openRouterProvider(options);
     case 'qwen':
       return qwenProvider(options);
-    case 'radius':
-      return radiusProvider(options);
     case 'self-hosted-generation':
       return selfHostedGenerationProvider(options);
     case 'together':

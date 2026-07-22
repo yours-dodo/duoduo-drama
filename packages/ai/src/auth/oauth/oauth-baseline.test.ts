@@ -9,10 +9,6 @@ import type {
 import { createAnthropicOAuthFlow } from './anthropic/index.js';
 import { createGitHubCopilotOAuthFlow } from './github-copilot/index.js';
 import { createOpenAiCodexOAuthFlow } from './openai-codex/index.js';
-import {
-  createRadiusOAuthFlow,
-  discoverRadiusOAuthConfig,
-} from './radius/index.js';
 import { createXAiOAuthFlow } from './xai/index.js';
 
 const encoder = new TextEncoder();
@@ -58,7 +54,6 @@ describe('PI OAuth baseline contracts', () => {
     expect(createAnthropicOAuthFlow().refreshSkewMs).toBe(300_000);
     expect(createGitHubCopilotOAuthFlow().refreshSkewMs).toBe(300_000);
     expect(createXAiOAuthFlow().refreshSkewMs).toBe(300_000);
-    expect(createRadiusOAuthFlow().refreshSkewMs).toBe(60_000);
     expect(createOpenAiCodexOAuthFlow().refreshSkewMs).toBe(0);
   });
 
@@ -125,93 +120,5 @@ describe('PI OAuth baseline contracts', () => {
       type: 'form',
       fields: { token: previous.refreshToken, client_id: 'x-client' },
     });
-  });
-
-  it('re-discovers Radius endpoints for refresh and revoke and preserves dynamic base URL facts', async () => {
-    const requests: AuthHttpRequest[] = [];
-    const previous = credential();
-    const flow = createRadiusOAuthFlow({ gateway: 'https://radius.pi.dev' });
-    const ctx = context(async (request) => {
-      requests.push(request);
-      if (request.url.pathname === '/v1/oauth')
-        return response(200, {
-          authorizationEndpoint: 'https://auth.radius.pi.dev/authorize',
-          tokenEndpoint: 'https://auth.radius.pi.dev/token',
-          revocationEndpoint: 'https://auth.radius.pi.dev/revoke',
-          clientId: 'radius-client',
-          baseUrl: 'https://api.radius.pi.dev/v1',
-        });
-      if (request.url.pathname === '/revoke') return response(200, {});
-      return response(200, { access_token: 'radius-new', expires_in: 60 });
-    });
-    const result = await flow.refresh(previous, ctx);
-    await flow.revoke?.(result.credential, ctx);
-    expect(requests.map((item) => item.url.pathname)).toEqual([
-      '/v1/oauth',
-      '/token',
-      '/v1/oauth',
-      '/revoke',
-    ]);
-    expect(result.credential.refreshToken).toBe(previous.refreshToken);
-    expect(flow.toRequestAuth(result.credential)).toMatchObject({
-      bindingFacts: { radiusBaseUrl: 'https://api.radius.pi.dev/v1' },
-    });
-  });
-
-  it('polls Radius device authorization through authorization_pending', async () => {
-    let tokenAttempts = 0;
-    const flow = createRadiusOAuthFlow();
-    const result = await flow.login(
-      {
-        promptSecret: async () => secret('unused'),
-        prompt: async () => 'device-code',
-        notify: async () => {},
-      },
-      context(async (request) => {
-        if (request.url.pathname === '/v1/oauth')
-          return response(200, {
-            authorizationEndpoint: '/authorize',
-            tokenEndpoint: '/token',
-            deviceAuthorizationEndpoint: '/device',
-            clientId: 'radius-client',
-          });
-        if (request.url.pathname === '/device')
-          return response(200, {
-            device_code: 'dev',
-            user_code: 'USER',
-            verification_uri: 'https://radius.pi.dev/verify',
-            interval: 0.001,
-            expires_in: 1,
-          });
-        tokenAttempts += 1;
-        return tokenAttempts === 1
-          ? response(400, { error: 'authorization_pending' })
-          : response(200, {
-              access_token: 'ready',
-              refresh_token: 'refresh',
-              expires_in: 60,
-            });
-      }),
-    );
-    expect(tokenAttempts).toBe(2);
-    expect(result.credential).toMatchObject({
-      type: 'oauth',
-      expiresAt: 1_060_000,
-    });
-  });
-
-  it('rejects Radius discovery endpoints outside the gateway DNS binding', async () => {
-    await expect(
-      discoverRadiusOAuthConfig(
-        'https://radius.pi.dev',
-        context(async () =>
-          response(200, {
-            authorizationEndpoint: 'https://evil.example/authorize',
-            tokenEndpoint: 'https://evil.example/token',
-            clientId: 'bad',
-          }),
-        ),
-      ),
-    ).rejects.toThrow('origin is not allowed');
   });
 });

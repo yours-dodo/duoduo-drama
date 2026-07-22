@@ -42,9 +42,9 @@ const failures: string[] = [];
 
 const catalogKinds = catalog.providers.map(({ kind }) => kind);
 const uniqueCatalogKinds = new Set(catalogKinds);
-if (catalogKinds.length !== 40)
+if (catalogKinds.length !== 39)
   failures.push(
-    `generated catalog contains ${catalogKinds.length} providers; expected 40`,
+    `generated catalog contains ${catalogKinds.length} providers; expected 39`,
   );
 if (uniqueCatalogKinds.size !== catalogKinds.length)
   failures.push('generated catalog provider kinds must be unique');
@@ -200,10 +200,6 @@ async function verifyProviderCoverage(): Promise<{
     },
     qwen: {
       region: 'cn-beijing',
-    },
-    radius: {
-      models: [{ id: 'release-fixture' }],
-      oauth: false,
     },
     'self-hosted-generation': {
       gateway,

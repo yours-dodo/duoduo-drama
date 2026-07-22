@@ -1,5 +1,7 @@
 # Duoduo AI 可执行实施计划
 
+> 后续决策（2026-07-22）：本计划已完成后，Radius Provider、Radius OAuth 和 PI Messages 私有协议因无产品消费者而从当前发布面移除。S10/S21/S22 中的 Radius 与数量记录是实施时的历史验收证据，不再描述当前产品清单。
+
 > 对应设计：[`Duoduo AI 单包模块化设计`](../specs/2026-07-19-duoduo-ai-design.md)
 >
 > 当前事实：`packages/ai` 尚不存在，八个 gate 均未开始。本计划只安排 `@duoduo/ai`，不修改 Agent loop，不实现真实云 GPU 调度器。

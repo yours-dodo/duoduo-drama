@@ -116,14 +116,6 @@ OpenAI Codex OAuth 流程。
 | ---------- | -------------------------------------------------------------- |
 | `index.ts` | 实现 OpenAI Codex OAuth 流程，处理授权、轮询、刷新和撤销能力。 |
 
-### `src/auth/oauth/radius`
-
-Radius OAuth 与配置发现。
-
-| 文件       | 作用                                                                         |
-| ---------- | ---------------------------------------------------------------------------- |
-| `index.ts` | 实现 Radius OAuth 流程，并校验动态发现配置，处理授权、轮询、刷新和撤销能力。 |
-
 ### `src/auth/oauth/xai`
 
 xAI OAuth 流程。
@@ -409,15 +401,6 @@ Openrouter Images 线协议的请求映射、响应解析与离线契约测试�
 | `adapter.ts`                | 实现 Openrouter Images 请求映射、响应/流解析和统一协议契约。 |
 | `index.ts`                  | Openrouter Images 协议公共入口，导出适配器、配置和协议类型。 |
 | `openrouter-images.test.ts` | 验证Openrouter Images 行为的正常、边界和失败路径。           |
-
-### `src/protocols/pi-messages`
-
-Pi Messages 线协议的请求映射、响应解析与离线契约测试。
-
-| 文件                  | 作用                                                   |
-| --------------------- | ------------------------------------------------------ |
-| `index.ts`            | Pi Messages 协议公共入口，导出适配器、配置和协议类型。 |
-| `pi-messages.test.ts` | 验证Pi Messages 行为的正常、边界和失败路径。           |
 
 ### `src/protocols/xai-images`
 
@@ -731,15 +714,6 @@ Qwen Provider 的模型、端点、认证和协议绑定。
 | `profiles.ts`  | 定义 Qwen 模型到协议/兼容配置的受信任映射。                    |
 | `provider.ts`  | 组装 Qwen Provider 工厂、模型引用、认证和各能力绑定。          |
 | `qwen.test.ts` | 验证Qwen 行为的正常、边界和失败路径。                          |
-
-### `src/providers/radius`
-
-Radius Provider 的模型、端点、认证和协议绑定。
-
-| 文件             | 作用                                    |
-| ---------------- | --------------------------------------- |
-| `index.ts`       | 该 Provider 的公共入口。                |
-| `radius.test.ts` | 验证Radius 行为的正常、边界和失败路径。 |
 
 ### `src/providers/self-hosted-generation`
 

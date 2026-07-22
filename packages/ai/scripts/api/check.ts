@@ -57,11 +57,6 @@ const protocolSymbols = Object.freeze({
     'createMistralConversationsAdapter',
     'mistralConversationsReplayCodecs',
   ]),
-  'pi-messages': Object.freeze([
-    'piMessagesContract',
-    'createPiMessagesAdapter',
-    'piMessagesReplayCodecs',
-  ]),
   dashscope: Object.freeze([
     'dashScopeContract',
     'createDashScopeAdapter',

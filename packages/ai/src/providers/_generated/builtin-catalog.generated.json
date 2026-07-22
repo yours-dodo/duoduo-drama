@@ -45,7 +45,6 @@
     { "kind": "opencode-go", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "openrouter", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "qwen", "requiredNonSecretOptions": ["region"], "models": [] },
-    { "kind": "radius", "requiredNonSecretOptions": [], "models": [] },
     {
       "kind": "self-hosted-generation",
       "requiredNonSecretOptions": ["gateway", "gatewayBaseUrl"],
@@ -77,5 +76,5 @@
     { "kind": "zai", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "zai-coding-cn", "requiredNonSecretOptions": [], "models": [] }
   ],
-  "digest": "23dc46829ea406a383b6cf27897f185685038370b5f1f2e321f1d67fdeba0f8b"
+  "digest": "ca30d5dc167b81a554083480fbae0dd66a86d65c76ae9bcd1e5a217c62b6982c"
 }

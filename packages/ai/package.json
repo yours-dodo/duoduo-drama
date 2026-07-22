@@ -248,10 +248,6 @@
       "types": "./dist/protocols/mistral-conversations/index.d.ts",
       "import": "./dist/protocols/mistral-conversations/index.js"
     },
-    "./protocols/pi-messages": {
-      "types": "./dist/protocols/pi-messages/index.d.ts",
-      "import": "./dist/protocols/pi-messages/index.js"
-    },
     "./providers/openai-codex": {
       "types": "./dist/providers/openai-codex/index.d.ts",
       "import": "./dist/providers/openai-codex/index.js"
@@ -260,10 +256,6 @@
       "types": "./dist/providers/mistral/index.d.ts",
       "import": "./dist/providers/mistral/index.js"
     },
-    "./providers/radius": {
-      "types": "./dist/providers/radius/index.d.ts",
-      "import": "./dist/providers/radius/index.js"
-    },
     "./auth/oauth/openai-codex": {
       "types": "./dist/auth/oauth/openai-codex/index.d.ts",
       "import": "./dist/auth/oauth/openai-codex/index.js"
@@ -271,10 +263,6 @@
     "./auth/oauth/xai": {
       "types": "./dist/auth/oauth/xai/index.d.ts",
       "import": "./dist/auth/oauth/xai/index.js"
-    },
-    "./auth/oauth/radius": {
-      "types": "./dist/auth/oauth/radius/index.d.ts",
-      "import": "./dist/auth/oauth/radius/index.js"
     },
     "./protocols/dashscope": {
       "types": "./dist/protocols/dashscope/index.d.ts",

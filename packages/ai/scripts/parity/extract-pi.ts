@@ -13,7 +13,6 @@ const EXPECTED_TEXT_PROTOCOLS = Object.freeze([
   'openai-chat-completions',
   'openai-codex-responses',
   'openai-responses',
-  'pi-messages',
 ]);
 
 const NON_PROVIDER_MODULES = new Set([
@@ -22,6 +21,7 @@ const NON_PROVIDER_MODULES = new Set([
   'cloudflare-stream',
   'faux',
   'openrouter-images',
+  'radius',
   'radius-config',
 ]);
 
@@ -94,12 +94,14 @@ function extractTextProtocols(piRoot: string): readonly string[] {
 function createLedger(piRoot: string): ParityLedger {
   const providers = extractProviders(piRoot);
   const textProtocols = extractTextProtocols(piRoot);
-  if (providers.length !== 36) {
-    throw new Error(`Expected 36 PI providers, received ${providers.length}`);
-  }
-  if (textProtocols.length !== 10) {
+  if (providers.length !== 35) {
     throw new Error(
-      `Expected 10 PI text protocols, received ${textProtocols.length}`,
+      `Expected 35 retained PI providers, received ${providers.length}`,
+    );
+  }
+  if (textProtocols.length !== 9) {
+    throw new Error(
+      `Expected 9 PI text protocols, received ${textProtocols.length}`,
     );
   }
   const canonical = JSON.stringify({

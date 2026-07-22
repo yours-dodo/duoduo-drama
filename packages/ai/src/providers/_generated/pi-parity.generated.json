@@ -27,7 +27,6 @@
     "opencode",
     "opencode-go",
     "openrouter",
-    "radius",
     "together",
     "vercel-ai-gateway",
     "xai",
@@ -47,8 +46,7 @@
     "mistral-conversations",
     "openai-chat-completions",
     "openai-codex-responses",
-    "openai-responses",
-    "pi-messages"
+    "openai-responses"
   ],
-  "digest": "1f10b9171434d9faf9e67625cf141e8d0cb5a1c8ff1d01eaa0f2c3d7ea1c97d6"
+  "digest": "51b5df206907895714fb10a559fa7456285c61dca4f4945547638c3a0683ad59"
 }
