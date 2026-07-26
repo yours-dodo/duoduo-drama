@@ -1,8 +1,4 @@
 import {
-  createGitHubCopilotOAuthFlow,
-  resolveGitHubCopilotOrigin,
-} from '@duoduo/ai/auth/oauth/github-copilot';
-import {
   cloudflareAiGatewayModelRef,
   cloudflareAiGatewayProvider,
 } from '@duoduo/ai/providers/cloudflare-ai-gateway';
@@ -10,10 +6,6 @@ import {
   fireworksModelRef,
   fireworksProvider,
 } from '@duoduo/ai/providers/fireworks';
-import {
-  githubCopilotModelRef,
-  githubCopilotProvider,
-} from '@duoduo/ai/providers/github-copilot';
 import {
   kimiCodingModelRef,
   kimiCodingProvider,
@@ -40,11 +32,8 @@ import {
   vercelAiGatewayProvider,
 } from '@duoduo/ai/providers/vercel-ai-gateway';
 
-void createGitHubCopilotOAuthFlow();
-void resolveGitHubCopilotOrigin({});
 void cloudflareAiGatewayModelRef();
 void fireworksModelRef();
-void githubCopilotModelRef();
 void kimiCodingModelRef();
 void minimaxModelRef();
 void minimaxCnModelRef();
@@ -55,7 +44,6 @@ void vercelAiGatewayModelRef();
 void [
   cloudflareAiGatewayProvider({ accountId: 'account', gatewayId: 'gateway' }),
   fireworksProvider(),
-  githubCopilotProvider({ oauth: false }),
   kimiCodingProvider(),
   minimaxProvider(),
   minimaxCnProvider(),

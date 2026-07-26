@@ -26,7 +26,6 @@
     { "kind": "deepseek", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "doubao", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "fireworks", "requiredNonSecretOptions": [], "models": [] },
-    { "kind": "github-copilot", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "google", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "google-vertex", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "groq", "requiredNonSecretOptions": [], "models": [] },
@@ -76,5 +75,5 @@
     { "kind": "zai", "requiredNonSecretOptions": [], "models": [] },
     { "kind": "zai-coding-cn", "requiredNonSecretOptions": [], "models": [] }
   ],
-  "digest": "ca30d5dc167b81a554083480fbae0dd66a86d65c76ae9bcd1e5a217c62b6982c"
+  "digest": "42a52f30d6bc0b85973ce0b86cedb59dee014baad654d6493b9eee75b66031c6"
 }

@@ -8,7 +8,6 @@ import { cloudflareWorkersAiProvider } from '../cloudflare-workers-ai/index.js';
 import { deepseekProvider } from '../deepseek/index.js';
 import { doubaoProvider } from '../doubao/index.js';
 import { fireworksProvider } from '../fireworks/index.js';
-import { githubCopilotProvider } from '../github-copilot/index.js';
 import { createGoogleProvider } from '../google/index.js';
 import { createGoogleVertexProvider } from '../google-vertex/index.js';
 import { groqProvider } from '../groq/index.js';
@@ -58,7 +57,6 @@ export interface ProviderFactoryOptionsMap {
   deepseek: FirstOption<typeof deepseekProvider>;
   doubao: FirstOption<typeof doubaoProvider>;
   fireworks: FirstOption<typeof fireworksProvider>;
-  'github-copilot': FirstOption<typeof githubCopilotProvider>;
   google: FirstOption<typeof createGoogleProvider>;
   'google-vertex': FirstOption<typeof createGoogleVertexProvider>;
   groq: FirstOption<typeof groqProvider>;
@@ -113,7 +111,6 @@ export const builtinProviderKinds = Object.freeze([
   'deepseek',
   'doubao',
   'fireworks',
-  'github-copilot',
   'google',
   'google-vertex',
   'groq',
@@ -238,8 +235,6 @@ async function createBuiltinProvider(
       return doubaoProvider(options);
     case 'fireworks':
       return fireworksProvider(options);
-    case 'github-copilot':
-      return githubCopilotProvider(options);
     case 'google':
       return createGoogleProvider(options);
     case 'google-vertex':

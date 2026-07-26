@@ -7,7 +7,6 @@ import type {
   OAuthCredential,
 } from '../oauth.js';
 import { createAnthropicOAuthFlow } from './anthropic/index.js';
-import { createGitHubCopilotOAuthFlow } from './github-copilot/index.js';
 import { createOpenAiCodexOAuthFlow } from './openai-codex/index.js';
 import { createXAiOAuthFlow } from './xai/index.js';
 
@@ -52,7 +51,6 @@ function credential(): OAuthCredential {
 describe('PI OAuth baseline contracts', () => {
   it('uses the exact provider refresh skews', () => {
     expect(createAnthropicOAuthFlow().refreshSkewMs).toBe(300_000);
-    expect(createGitHubCopilotOAuthFlow().refreshSkewMs).toBe(300_000);
     expect(createXAiOAuthFlow().refreshSkewMs).toBe(300_000);
     expect(createOpenAiCodexOAuthFlow().refreshSkewMs).toBe(0);
   });

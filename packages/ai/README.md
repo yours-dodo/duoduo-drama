@@ -54,7 +54,7 @@ await ai.dispose({ timeoutMs: 30_000, onTimeout: 'error' });
 
 ## 内置 Provider 清单
 
-生成的目录和包导出映射必须包含相同的 39 种 Provider。空白配置表示该 Provider 具备安全的包级默认值；凭证仍须通过显式凭证存储、环境能力、OAuth 流程或请求级覆盖提供。
+生成的目录和包导出映射必须包含相同的 38 种 Provider。空白配置表示该 Provider 具备安全的包级默认值；凭证仍须通过显式凭证存储、环境能力、OAuth 流程或请求级覆盖提供。
 
 | Provider 类型            | `builtinProviders()` 注册前要求的非敏感配置                      |
 | ------------------------ | ---------------------------------------------------------------- |
@@ -68,7 +68,6 @@ await ai.dispose({ timeoutMs: 30_000, onTimeout: 'error' });
 | `deepseek`               | 无                                                               |
 | `doubao`                 | 无                                                               |
 | `fireworks`              | 无                                                               |
-| `github-copilot`         | 无                                                               |
 | `google`                 | 无                                                               |
 | `google-vertex`          | 无                                                               |
 | `groq`                   | 无                                                               |
@@ -153,7 +152,7 @@ pnpm --filter @duoduo/ai catalog:update -- --check --offline
 pnpm --filter @duoduo/ai manifest:check
 ```
 
-语义目录摘要不包含时间戳，并且不受输入顺序影响。经过审查的远程分片只能包含模型的 `id`、`name`、`capabilities`、`limits`、`pricing`、`region` 和 `deprecated` 字段。清单检查器会约束 39 个 Provider 导出、生成目录、公共入口、构建目标、CLI 二进制文件和实现状态。
+语义目录摘要不包含时间戳，并且不受输入顺序影响。经过审查的远程分片只能包含模型的 `id`、`name`、`capabilities`、`limits`、`pricing`、`region` 和 `deprecated` 字段。清单检查器会约束 38 个 Provider 导出、生成目录、公共入口、构建目标、CLI 二进制文件和实现状态。
 
 ## 在线测试安全机制
 
@@ -188,7 +187,7 @@ pnpm --filter @duoduo/ai release:check
 pnpm --filter @duoduo/ai release:no-vendor
 ```
 
-`api:check` 会编译公共消费者，并核对当前协议子路径和运行时符号清单。`manifest:check` 会动态构建全部 39 个内置 Provider，并要求所有声明的绑定字段、运行时绑定、包导出以及 S01–S22 状态证据均被覆盖。
+`api:check` 会编译公共消费者，并核对当前协议子路径和运行时符号清单。`manifest:check` 会动态构建全部 38 个内置 Provider，并要求所有声明的绑定字段、运行时绑定、包导出以及 S01–S22 状态证据均被覆盖。
 
 `release:check` 会约束生产导入图、运行密钥脱敏金丝雀测试、扫描夹具中的疑似密钥值和未脱敏签名 URL，并证明在线测试运行器默认关闭。`release:no-vendor` 会复制一份不含 `vendor` 的干净临时检出，从 pnpm 存储中使用 `--offline --frozen-lockfile` 重新安装，并运行包的类型检查、测试和构建。所有默认验证都离线且确定性执行，不会发送任何付费在线请求。
 

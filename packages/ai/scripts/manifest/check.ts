@@ -42,9 +42,9 @@ const failures: string[] = [];
 
 const catalogKinds = catalog.providers.map(({ kind }) => kind);
 const uniqueCatalogKinds = new Set(catalogKinds);
-if (catalogKinds.length !== 39)
+if (catalogKinds.length !== 38)
   failures.push(
-    `generated catalog contains ${catalogKinds.length} providers; expected 39`,
+    `generated catalog contains ${catalogKinds.length} providers; expected 38`,
   );
 if (uniqueCatalogKinds.size !== catalogKinds.length)
   failures.push('generated catalog provider kinds must be unique');
@@ -113,6 +113,10 @@ for (const id of Array.from(
 }
 
 const coverage = await verifyProviderCoverage();
+if (coverage.totalBindings !== 59)
+  failures.push(
+    `runtime manifests contain ${coverage.totalBindings} bindings; expected 59`,
+  );
 
 if (failures.length > 0) {
   process.stderr.write(`Manifest check failed:\n- ${failures.join('\n- ')}\n`);

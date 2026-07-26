@@ -90,16 +90,6 @@ Anthropic OAuth 流程。
 | `anthropic-oauth.test.ts` | 验证运行时 Anthropic OAuth 接线的正常、边界和失败路径。     |
 | `index.ts`                | 实现 Anthropic OAuth 流程，处理授权、轮询、刷新和撤销能力。 |
 
-### `src/auth/oauth/github-copilot`
-
-GitHub Copilot 设备授权与端点边界。
-
-| 文件                           | 作用                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------- |
-| `endpoint.ts`                  | 校验并解析 GitHub Copilot OAuth/网关来源，防止发现结果越出受信任 DNS 边界。 |
-| `github-copilot-oauth.test.ts` | 验证GitHub Copilot OAuth的正常、边界和失败路径。                            |
-| `index.ts`                     | 实现 GitHub Copilot OAuth 流程，处理授权、轮询、刷新和撤销能力。            |
-
 ### `src/auth/oauth`
 
 供应商 OAuth 流程。
@@ -543,14 +533,6 @@ Doubao Provider 的模型、端点、认证和协议绑定。
 ### `src/providers/fireworks`
 
 Fireworks Provider 的模型、端点、认证和协议绑定。
-
-| 文件       | 作用                     |
-| ---------- | ------------------------ |
-| `index.ts` | 该 Provider 的公共入口。 |
-
-### `src/providers/github-copilot`
-
-GitHub Copilot Provider 的模型、端点、认证和协议绑定。
 
 | 文件       | 作用                     |
 | ---------- | ------------------------ |

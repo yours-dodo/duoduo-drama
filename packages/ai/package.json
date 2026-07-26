@@ -204,10 +204,6 @@
       "types": "./dist/providers/fireworks/index.d.ts",
       "import": "./dist/providers/fireworks/index.js"
     },
-    "./providers/github-copilot": {
-      "types": "./dist/providers/github-copilot/index.d.ts",
-      "import": "./dist/providers/github-copilot/index.js"
-    },
     "./providers/kimi-coding": {
       "types": "./dist/providers/kimi-coding/index.d.ts",
       "import": "./dist/providers/kimi-coding/index.js"
@@ -235,10 +231,6 @@
     "./providers/vercel-ai-gateway": {
       "types": "./dist/providers/vercel-ai-gateway/index.d.ts",
       "import": "./dist/providers/vercel-ai-gateway/index.js"
-    },
-    "./auth/oauth/github-copilot": {
-      "types": "./dist/auth/oauth/github-copilot/index.d.ts",
-      "import": "./dist/auth/oauth/github-copilot/index.js"
     },
     "./protocols/openai-codex-responses": {
       "types": "./dist/protocols/openai-codex-responses/index.d.ts",

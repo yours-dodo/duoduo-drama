@@ -33,7 +33,7 @@ function capture(): { writer: CliWriter; text: () => string } {
 }
 
 describe('cli inventory and auth', () => {
-  it('lists all 39 builtin kinds and marks missing non-secret config', async () => {
+  it('lists all 38 builtin kinds without GitHub Copilot and marks missing non-secret config', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'duoduo-ai-cli-'));
     const stdout = capture();
     const stderr = capture();
@@ -45,7 +45,8 @@ describe('cli inventory and auth', () => {
       stderr: stderr.writer,
     });
     try {
-      expect(builtinProviderKinds).toHaveLength(39);
+      expect(builtinProviderKinds).toHaveLength(38);
+      expect(builtinProviderKinds).not.toContain('github-copilot');
       expect(await runCli(['providers', '--json'], dependencies)).toBe(0);
       const output = JSON.parse(stdout.text()) as {
         providers: Array<{
@@ -54,7 +55,10 @@ describe('cli inventory and auth', () => {
           missingOptions?: string[];
         }>;
       };
-      expect(output.providers).toHaveLength(39);
+      expect(output.providers).toHaveLength(38);
+      expect(output.providers).not.toContainEqual(
+        expect.objectContaining({ kind: 'github-copilot' }),
+      );
       expect(output.providers).toContainEqual({
         kind: 'qwen',
         status: 'unconfigured',

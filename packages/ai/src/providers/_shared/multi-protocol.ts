@@ -20,14 +20,6 @@ import {
   type VercelGatewayRoutingProfile,
 } from '../../protocols/openai-chat-completions/adapter.js';
 import { runOpenAiResponses } from '../../protocols/openai-responses/adapter.js';
-import {
-  createGitHubCopilotOAuthFlow,
-  type CreateGitHubCopilotOAuthFlowOptions,
-} from '../../auth/oauth/github-copilot/index.js';
-import {
-  resolveGitHubCopilotOrigin,
-  resolveGitHubCopilotOriginFact,
-} from '../../auth/oauth/github-copilot/endpoint.js';
 import type {
   ProtocolEventSink,
   Provider,
@@ -62,8 +54,6 @@ export interface GatewayEndpointOptions {
   readonly baseUrl?: string;
   readonly accountId?: string;
   readonly gatewayId?: string;
-  readonly enterpriseDomain?: string;
-  readonly copilotToken?: string;
 }
 
 export interface GatewayModelInput {
@@ -85,7 +75,6 @@ export interface GatewayProviderOptions extends GatewayEndpointOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly openRouterRouting?: Readonly<OpenRouterRoutingProfile>;
   readonly vercelGatewayRouting?: Readonly<VercelGatewayRoutingProfile>;
-  readonly oauth?: CreateGitHubCopilotOAuthFlowOptions | false;
 }
 
 function binding(
@@ -128,11 +117,6 @@ function cloudflare(path: string) {
   };
 }
 
-function copilot(path: string) {
-  return (options: GatewayEndpointOptions) =>
-    appendPath(resolveGitHubCopilotOrigin(options), path);
-}
-
 export const gatewayProviderDescriptors = Object.freeze([
   Object.freeze({
     kind: 'cloudflare-ai-gateway',
@@ -163,19 +147,6 @@ export const gatewayProviderDescriptors = Object.freeze([
         'openai-chat-completions',
         fixed('https://api.fireworks.ai/inference', 'v1/chat/completions'),
       ),
-    ]),
-  }),
-  Object.freeze({
-    kind: 'github-copilot',
-    name: 'GitHub Copilot',
-    publisher: 'GitHub',
-    environmentVariable: 'COPILOT_GITHUB_TOKEN',
-    defaultModelId: 'gpt-4.1',
-    officialSource: 'https://docs.github.com/copilot',
-    bindings: Object.freeze([
-      binding('anthropic-messages', copilot('v1/messages')),
-      binding('openai-chat-completions', copilot('chat/completions')),
-      binding('openai-responses', copilot('responses')),
     ]),
   }),
   Object.freeze({
@@ -378,9 +349,6 @@ export function createGatewayProvider(
             ]),
           )
           .digest('base64url') + `:${descriptor.environmentVariable}`,
-      ...(descriptor.kind === 'github-copilot' && options.oauth !== false
-        ? { oauth: createGitHubCopilotOAuthFlow(options.oauth) }
-        : {}),
     }),
     contractManifest: manifest,
     chat: {
@@ -395,51 +363,6 @@ export function createGatewayProvider(
             throw new Error(`unsupported protocol: ${model.protocol}`);
           return resolved.endpoint;
         },
-        ...(descriptor.kind === 'github-copilot'
-          ? {
-              endpointForCredential: (
-                model: Readonly<ModelDefinition>,
-                facts:
-                  | Readonly<
-                      Record<string, import('../../core/content.js').JsonValue>
-                    >
-                  | undefined,
-              ) => {
-                const resolved = byProtocol.get(
-                  model.protocol as GatewayProtocol,
-                );
-                if (!resolved)
-                  throw new Error(`unsupported protocol: ${model.protocol}`);
-                const origin = resolveGitHubCopilotOriginFact(
-                  facts?.endpointOrigin,
-                );
-                if (!origin) return resolved.endpoint;
-                return `${origin}${new URL(resolved.endpoint).pathname}`;
-              },
-              derivedOriginPolicy: Object.freeze({
-                id: 'github-copilot-endpoint-origin',
-                version: 1,
-                configuration: Object.freeze({
-                  enterpriseDomain: options.enterpriseDomain ?? '',
-                }),
-                resolve: (
-                  facts:
-                    | Readonly<
-                        Record<
-                          string,
-                          import('../../core/content.js').JsonValue
-                        >
-                      >
-                    | undefined,
-                ) => {
-                  const origin = resolveGitHubCopilotOriginFact(
-                    facts?.endpointOrigin,
-                  );
-                  return origin ? Object.freeze([origin]) : Object.freeze([]);
-                },
-              }),
-            }
-          : {}),
         headers: Object.freeze({
           'content-type': 'application/json',
           ...(options.headers ?? {}),
@@ -565,18 +488,12 @@ function makeManifest(
           capability: 'chat' as const,
           protocol: item.protocol,
           profileIds: Object.freeze([item.profileId]),
-          authSchemes: Object.freeze([
-            descriptor.kind === 'github-copilot'
-              ? 'github_token_or_oauth'
-              : 'api_key',
-          ]),
+          authSchemes: Object.freeze(['api_key']),
           endpointBranchIds: Object.freeze([
             'default',
             ...(descriptor.kind === 'cloudflare-ai-gateway'
               ? ['account-gateway']
-              : descriptor.kind === 'github-copilot'
-                ? ['token-hint', 'enterprise', 'individual']
-                : ['explicit-base-url']),
+              : ['explicit-base-url']),
           ]),
           requestFixtureIds: Object.freeze([
             `${descriptor.kind}_${item.protocol}_request`,
@@ -621,8 +538,6 @@ export function requireGatewayDescriptor(
   if (!descriptor) throw new Error(`unknown gateway provider: ${kind}`);
   return descriptor;
 }
-
-export { resolveGitHubCopilotOrigin } from '../../auth/oauth/github-copilot/endpoint.js';
 
 function appendPath(baseUrl: string, path: string): string {
   const url = new URL(baseUrl);

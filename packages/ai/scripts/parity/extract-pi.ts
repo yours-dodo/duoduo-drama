@@ -20,6 +20,7 @@ const NON_PROVIDER_MODULES = new Set([
   'cloudflare-auth',
   'cloudflare-stream',
   'faux',
+  'github-copilot',
   'openrouter-images',
   'radius',
   'radius-config',
@@ -94,9 +95,9 @@ function extractTextProtocols(piRoot: string): readonly string[] {
 function createLedger(piRoot: string): ParityLedger {
   const providers = extractProviders(piRoot);
   const textProtocols = extractTextProtocols(piRoot);
-  if (providers.length !== 35) {
+  if (providers.length !== 34) {
     throw new Error(
-      `Expected 35 retained PI providers, received ${providers.length}`,
+      `Expected 34 retained PI providers, received ${providers.length}`,
     );
   }
   if (textProtocols.length !== 9) {

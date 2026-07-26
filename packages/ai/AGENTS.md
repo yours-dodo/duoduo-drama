@@ -61,7 +61,7 @@
 - `pnpm --filter @duoduo/ai test -- --run anthropic-messages anthropic oauth`
 - `pnpm --filter @duoduo/ai test -- --run google vertex bedrock ambient`
 - `pnpm --filter @duoduo/ai test -- --run openai-chat-completions providers-compatible`
-- `pnpm --filter @duoduo/ai test -- --run gateways github-copilot minimax kimi openrouter`
+- `pnpm --filter @duoduo/ai test -- --run gateways minimax kimi openrouter`
 - `pnpm --filter @duoduo/ai test -- --run protocols providers baseline-parity oauth`
 - `pnpm --filter @duoduo/ai test -- --run dashscope qwen`
 - `pnpm --filter @duoduo/ai test -- --run ark-responses doubao`

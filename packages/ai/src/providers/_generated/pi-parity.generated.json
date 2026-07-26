@@ -10,7 +10,6 @@
     "cloudflare-workers-ai",
     "deepseek",
     "fireworks",
-    "github-copilot",
     "google",
     "google-vertex",
     "groq",
@@ -48,5 +47,5 @@
     "openai-codex-responses",
     "openai-responses"
   ],
-  "digest": "51b5df206907895714fb10a559fa7456285c61dca4f4945547638c3a0683ad59"
+  "digest": "34cb246491c882d55845d6a942e1016f3c61017cb9a5b67dc08935ebeaea418c"
 }

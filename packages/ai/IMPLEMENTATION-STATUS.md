@@ -6,7 +6,7 @@
 
 ## 当前产品基线
 
-2026 年 7 月 22 日按 YAGNI 原则移除了未被产品使用的 Radius Provider、Radius OAuth 和 PI Messages 私有协议。当前发布面包含 39 个内建 Provider、62 个 manifest binding、77 个公共导出，以及 20 个公共协议子路径中的 51 个运行时协议符号；目录与 manifest 覆盖率仍为 100%，删除后的包测试为 69 个文件、345 项用例。下方 S01–S22 表格保留最初实施时的历史证据，因此其中 S10、S21 和 S22 的原始计数不代表当前发布面的计数。
+2026 年 7 月 22 日按 YAGNI 原则移除了未被产品使用的 Radius Provider、Radius OAuth 和 PI Messages 私有协议；2026 年 7 月 27 日继续完整移除了无产品消费者的 GitHub Copilot Provider、专用 OAuth/token 交换和 endpoint 推导。当前发布面包含 38 个内建 Provider、59 个 manifest binding、75 个公共导出，以及 20 个公共协议子路径中的 51 个运行时协议符号；目录与 manifest 覆盖率仍为 100%，包测试为 69 个文件、413 项用例。下方 S01–S22 表格保留最初实施时的历史证据，因此其中 S09、S10、S21 和 S22 的原始能力与计数不代表当前发布面。
 
 ## 2026-07-24 运行时逻辑硬化
 

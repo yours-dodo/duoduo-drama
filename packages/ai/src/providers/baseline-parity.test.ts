@@ -63,10 +63,11 @@ describe('PI text baseline parity', () => {
     });
   });
 
-  it('freezes the deterministic 35-provider and nine-protocol PI ledger', () => {
+  it('freezes the deterministic 34-provider and nine-protocol PI ledger without GitHub Copilot', () => {
     expect(parity.schemaVersion).toBe(1);
-    expect(parity.providers).toHaveLength(35);
-    expect(new Set(parity.providers).size).toBe(35);
+    expect(parity.providers).toHaveLength(34);
+    expect(new Set(parity.providers).size).toBe(34);
+    expect(parity.providers).not.toContain('github-copilot');
     expect(parity.textProtocols).toEqual([
       'anthropic-messages',
       'azure-openai-responses',
