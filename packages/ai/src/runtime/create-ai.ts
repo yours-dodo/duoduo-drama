@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { AiRuntimeError, type AiError } from '../core/errors.js';
+import { toPublicAiError, toPublicDiagnostics } from '../core/public-errors.js';
 import type { RequestCredentialOverride } from '../auth/api-key.js';
 import type {
   AmbientAuthPolicy,
@@ -9,11 +10,15 @@ import type {
 import { credentialScheme } from '../auth/api-key.js';
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
 import type { CredentialStore } from '../auth/credential-store.js';
-import type { AuthApi } from '../auth/login.js';
+import type { AuthApi, AuthInteraction } from '../auth/login.js';
 import type { AuthRuntimeOptions } from '../auth/oauth.js';
-import type { CredentialScopeAuthority } from '../auth/scope-authority.js';
+import type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+} from '../auth/scope-authority.js';
 import { revealSecret } from '../auth/secret-value.js';
 import { validateContext } from '../core/context.js';
+import { estimateContextTokens } from '../core/usage.js';
 import { parseToolArguments } from '../core/tools.js';
 import { AttemptLocalSink } from '../stream/attempt-sink.js';
 import type {
@@ -26,10 +31,14 @@ import type {
 } from '../core/events.js';
 import type { AiContext } from '../core/messages.js';
 import type {
+  CacheRetention,
+  ContextNormalizationPolicy,
   ModelDefinition,
   ModelHandle,
   ModelRef,
   ProviderSnapshot,
+  ReasoningLevel,
+  ToolChoice,
 } from '../core/models.js';
 import { createSessionManager } from '../session/manager.js';
 import { createImagesApi } from '../images/runtime.js';
@@ -39,8 +48,32 @@ import type {
   GenerationOperationPolicy,
   OperationCredentialVerifier,
 } from '../generation/index.js';
-import type { ImagesApi } from '../images/contracts.js';
-import type { VideosApi } from '../videos/contracts.js';
+import type {
+  ImageGenerationOptions,
+  ImageModelReadOptions,
+  ImageOperationResumeOptions,
+  ImagesApi,
+} from '../images/contracts.js';
+import type { ImageGenerationInput } from '../images/input.js';
+import type {
+  ImageModelHandle,
+  ImageModelListFilter,
+  ImageModelRef,
+} from '../images/models.js';
+import type { ImageOperationRef } from '../images/operation-claims.js';
+import type {
+  VideoGenerationOptions,
+  VideoModelReadOptions,
+  VideoOperationResumeOptions,
+  VideosApi,
+} from '../videos/contracts.js';
+import type { VideoGenerationInput } from '../videos/input.js';
+import type {
+  VideoModelHandle,
+  VideoModelListFilter,
+  VideoModelRef,
+} from '../videos/models.js';
+import type { VideoOperationRef } from '../videos/operation-claims.js';
 import type { SessionHandle } from '../session/lease.js';
 import { ResponseStream } from '../stream/response-stream.js';
 import type { RetryPolicy } from '../transport/retry.js';
@@ -52,6 +85,7 @@ import {
 } from '../transport/request-transport.js';
 import {
   ProviderRegistry,
+  type ChatTransportBinding,
   type Provider,
   type ProvidersApi,
 } from './registry.js';
@@ -61,6 +95,17 @@ import {
   type AuthCoordinator,
   type StoredRequestAuth,
 } from './auth-coordinator.js';
+import {
+  resolveRuntimeResourcePolicy,
+  type RuntimeResourcePolicyInput,
+} from './resource-policy.js';
+import {
+  createRuntimeLifecycle,
+  type RuntimeDisposeOptions as RuntimeLifecycleDisposeOptions,
+  type RuntimeLifecycle,
+} from './lifecycle.js';
+
+export type { RuntimeResourcePolicyInput } from './resource-policy.js';
 
 const handleProvider = new WeakMap<object, string>();
 const handleRuntime = new WeakMap<object, symbol>();
@@ -72,8 +117,14 @@ const handleAmbientAuth = new WeakMap<object, AmbientAuthResolution>();
 export interface StreamOptionsInput {
   readonly signal?: AbortSignal;
   readonly maxOutputTokens?: number;
+  readonly temperature?: number;
+  readonly topP?: number;
   readonly stop?: readonly string[];
+  readonly toolChoice?: ToolChoice;
+  readonly reasoning?: ReasoningLevel;
+  readonly cacheRetention?: CacheRetention;
   readonly timeoutMs?: number;
+  readonly contextPolicy?: ContextNormalizationPolicy;
   readonly protocolOptions?: Readonly<Record<string, unknown>>;
   readonly credentialOverride?: RequestCredentialOverride;
   readonly retry?: false | RetryPolicy;
@@ -87,8 +138,6 @@ export interface ModelListFilter {
 }
 
 export interface ModelReadOptions {
-  readonly allowNetwork?: boolean;
-  readonly force?: boolean;
   readonly signal?: AbortSignal;
   readonly credentialOverride?: RequestCredentialOverride;
 }
@@ -142,6 +191,8 @@ export interface SessionsApi<TScopeHandle> {
   ): Promise<void>;
 }
 
+export type RuntimeDisposeOptions = RuntimeLifecycleDisposeOptions;
+
 export interface AiRuntime<TScopeHandle = unknown> {
   readonly providers: ProvidersApi;
   readonly inventory: InventoryApi;
@@ -160,21 +211,21 @@ export interface AiRuntime<TScopeHandle = unknown> {
     context: AiContext,
     options?: StreamOptionsInput,
   ): Promise<AssistantResponse>;
-  dispose(): Promise<void>;
-}
-
-export interface RuntimeResourcePolicyInput {
-  readonly streamQueue?: Readonly<{
-    readonly maxEvents?: number;
-    readonly maxBytes?: number;
-  }>;
+  dispose(options?: RuntimeDisposeOptions): Promise<void>;
 }
 
 export interface CreateAiOptions<TScopeHandle = unknown> {
   readonly commonDefaults?: Readonly<{
     maxOutputTokens?: number;
+    temperature?: number;
+    topP?: number;
+    stop?: readonly string[];
+    toolChoice?: ToolChoice;
+    reasoning?: ReasoningLevel;
+    cacheRetention?: CacheRetention;
     timeoutMs?: number;
     retry?: false | RetryPolicy;
+    contextPolicy?: ContextNormalizationPolicy;
   }>;
   readonly scope?: TScopeHandle;
   readonly resourcePolicy?: RuntimeResourcePolicyInput;
@@ -216,8 +267,10 @@ interface BlockState {
 export function createAi<TScopeHandle = unknown>(
   options: CreateAiOptions<TScopeHandle> = {},
 ): AiRuntime<TScopeHandle> {
+  const resourcePolicy = resolveRuntimeResourcePolicy(options.resourcePolicy);
   const registry = new ProviderRegistry();
-  const sessionManager = createSessionManager();
+  const sessionManager = createSessionManager(resourcePolicy.session);
+  const lifecycle = createRuntimeLifecycle();
   const runtimeId = Symbol('duoduo-ai-runtime');
   const credentialFingerprintKey = randomBytes(32);
   const runtimeScopeFingerprint = createRuntimeScopeFingerprinter();
@@ -248,8 +301,6 @@ export function createAi<TScopeHandle = unknown>(
           },
         })
       : undefined;
-  let disposed = false;
-
   const inventory: InventoryApi = {
     models: {
       find: async <TProtocol extends string>(ref: ModelRef<TProtocol>) => {
@@ -288,7 +339,7 @@ export function createAi<TScopeHandle = unknown>(
       );
       if (!definition || !entry) return undefined;
       const resolvedAuth = await resolveModelAuth({
-        chat: entry.provider.chat,
+        transport: entry.provider.chat?.transport,
         auth: entry.provider.auth,
         provider: entry.snapshot,
         scope,
@@ -349,7 +400,7 @@ export function createAi<TScopeHandle = unknown>(
         const entry = registry.get(snapshot.id);
         if (!entry) continue;
         const resolvedAuth = await resolveModelAuth({
-          chat: entry.provider.chat,
+          transport: entry.provider.chat?.transport,
           auth: entry.provider.auth,
           provider: snapshot,
           scope,
@@ -391,6 +442,7 @@ export function createAi<TScopeHandle = unknown>(
   const images = createImagesApi({
     registry,
     runtimeId,
+    beginOperation: (abort) => lifecycle.acquire(abort),
     transport: options.transport,
     networkPolicy: options.networkPolicy,
     credentialOverridePolicy: options.credentialOverridePolicy,
@@ -398,10 +450,17 @@ export function createAi<TScopeHandle = unknown>(
     generationOperationCodec: options.generationOperationCodec,
     operationCredentialVerifier: options.operationCredentialVerifier,
     generationOperationPolicy: options.generationOperationPolicy,
-    resolveAuth: async ({ provider, scope, override, signal }) => {
+    resolveAuth: async ({
+      binding,
+      provider,
+      scope,
+      action,
+      override,
+      signal,
+    }) => {
       const entry = registry.get(provider.id);
       const resolved = await resolveModelAuth({
-        chat: entry?.provider.chat,
+        transport: binding,
         auth: entry?.provider.auth,
         provider,
         scope,
@@ -410,6 +469,7 @@ export function createAi<TScopeHandle = unknown>(
         ambientPolicy: options.ambientAuthPolicy,
         key: credentialFingerprintKey,
         coordinator: authCoordinator,
+        action,
         signal,
       });
       const credentialScopeFingerprint = await resolveSessionScopeFingerprint({
@@ -419,6 +479,7 @@ export function createAi<TScopeHandle = unknown>(
         ambientAuth: resolved.ambientAuth,
         scopeAuthority: options.scopeAuthority,
         runtimeScopeFingerprint,
+        action,
         signal,
       });
       const requestCredential = override ?? resolved.storedAuth?.override;
@@ -472,6 +533,7 @@ export function createAi<TScopeHandle = unknown>(
   const videos = createVideosApi({
     registry,
     runtimeId,
+    beginOperation: (abort) => lifecycle.acquire(abort),
     transport: options.transport,
     networkPolicy: options.networkPolicy,
     credentialOverridePolicy: options.credentialOverridePolicy,
@@ -479,10 +541,17 @@ export function createAi<TScopeHandle = unknown>(
     generationOperationCodec: options.generationOperationCodec,
     operationCredentialVerifier: options.operationCredentialVerifier,
     generationOperationPolicy: options.generationOperationPolicy,
-    resolveAuth: async ({ provider, scope, override, signal }) => {
+    resolveAuth: async ({
+      binding,
+      provider,
+      scope,
+      action,
+      override,
+      signal,
+    }) => {
       const entry = registry.get(provider.id);
       const resolved = await resolveModelAuth({
-        chat: entry?.provider.chat,
+        transport: binding,
         auth: entry?.provider.auth,
         provider,
         scope,
@@ -491,6 +560,7 @@ export function createAi<TScopeHandle = unknown>(
         ambientPolicy: options.ambientAuthPolicy,
         key: credentialFingerprintKey,
         coordinator: authCoordinator,
+        action,
         signal,
       });
       const credentialScopeFingerprint = await resolveSessionScopeFingerprint({
@@ -500,6 +570,7 @@ export function createAi<TScopeHandle = unknown>(
         ambientAuth: resolved.ambientAuth,
         scopeAuthority: options.scopeAuthority,
         runtimeScopeFingerprint,
+        action,
         signal,
       });
       const requestCredential = override ?? resolved.storedAuth?.override;
@@ -550,49 +621,276 @@ export function createAi<TScopeHandle = unknown>(
     },
   });
 
+  const providers: ProvidersApi = Object.freeze({
+    register: (provider: Provider) => {
+      lifecycle.assertRunning();
+      registry.register(provider);
+    },
+    registerAll: (providersToRegister: Iterable<Provider>) => {
+      lifecycle.assertRunning();
+      registry.registerAll(providersToRegister);
+    },
+    unregister: (providerInstanceId: string) => {
+      lifecycle.assertRunning();
+      return registry.unregister(providerInstanceId);
+    },
+    list: () => {
+      lifecycle.assertRunning();
+      return registry.list();
+    },
+  });
+
+  const runtimeInventory: InventoryApi = Object.freeze({
+    models: Object.freeze({
+      find: async <TProtocol extends string>(ref: ModelRef<TProtocol>) =>
+        runLifecycleOperation(lifecycle, undefined, () =>
+          inventory.models.find(ref),
+        ),
+      list: async (filter?: ModelListFilter) =>
+        runLifecycleOperation(lifecycle, undefined, () =>
+          inventory.models.list(filter),
+        ),
+    }),
+  });
+
+  const runtimeModels: ModelsApi<TScopeHandle> = Object.freeze({
+    find: async <TProtocol extends string>(
+      ref: ModelRef<TProtocol>,
+      scope: TScopeHandle,
+      readOptions?: ModelReadOptions,
+    ) =>
+      runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+        models.find(ref, scope, { ...readOptions, signal }),
+      ),
+    require: async <TProtocol extends string>(
+      ref: ModelRef<TProtocol>,
+      scope: TScopeHandle,
+      readOptions?: ModelReadOptions,
+    ) =>
+      runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+        models.require(ref, scope, { ...readOptions, signal }),
+      ),
+    list: async (
+      scope: TScopeHandle,
+      filter?: ModelListFilter,
+      readOptions?: ModelReadOptions,
+    ) =>
+      runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+        models.list(scope, filter, { ...readOptions, signal }),
+      ),
+  });
+
+  const runtimeImages: ImagesApi<TScopeHandle> = Object.freeze({
+    models: Object.freeze({
+      find: async <TProtocol extends string>(
+        ref: ImageModelRef<TProtocol>,
+        scope: TScopeHandle,
+        readOptions?: ImageModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          images.models.find(ref, scope, { ...readOptions, signal }),
+        ),
+      require: async <TProtocol extends string>(
+        ref: ImageModelRef<TProtocol>,
+        scope: TScopeHandle,
+        readOptions?: ImageModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          images.models.require(ref, scope, { ...readOptions, signal }),
+        ),
+      list: async (
+        scope: TScopeHandle,
+        filter?: ImageModelListFilter,
+        readOptions?: ImageModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          images.models.list(scope, filter, { ...readOptions, signal }),
+        ),
+    }),
+    stream: <TProtocol extends string>(
+      model: ImageModelHandle<TProtocol>,
+      input: ImageGenerationInput,
+      callOptions?: ImageGenerationOptions<TProtocol>,
+    ) => {
+      lifecycle.assertRunning();
+      return images.stream(model, input, callOptions);
+    },
+    generate: async <TProtocol extends string>(
+      model: ImageModelHandle<TProtocol>,
+      input: ImageGenerationInput,
+      callOptions?: ImageGenerationOptions<TProtocol>,
+    ) => {
+      lifecycle.assertRunning();
+      return images.generate(model, input, callOptions);
+    },
+    resume: async (
+      operation: ImageOperationRef,
+      resumeOptions: ImageOperationResumeOptions<TScopeHandle>,
+    ) =>
+      runLifecycleOperation(lifecycle, resumeOptions.signal, (signal) =>
+        images.resume(operation, { ...resumeOptions, signal }),
+      ),
+    serializeOperation: async (operation: ImageOperationRef) =>
+      runLifecycleOperation(lifecycle, undefined, () =>
+        images.serializeOperation(operation),
+      ),
+    parseOperation: async (serialized: string) =>
+      runLifecycleOperation(lifecycle, undefined, () =>
+        images.parseOperation(serialized),
+      ),
+  });
+
+  const runtimeVideos: VideosApi<TScopeHandle> = Object.freeze({
+    models: Object.freeze({
+      find: async <TProtocol extends string>(
+        ref: VideoModelRef<TProtocol>,
+        scope: TScopeHandle,
+        readOptions?: VideoModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          videos.models.find(ref, scope, { ...readOptions, signal }),
+        ),
+      require: async <TProtocol extends string>(
+        ref: VideoModelRef<TProtocol>,
+        scope: TScopeHandle,
+        readOptions?: VideoModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          videos.models.require(ref, scope, { ...readOptions, signal }),
+        ),
+      list: async (
+        scope: TScopeHandle,
+        filter?: VideoModelListFilter,
+        readOptions?: VideoModelReadOptions,
+      ) =>
+        runLifecycleOperation(lifecycle, readOptions?.signal, (signal) =>
+          videos.models.list(scope, filter, { ...readOptions, signal }),
+        ),
+    }),
+    stream: <TProtocol extends string>(
+      model: VideoModelHandle<TProtocol>,
+      input: VideoGenerationInput,
+      callOptions?: VideoGenerationOptions<TProtocol>,
+    ) => {
+      lifecycle.assertRunning();
+      return videos.stream(model, input, callOptions);
+    },
+    generate: async <TProtocol extends string>(
+      model: VideoModelHandle<TProtocol>,
+      input: VideoGenerationInput,
+      callOptions?: VideoGenerationOptions<TProtocol>,
+    ) => {
+      lifecycle.assertRunning();
+      return videos.generate(model, input, callOptions);
+    },
+    resume: async (
+      operation: VideoOperationRef,
+      resumeOptions: VideoOperationResumeOptions<TScopeHandle>,
+    ) =>
+      runLifecycleOperation(lifecycle, resumeOptions.signal, (signal) =>
+        videos.resume(operation, { ...resumeOptions, signal }),
+      ),
+    serializeOperation: async (operation: VideoOperationRef) =>
+      runLifecycleOperation(lifecycle, undefined, () =>
+        videos.serializeOperation(operation),
+      ),
+    parseOperation: async (serialized: string) =>
+      runLifecycleOperation(lifecycle, undefined, () =>
+        videos.parseOperation(serialized),
+      ),
+  });
+
+  const auth = authCoordinator?.api ?? createUnavailableAuthApi<TScopeHandle>();
+  const runtimeAuth: AuthApi<TScopeHandle> = Object.freeze({
+    status: async (
+      providerInstanceId: string,
+      scope: TScopeHandle,
+      callOptions?: { readonly signal?: AbortSignal },
+    ) =>
+      runLifecycleOperation(lifecycle, callOptions?.signal, (signal) =>
+        auth.status(providerInstanceId, scope, { ...callOptions, signal }),
+      ),
+    login: async (
+      providerInstanceId: string,
+      method: 'api_key' | 'oauth' | 'ambient_config',
+      scope: TScopeHandle,
+      interaction: AuthInteraction,
+      callOptions?: {
+        readonly secretScheme?: string;
+        readonly signal?: AbortSignal;
+      },
+    ) =>
+      runLifecycleOperation(
+        lifecycle,
+        callOptions?.signal ?? interaction.signal,
+        (signal) =>
+          auth.login(
+            providerInstanceId,
+            method,
+            scope,
+            { ...interaction, signal },
+            { ...callOptions, signal },
+          ),
+      ),
+    logout: async (
+      providerInstanceId: string,
+      scope: TScopeHandle,
+      callOptions?: {
+        readonly revokeRemote?: boolean;
+        readonly signal?: AbortSignal;
+      },
+    ) =>
+      runLifecycleOperation(lifecycle, callOptions?.signal, (signal) =>
+        auth.logout(providerInstanceId, scope, { ...callOptions, signal }),
+      ),
+  });
+
   const runtime: AiRuntime<TScopeHandle> = {
-    providers: registry,
-    inventory,
-    auth: authCoordinator?.api ?? createUnavailableAuthApi(),
-    models,
-    images,
-    videos,
+    providers,
+    inventory: runtimeInventory,
+    auth: runtimeAuth,
+    models: runtimeModels,
+    images: runtimeImages,
+    videos: runtimeVideos,
     sessions: Object.freeze({
       cleanup: async (
         providerInstanceId: string,
         scope: TScopeHandle,
         sessionId: string,
         callOptions?: { readonly signal?: AbortSignal },
-      ) => {
-        if (!options.scopeAuthority)
-          throw new AiRuntimeError(
-            'SESSION_CLEANUP_UNAVAILABLE',
-            'auth',
-            'scopeAuthority is required to clean up a persistent session',
-          );
-        const resolvedScope = await options.scopeAuthority.resolve(
-          scope,
-          { expectedProviderInstanceId: providerInstanceId, action: 'use' },
+      ) =>
+        runLifecycleOperation(
+          lifecycle,
           callOptions?.signal,
-        );
-        const scopeFingerprint = await options.scopeAuthority.fingerprint(
-          resolvedScope,
-          callOptions?.signal,
-        );
-        await sessionManager.cleanup({
-          providerInstanceId,
-          credentialScopeFingerprint: scopeFingerprint,
-          sessionId,
-        });
-      },
+          async (signal) => {
+            if (!options.scopeAuthority)
+              throw new AiRuntimeError(
+                'SESSION_CLEANUP_UNAVAILABLE',
+                'auth',
+                'scopeAuthority is required to clean up a persistent session',
+              );
+            const resolvedScope = await options.scopeAuthority.resolve(
+              scope,
+              {
+                expectedProviderInstanceId: providerInstanceId,
+                action: 'cleanup_session',
+              },
+              signal,
+            );
+            const scopeFingerprint = await options.scopeAuthority.fingerprint(
+              resolvedScope,
+              signal,
+            );
+            await sessionManager.cleanup({
+              providerInstanceId,
+              credentialScopeFingerprint: scopeFingerprint,
+              sessionId,
+            });
+          },
+        ),
     }),
     stream: (model, context, streamOptions) => {
-      if (disposed)
-        throw new AiRuntimeError(
-          'RUNTIME_DISPOSED',
-          'invalid_request',
-          'runtime is disposed',
-        );
+      lifecycle.assertRunning();
       const providerId = handleProvider.get(model as object);
       if (
         providerId === undefined ||
@@ -630,26 +928,33 @@ export function createAi<TScopeHandle = unknown>(
       );
       const stream = new ResponseStream(
         async (ownedStream) => {
-          await runChat({
-            chat,
-            providerSnapshot: entry.snapshot,
-            model,
-            context,
-            resolved,
-            credentialOverride: streamOptions?.credentialOverride,
-            credentialFingerprintKey,
-            storedAuth: handleStoredAuth.get(model as object),
-            ambientAuth: handleAmbientAuth.get(model as object),
-            authCoordinator,
-            driver: options.transport,
-            networkPolicy: options.networkPolicy,
-            sessionManager,
-            stream: ownedStream,
-          });
+          const lease = lifecycle.acquire(() =>
+            ownedStream.abort('runtime disposal timeout'),
+          );
+          try {
+            await runChat({
+              chat,
+              providerSnapshot: entry.snapshot,
+              model,
+              context,
+              resolved,
+              credentialOverride: streamOptions?.credentialOverride,
+              credentialFingerprintKey,
+              storedAuth: handleStoredAuth.get(model as object),
+              ambientAuth: handleAmbientAuth.get(model as object),
+              authCoordinator,
+              driver: options.transport,
+              networkPolicy: options.networkPolicy,
+              sessionManager,
+              stream: ownedStream,
+            });
+          } finally {
+            lease.release();
+          }
         },
         {
-          observerMaxItems: options.resourcePolicy?.streamQueue?.maxEvents,
-          observerMaxBytes: options.resourcePolicy?.streamQueue?.maxBytes,
+          observerMaxItems: resourcePolicy.streamQueue.maxEvents,
+          observerMaxBytes: resourcePolicy.streamQueue.maxBytes,
         },
       );
       if (streamOptions?.signal) {
@@ -667,16 +972,51 @@ export function createAi<TScopeHandle = unknown>(
       const stream = runtime.stream(model, context, streamOptions);
       return stream.result();
     },
-    dispose: async () => {
-      if (disposed) return;
-      disposed = true;
-      credentialFingerprintKey.fill(0);
-      await sessionManager.dispose();
-      await options.transport?.dispose?.();
-    },
+    dispose: (disposeOptions) =>
+      lifecycle.dispose(disposeOptions, async () => {
+        await runCleanupSteps([
+          () => sessionManager.dispose(),
+          () => {
+            credentialFingerprintKey.fill(0);
+            images.dispose();
+            videos.dispose();
+          },
+          () => options.transport?.dispose?.(),
+        ]);
+      }),
   };
 
   return runtime;
+}
+
+async function runLifecycleOperation<T>(
+  lifecycle: RuntimeLifecycle,
+  callerSignal: AbortSignal | undefined,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const lease = lifecycle.acquire();
+  const signal = callerSignal
+    ? AbortSignal.any([callerSignal, lease.signal])
+    : lease.signal;
+  try {
+    return await operation(signal);
+  } finally {
+    lease.release();
+  }
+}
+
+async function runCleanupSteps(
+  steps: readonly (() => Promise<void> | void)[],
+): Promise<void> {
+  const errors: unknown[] = [];
+  for (const step of steps) {
+    try {
+      await step();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) throw errors[0];
 }
 
 function makeHandle<TProtocol extends string>(
@@ -740,26 +1080,302 @@ function resolveOptions<TProtocol extends string>(
   defaults: CreateAiOptions['commonDefaults'],
 ): ResolvedStreamOptions<TProtocol> {
   const controller = new AbortController();
-  const timeoutMs = input?.timeoutMs ?? defaults?.timeoutMs ?? 30_000;
+  const protocolOptions = asOptionRecord(input?.protocolOptions);
+  const protocolToolChoice = isToolChoice(protocolOptions?.toolChoice)
+    ? protocolOptions.toolChoice
+    : undefined;
+  const protocolReasoning = resolveProtocolReasoning(
+    protocolOptions,
+    model.capabilities.thinkingLevels,
+  );
+  const timeoutMs =
+    input?.timeoutMs ??
+    defaults?.timeoutMs ??
+    model.requestDefaults?.timeoutMs ??
+    120_000;
   const maxOutputTokens =
     input?.maxOutputTokens ??
-    model.limits.maxOutputTokens ??
     defaults?.maxOutputTokens ??
-    4096;
+    model.requestDefaults?.maxOutputTokens ??
+    Math.min(model.limits.maxOutputTokens, 8_192);
+  const temperature =
+    input?.temperature ??
+    defaults?.temperature ??
+    model.requestDefaults?.temperature;
+  const topP = input?.topP ?? defaults?.topP ?? model.requestDefaults?.topP;
+  const stop =
+    input?.stop ?? defaults?.stop ?? model.requestDefaults?.stop ?? [];
+  const toolChoice =
+    input?.toolChoice ??
+    protocolToolChoice ??
+    defaults?.toolChoice ??
+    model.requestDefaults?.toolChoice ??
+    'auto';
+  const reasoning =
+    input?.reasoning ??
+    protocolReasoning ??
+    defaults?.reasoning ??
+    model.requestDefaults?.reasoning ??
+    'none';
+  const cacheRetention =
+    input?.cacheRetention ??
+    defaults?.cacheRetention ??
+    model.requestDefaults?.cacheRetention ??
+    'short';
+  const retry =
+    input?.retry ??
+    defaults?.retry ??
+    model.requestDefaults?.retry ??
+    DEFAULT_RETRY_POLICY;
+  const contextPolicy =
+    input?.contextPolicy ??
+    defaults?.contextPolicy ??
+    model.requestDefaults?.contextPolicy ??
+    DEFAULT_CONTEXT_POLICY;
+  validateTextRequestOptions({
+    maxOutputTokens,
+    modelMaxOutputTokens: model.limits.maxOutputTokens,
+    temperature,
+    topP,
+    timeoutMs,
+    stop,
+    toolChoice,
+    reasoning,
+    model,
+    cacheRetention,
+    retry,
+    contextPolicy,
+  });
   return {
     signal: controller.signal,
     maxOutputTokens,
-    stop: input?.stop ?? model.requestDefaults?.stop ?? [],
+    ...(temperature === undefined ? {} : { temperature }),
+    ...(topP === undefined ? {} : { topP }),
+    stop,
+    toolChoice,
+    reasoning,
+    cacheRetention,
     timeoutMs,
-    retry: input?.retry ?? defaults?.retry ?? false,
+    retry,
+    contextPolicy,
     ...(input?.sessionId ? { sessionId: input.sessionId } : {}),
     protocolOptions: (input?.protocolOptions ??
       {}) as ResolvedStreamOptions<TProtocol>['protocolOptions'],
   };
 }
 
+function asOptionRecord(
+  value: unknown,
+): Readonly<Record<string, unknown>> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
+}
+
+function resolveProtocolReasoning(
+  options: Readonly<Record<string, unknown>> | undefined,
+  supported: readonly ReasoningLevel[],
+): ReasoningLevel | undefined {
+  if (!options) return undefined;
+  if (options.thinkingEnabled === false) return 'none';
+  const requested =
+    options.reasoningEffort ?? options.thinkingLevel ?? options.reasoning;
+  if (isReasoningLevel(requested)) return requested;
+  if (options.thinkingEnabled === true)
+    return supported.includes('medium')
+      ? 'medium'
+      : (supported.find((level) => level !== 'none') ?? 'medium');
+  return undefined;
+}
+
+function validateTextRequestOptions(input: {
+  readonly maxOutputTokens: number;
+  readonly modelMaxOutputTokens: number;
+  readonly temperature?: number;
+  readonly topP?: number;
+  readonly timeoutMs: number;
+  readonly stop: readonly string[];
+  readonly toolChoice: ToolChoice;
+  readonly reasoning: ReasoningLevel;
+  readonly model: Readonly<ModelDefinition>;
+  readonly cacheRetention: CacheRetention;
+  readonly retry: false | RetryPolicy;
+  readonly contextPolicy: ContextNormalizationPolicy;
+}): void {
+  if (
+    !Number.isInteger(input.maxOutputTokens) ||
+    input.maxOutputTokens < 1 ||
+    input.maxOutputTokens > input.modelMaxOutputTokens
+  )
+    throw new AiRuntimeError(
+      'MAX_OUTPUT_TOKENS_INVALID',
+      'invalid_request',
+      'maxOutputTokens must be a positive integer within the model limit',
+    );
+  if (
+    !Number.isInteger(input.timeoutMs) ||
+    input.timeoutMs < 1_000 ||
+    input.timeoutMs > 900_000
+  )
+    throw new AiRuntimeError(
+      'TIMEOUT_INVALID',
+      'invalid_request',
+      'timeoutMs must be an integer between 1000 and 900000',
+    );
+  if (
+    !Array.isArray(input.stop) ||
+    input.stop.length > 16 ||
+    input.stop.some(
+      (sequence) =>
+        typeof sequence !== 'string' ||
+        Buffer.byteLength(sequence, 'utf8') > 256,
+    )
+  )
+    throw new AiRuntimeError(
+      'STOP_INVALID',
+      'invalid_request',
+      'stop must contain at most 16 strings of at most 256 UTF-8 bytes',
+    );
+  if (
+    input.temperature !== undefined &&
+    (!Number.isFinite(input.temperature) ||
+      input.temperature < 0 ||
+      input.temperature > 2)
+  )
+    throw new AiRuntimeError(
+      'TEMPERATURE_INVALID',
+      'invalid_request',
+      'temperature must be between 0 and 2',
+    );
+  if (
+    input.topP !== undefined &&
+    (!Number.isFinite(input.topP) || input.topP < 0 || input.topP > 1)
+  )
+    throw new AiRuntimeError(
+      'TOP_P_INVALID',
+      'invalid_request',
+      'topP must be between 0 and 1',
+    );
+  if (!isToolChoice(input.toolChoice))
+    throw new AiRuntimeError(
+      'TOOL_CHOICE_INVALID',
+      'invalid_request',
+      'toolChoice must be auto, none, required, or a named tool',
+    );
+  if (!isReasoningLevel(input.reasoning))
+    throw new AiRuntimeError(
+      'REASONING_INVALID',
+      'invalid_request',
+      'reasoning level is invalid',
+    );
+  if (
+    input.reasoning !== 'none' &&
+    (!input.model.capabilities.reasoning ||
+      (input.model.capabilities.thinkingLevels.length > 0 &&
+        !input.model.capabilities.thinkingLevels.includes(input.reasoning)))
+  )
+    throw new AiRuntimeError(
+      'REASONING_UNSUPPORTED',
+      'invalid_request',
+      'reasoning level is not supported by this model',
+    );
+  if (!['none', 'short', 'long'].includes(input.cacheRetention))
+    throw new AiRuntimeError(
+      'CACHE_RETENTION_INVALID',
+      'invalid_request',
+      'cacheRetention must be none, short, or long',
+    );
+  validateContextPolicy(input.contextPolicy);
+  validateResolvedRetry(input.retry);
+}
+
+const DEFAULT_CONTEXT_POLICY: ContextNormalizationPolicy = Object.freeze({
+  unsupportedImage: 'reject',
+  crossProviderReasoning: 'as-text',
+  failedTurn: 'drop',
+  incompleteToolCall: 'drop',
+  deferredTools: 'eager-fallback',
+  tokenBudget: 'reject',
+});
+
+const DEFAULT_RETRY_POLICY: RetryPolicy = Object.freeze({
+  maxAttempts: 3,
+  baseDelayMs: 250,
+  maxDelayMs: 5_000,
+  jitterRatio: 0.2,
+  retryOn: Object.freeze([
+    'network',
+    'rate_limit',
+    'timeout',
+    'provider_5xx',
+  ] as const),
+});
+
+function isToolChoice(value: unknown): value is ToolChoice {
+  if (value === 'auto' || value === 'none' || value === 'required') return true;
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === 'tool' &&
+    typeof candidate.name === 'string' &&
+    candidate.name.length > 0
+  );
+}
+
+function isReasoningLevel(value: unknown): value is ReasoningLevel {
+  return ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(
+    value as string,
+  );
+}
+
+function validateContextPolicy(policy: ContextNormalizationPolicy): void {
+  if (
+    !policy ||
+    !['reject', 'placeholder'].includes(policy.unsupportedImage) ||
+    !['preserve-readable', 'as-text', 'drop'].includes(
+      policy.crossProviderReasoning,
+    ) ||
+    !['drop', 'preserve-readable'].includes(policy.failedTurn) ||
+    !['drop', 'as-text'].includes(policy.incompleteToolCall) ||
+    !['eager-fallback', 'require-deferred'].includes(policy.deferredTools) ||
+    !['reject', 'truncate-oldest-safe-turns'].includes(policy.tokenBudget)
+  )
+    throw new AiRuntimeError(
+      'CONTEXT_POLICY_INVALID',
+      'invalid_request',
+      'contextPolicy is invalid',
+    );
+}
+
+function validateResolvedRetry(retry: false | RetryPolicy): void {
+  if (retry === false) return;
+  const retryKinds = ['network', 'rate_limit', 'timeout', 'provider_5xx'];
+  if (
+    !Number.isInteger(retry.maxAttempts) ||
+    retry.maxAttempts < 1 ||
+    retry.maxAttempts > 5 ||
+    !Number.isInteger(retry.baseDelayMs) ||
+    retry.baseDelayMs < 0 ||
+    retry.baseDelayMs > 30_000 ||
+    !Number.isInteger(retry.maxDelayMs) ||
+    retry.maxDelayMs < retry.baseDelayMs ||
+    retry.maxDelayMs > 30_000 ||
+    !Number.isFinite(retry.jitterRatio) ||
+    retry.jitterRatio < 0 ||
+    retry.jitterRatio > 1 ||
+    !Array.isArray(retry.retryOn) ||
+    retry.retryOn.some((kind) => !retryKinds.includes(kind))
+  )
+    throw new AiRuntimeError(
+      'RETRY_INVALID',
+      'invalid_request',
+      'retry policy is outside the supported hard limits',
+    );
+}
+
 async function resolveModelAuth<TScopeHandle>(input: {
-  chat: Provider['chat'];
+  transport?: ChatTransportBinding;
   auth: Provider['auth'];
   provider: ProviderSnapshot;
   scope: TScopeHandle;
@@ -768,13 +1384,14 @@ async function resolveModelAuth<TScopeHandle>(input: {
   ambientPolicy?: AmbientAuthPolicy<TScopeHandle>;
   key: Uint8Array;
   coordinator?: ReturnType<typeof createAuthCoordinator<TScopeHandle>>;
+  action?: CredentialScopeAction;
   signal?: AbortSignal;
 }): Promise<{
   credentialFingerprint?: string;
   storedAuth?: StoredRequestAuth;
   ambientAuth?: AmbientAuthResolution;
 }> {
-  if (!input.chat?.transport?.credential) return {};
+  if (!input.transport?.credential) return {};
   if (input.override)
     return {
       credentialFingerprint: await authorizeCredentialOverride(input),
@@ -784,10 +1401,11 @@ async function resolveModelAuth<TScopeHandle>(input: {
       const storedAuth = await input.coordinator.resolveStoredAuth(
         {
           snapshot: input.provider,
-          transport: input.chat.transport,
+          transport: input.transport,
           auth: input.auth,
         },
         input.scope,
+        input.action ?? 'use',
         input.signal,
       );
       return {
@@ -834,17 +1452,29 @@ async function resolveSessionScopeFingerprint<TScopeHandle>(input: {
   ambientAuth?: AmbientAuthResolution;
   scopeAuthority?: CredentialScopeAuthority<TScopeHandle>;
   runtimeScopeFingerprint(scope: TScopeHandle): string;
+  action?: CredentialScopeAction;
   signal?: AbortSignal;
 }): Promise<string> {
   if (input.storedAuth) return input.storedAuth.scopeFingerprint;
-  if (input.ambientAuth)
-    return `ambient:${input.ambientAuth.credentialInstanceId}`;
+  if (input.ambientAuth) {
+    if (!input.scopeAuthority)
+      return input.runtimeScopeFingerprint(input.scope);
+    const resolvedScope = await input.scopeAuthority.resolve(
+      input.scope,
+      {
+        expectedProviderInstanceId: input.providerInstanceId,
+        action: input.action ?? 'use',
+      },
+      input.signal,
+    );
+    return input.scopeAuthority.fingerprint(resolvedScope, input.signal);
+  }
   if (!input.scopeAuthority) return input.runtimeScopeFingerprint(input.scope);
   const resolvedScope = await input.scopeAuthority.resolve(
     input.scope,
     {
       expectedProviderInstanceId: input.providerInstanceId,
-      action: 'use',
+      action: input.action ?? 'use',
     },
     input.signal,
   );
@@ -888,14 +1518,14 @@ function createUnavailableAuthApi<TScopeHandle>(): AuthApi<TScopeHandle> {
 }
 
 async function authorizeCredentialOverride<TScopeHandle>(input: {
-  chat: Provider['chat'];
+  transport?: ChatTransportBinding;
   provider: ProviderSnapshot;
   scope: TScopeHandle;
   override?: RequestCredentialOverride;
   policy?: CredentialOverridePolicy<TScopeHandle>;
   key: Uint8Array;
 }): Promise<string | undefined> {
-  if (!input.chat?.transport?.credential) return undefined;
+  if (!input.transport?.credential) return undefined;
   if (!input.override)
     throw new AiRuntimeError(
       'CREDENTIAL_OVERRIDE_REQUIRED',
@@ -1114,6 +1744,32 @@ async function runChat<TProtocol extends string>(input: {
         ),
       };
     } else {
+      const preparedContext = prepareContext(
+        contextResult.context,
+        input.model.definition,
+        input.resolved,
+      );
+      if (preparedContext instanceof AiRuntimeError) {
+        terminal = { status: 'failed', error: preparedContext };
+        const sinkError = await sink.close();
+        if (sinkError)
+          terminal = { status: 'failed', error: failedError(sinkError) };
+        const completedAt = Date.now();
+        const response = makeResponse({
+          requestId,
+          startedAt,
+          completedAt,
+          model: input.model.definition,
+          content,
+          terminal,
+        });
+        const event: AiStreamEvent =
+          response.status === 'completed'
+            ? { type: 'response_end', sequence: ++sequence, response }
+            : { type: 'response_error', sequence: ++sequence, response };
+        await input.stream.complete(response, event);
+        return;
+      }
       const abortTimer = setTimeout(
         () => input.stream.abort('stream timeout'),
         input.resolved.timeoutMs,
@@ -1168,13 +1824,16 @@ async function runChat<TProtocol extends string>(input: {
           });
           const request: ChatRequest<TProtocol> = {
             model: input.model.definition,
-            context: input.context,
+            context: preparedContext,
             options: { ...input.resolved, signal: input.stream.signal },
             signal: input.stream.signal,
             session,
             ...(transportResult ? { transport: transportResult } : {}),
           };
-          terminal = await input.chat.runChat(request, sink);
+          terminal = await runProviderChat(
+            () => input.chat.runChat(request, sink),
+            input.stream.signal,
+          );
         }
       } finally {
         clearTimeout(abortTimer);
@@ -1217,6 +1876,179 @@ async function runChat<TProtocol extends string>(input: {
       ? { type: 'response_end', sequence: ++sequence, response }
       : { type: 'response_error', sequence: ++sequence, response };
   await input.stream.complete(response, event);
+}
+
+async function runProviderChat(
+  run: () => Promise<ProtocolTerminal>,
+  signal: AbortSignal,
+): Promise<ProtocolTerminal> {
+  if (signal.aborted)
+    return { status: 'cancelled', error: cancelledError(signal.reason) };
+  let onAbort: (() => void) | undefined;
+  const providerOutcome = Promise.resolve()
+    .then(run)
+    .then((terminal) => ({ kind: 'provider' as const, terminal }));
+  const abortOutcome = new Promise<Readonly<{ kind: 'abort' }>>((resolve) => {
+    onAbort = () => resolve({ kind: 'abort' });
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  let outcome: Awaited<typeof providerOutcome> | Readonly<{ kind: 'abort' }>;
+  try {
+    outcome = await Promise.race([providerOutcome, abortOutcome]);
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  }
+  if (outcome.kind === 'provider') return outcome.terminal;
+  void providerOutcome.catch(() => undefined);
+  return { status: 'cancelled', error: cancelledError(signal.reason) };
+}
+
+function prepareContext<TProtocol extends string>(
+  context: Readonly<AiContext>,
+  model: Readonly<ModelDefinition<TProtocol>>,
+  options: Readonly<ResolvedStreamOptions<TProtocol>>,
+): Readonly<AiContext> | AiRuntimeError {
+  const selectedTool =
+    typeof options.toolChoice === 'object'
+      ? options.toolChoice.name
+      : undefined;
+  if (
+    selectedTool !== undefined &&
+    !context.tools?.some((tool) => tool.name === selectedTool)
+  )
+    return new AiRuntimeError(
+      'TOOL_CHOICE_INVALID',
+      'invalid_request',
+      `selected tool is not defined: ${selectedTool}`,
+    );
+  if (
+    (options.toolChoice === 'required' || selectedTool !== undefined) &&
+    (!model.capabilities.toolCalling || !context.tools?.length)
+  )
+    return new AiRuntimeError(
+      'TOOL_CHOICE_UNSUPPORTED',
+      'invalid_request',
+      'tool choice requires a tool-capable model and at least one tool',
+    );
+
+  const tools: import('../core/messages.js').ToolDefinition[] = [];
+  for (const tool of context.tools ?? []) {
+    if (
+      tool.deferred &&
+      options.contextPolicy.deferredTools === 'require-deferred' &&
+      !model.capabilities.deferredTools
+    )
+      return new AiRuntimeError(
+        'DEFERRED_TOOLS_UNSUPPORTED',
+        'invalid_request',
+        'deferred tools are not supported by this model',
+      );
+    tools.push(
+      tool.deferred &&
+        options.contextPolicy.deferredTools === 'eager-fallback' &&
+        !model.capabilities.deferredTools
+        ? Object.freeze({ ...tool, deferred: false })
+        : tool,
+    );
+  }
+
+  const messages: import('../core/messages.js').Message[] = [];
+  for (const message of context.messages) {
+    if (
+      message.role === 'assistant' &&
+      (message.status === 'failed' || message.status === 'cancelled') &&
+      options.contextPolicy.failedTurn === 'drop'
+    )
+      continue;
+    if (message.role === 'assistant') {
+      const sourceModel = (
+        message as import('../core/messages.js').AssistantMessage
+      ).model;
+      const crossProvider =
+        sourceModel !== undefined &&
+        sourceModel.providerInstanceId !== model.providerInstanceId;
+      const content: (
+        | import('../core/content.js').TextContent
+        | import('../core/content.js').ReasoningContent
+        | import('../core/content.js').ToolCallContent
+      )[] = [];
+      for (const part of message.content) {
+        if (part.type === 'reasoning' && crossProvider) {
+          if (options.contextPolicy.crossProviderReasoning === 'drop') continue;
+          if (options.contextPolicy.crossProviderReasoning === 'as-text') {
+            if (part.text) content.push({ type: 'text', text: part.text });
+            continue;
+          }
+        }
+        if (part.type === 'tool_call' && part.status === 'incomplete') {
+          if (options.contextPolicy.incompleteToolCall === 'drop') continue;
+          content.push({
+            type: 'text',
+            text: `${part.name}(${part.rawArguments})`,
+          });
+          continue;
+        }
+        content.push(part);
+      }
+      messages.push(
+        Object.freeze({ ...message, content: Object.freeze(content) }),
+      );
+      continue;
+    }
+
+    const content: (
+      | import('../core/content.js').TextContent
+      | import('../core/content.js').ImageContent
+    )[] = [];
+    for (const part of message.content) {
+      if (
+        part.type === 'image' &&
+        !model.capabilities.input.includes('image')
+      ) {
+        if (options.contextPolicy.unsupportedImage === 'reject')
+          return new AiRuntimeError(
+            'CONTEXT_IMAGE_UNSUPPORTED',
+            'invalid_request',
+            'context contains an image unsupported by this model',
+          );
+        content.push({
+          type: 'text',
+          text: '[unsupported image omitted]',
+        });
+      } else content.push(part);
+    }
+    messages.push(
+      Object.freeze({ ...message, content: Object.freeze(content) }),
+    );
+  }
+
+  let prepared: Readonly<AiContext> = Object.freeze({
+    ...(context.systemPrompt ? { systemPrompt: context.systemPrompt } : {}),
+    messages: Object.freeze(messages),
+    ...(tools.length ? { tools: Object.freeze(tools) } : {}),
+  });
+  if (estimateContextTokens(prepared) <= model.limits.contextTokens)
+    return prepared;
+  if (options.contextPolicy.tokenBudget === 'truncate-oldest-safe-turns') {
+    const truncated = [...prepared.messages];
+    while (
+      truncated.length > 0 &&
+      estimateContextTokens({ ...prepared, messages: truncated }) >
+        model.limits.contextTokens
+    )
+      truncated.shift();
+    prepared = Object.freeze({
+      ...prepared,
+      messages: Object.freeze(truncated),
+    });
+    if (estimateContextTokens(prepared) <= model.limits.contextTokens)
+      return prepared;
+  }
+  return new AiRuntimeError(
+    'CONTEXT_OVERFLOW',
+    'invalid_request',
+    'context exceeds the model token limit',
+  );
 }
 
 type AggregatedContent = {
@@ -1474,7 +2306,7 @@ function makeResponse(input: {
     content: orderedContent,
     usage: input.terminal.usage,
     cost: input.terminal.cost,
-    diagnostics: input.terminal.diagnostics,
+    diagnostics: toPublicDiagnostics(input.terminal.diagnostics),
     startedAt: input.startedAt,
     completedAt: input.completedAt,
   };
@@ -1491,42 +2323,29 @@ function makeResponse(input: {
       status: 'cancelled',
       finishReason: 'cancelled',
       partial: orderedContent.length > 0,
-      error: input.terminal.error,
+      error: cancelledError(input.terminal.error),
     };
   return {
     ...base,
     status: 'failed',
     finishReason: 'error',
     partial: orderedContent.length > 0,
-    error: input.terminal.error,
+    error: failedError(input.terminal.error),
   };
 }
 
 function failedError(error: unknown): AiError {
-  if (isAiError(error)) return error;
-  return new AiRuntimeError(
-    'INTERNAL_ERROR',
-    'internal',
-    'AI provider failed internally',
-    false,
-  );
+  return toPublicAiError(error, {
+    code: 'INTERNAL_ERROR',
+    category: 'internal',
+    message: 'AI provider failed internally',
+  });
 }
 
 function cancelledError(error: unknown): AiError & { category: 'cancelled' } {
-  if (isAiError(error) && error.category === 'cancelled')
-    return error as AiError & { category: 'cancelled' };
-  return new AiRuntimeError(
-    'REQUEST_CANCELLED',
-    'cancelled',
-    error instanceof Error ? error.message : 'request cancelled',
-    false,
-  ) as AiError & { category: 'cancelled' };
-}
-
-function isAiError(error: unknown): error is AiError {
-  return (
-    error instanceof Error &&
-    error.name === 'AiError' &&
-    typeof (error as Partial<AiError>).code === 'string'
-  );
+  return toPublicAiError(error, {
+    code: 'REQUEST_CANCELLED',
+    category: 'cancelled',
+    message: 'request cancelled',
+  }) as AiError & { category: 'cancelled' };
 }

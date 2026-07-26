@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createLocalScopeAuthority } from '../auth/node/local-scope.js';
+import type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+} from '../auth/scope-authority.js';
 import { secret } from '../auth/secret-value.js';
 import type { ChatRequest } from '../core/events.js';
 import { createOpenAiProvider } from '../providers/openai/index.js';
@@ -21,6 +25,37 @@ function completedSse(): Uint8Array {
 }
 
 describe('runtime transport and session integration', () => {
+  it('authorizes explicit session cleanup with the cleanup_session action', async () => {
+    const local = createLocalScopeAuthority({
+      tenantId: 'cleanup-tenant',
+      subjectId: 'cleanup-subject',
+    });
+    const actions: CredentialScopeAction[] = [];
+    const scopeAuthority: CredentialScopeAuthority<typeof local.scope> = {
+      fingerprintLifetime: local.authority.fingerprintLifetime,
+      resolve: async (scope, request, signal) => {
+        actions.push(request.action);
+        return local.authority.resolve(scope, request, signal);
+      },
+      fingerprint: (scope, signal) =>
+        local.authority.fingerprint(scope, signal),
+      verifyFingerprint: (scope, fingerprint, signal) =>
+        local.authority.verifyFingerprint(scope, fingerprint, signal),
+    };
+    const ai = createAi({
+      credentialStore: createMemoryCredentialStore(),
+      scopeAuthority,
+    });
+
+    await ai.sessions.cleanup(
+      'cleanup-provider',
+      local.scope,
+      'cleanup-session',
+    );
+
+    expect(actions).toEqual(['cleanup_session']);
+  });
+
   it('passes retry policy and provider idempotency safety into the bound transport', async () => {
     const driver = createFixtureTransportDriver();
     driver.enqueue({
@@ -350,5 +385,47 @@ describe('runtime transport and session integration', () => {
 
     await ai.dispose();
     expect(disposeCount).toBe(2);
+  });
+
+  it('enforces the configured resource limit through the runtime session seam', async () => {
+    const fixture = createFauxProvider({ id: 'resource-limited' });
+    let secondCreateCalls = 0;
+    const provider: Provider = {
+      ...fixture.provider,
+      chat: {
+        ...fixture.provider.chat!,
+        runChat: async (request: ChatRequest) => {
+          const first = await request.session.acquire('first', async () => ({
+            value: 'first',
+            dispose() {},
+          }));
+          await first.release();
+          await request.session.acquire('second', async () => {
+            secondCreateCalls += 1;
+            return { value: 'second', dispose() {} };
+          });
+          return { status: 'completed', finishReason: 'stop' };
+        },
+      },
+    };
+    const ai = createAi({
+      resourcePolicy: {
+        session: { maxResourcesPerSession: 1 },
+      },
+    });
+    ai.providers.register(provider);
+    const model = await ai.models.require(fixture.modelRef, {});
+
+    const response = await ai.complete(
+      model,
+      { messages: [] },
+      { sessionId: 'limited' },
+    );
+
+    expect(response).toMatchObject({
+      status: 'failed',
+      error: { code: 'SESSION_RESOURCE_LIMIT' },
+    });
+    expect(secondCreateCalls).toBe(0);
   });
 });

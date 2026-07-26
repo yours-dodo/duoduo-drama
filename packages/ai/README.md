@@ -32,6 +32,26 @@ console.log(result.unconfigured);
 
 根入口 `@duoduo/ai` 永远不会发现或注册 Provider。`@duoduo/ai/providers/all` 是唯一会静态导入全部内置 Provider 的入口。
 
+## 优雅关闭
+
+`dispose()` 会先让 Runtime 进入 draining：Provider 注册、模型查询、认证以及新的聊天、图片和视频调用会在进入 Provider 前被拒绝；已经启动的调用会继续执行，全部进入本地终态后才释放 session、凭证指纹密钥和 transport。
+
+```ts
+await ai.dispose();
+```
+
+宿主需要关闭时限时，可以设置 drain 超时。默认在超时后中止活跃调用，并对支持取消的远端媒体任务执行尽力取消：
+
+```ts
+await ai.dispose({ timeoutMs: 30_000 });
+```
+
+如果超时后不能释放资源，使用 `onTimeout: 'error'`。此时 `dispose()` 返回 `RUNTIME_DISPOSE_TIMEOUT`，Runtime 保持 draining，调用方可以等待在途任务结束后再次调用 `dispose()`：
+
+```ts
+await ai.dispose({ timeoutMs: 30_000, onTimeout: 'error' });
+```
+
 ## 内置 Provider 清单
 
 生成的目录和包导出映射必须包含相同的 39 种 Provider。空白配置表示该 Provider 具备安全的包级默认值；凭证仍须通过显式凭证存储、环境能力、OAuth 流程或请求级覆盖提供。
@@ -87,11 +107,11 @@ console.log(result.unconfigured);
 ```bash
 pnpm --filter @duoduo/ai build
 pnpm --filter @duoduo/ai exec duoduo-ai providers
-pnpm --filter @duoduo/ai exec duoduo-ai models openai --available
+pnpm --filter @duoduo/ai exec duoduo-ai models openai --configured
 pnpm --filter @duoduo/ai exec duoduo-ai auth status openai --json
 ```
 
-支持的命令包括 `providers`、`models`、`models refresh`、`auth status`、`auth login`、`auth logout` 和 `diagnose`。清单命令会区分静态已知模型和已配置运行时中实际可用的模型。使用 `--json` 输出机器可读结果时，还会经过第二层脱敏处理。
+支持的命令包括 `providers`、`models`、`models --configured`、`auth status`、`auth login`、`auth logout` 和 `diagnose`。`models` 返回静态已知模型；`models --configured` 返回当前凭证作用域能够完成认证绑定的模型，但不会访问远端或宣称模型实际可用。Runtime 目前不支持远程模型目录刷新。使用 `--json` 输出机器可读结果时，还会经过第二层脱敏处理。
 
 凭证持久化采用故障关闭策略。将 `DUODUO_AI_MASTER_KEY` 设置为经过 base64url 编码的 32 字节密钥，才能启用加密文件存储。如果没有可用密钥，修改凭证的命令会返回 `CREDENTIAL_CODEC_KEY_UNAVAILABLE`，退出码为 69。`DUODUO_AI_HOME` 可以覆盖本地状态目录。`config.json` 只能包含非敏感的 Provider 选项；疑似敏感字段会被拒绝，而不是持久化。
 

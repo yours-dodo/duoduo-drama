@@ -85,6 +85,7 @@ export type {
   ModelListFilter,
   ModelReadOptions,
   ModelsApi,
+  RuntimeDisposeOptions,
   SessionsApi,
   RuntimeResourcePolicyInput,
   StreamOptionsInput,
@@ -119,6 +120,9 @@ export type {
   ToolCallContent,
 } from './core/content.js';
 export type {
+  CacheRetention,
+  CommonStreamRequestDefaults,
+  ContextNormalizationPolicy,
   ModelCapabilities,
   ModelDefinition,
   ModelHandle,
@@ -127,6 +131,7 @@ export type {
   ModelRef,
   ProviderInstanceId,
   ReasoningLevel,
+  ToolChoice,
 } from './core/models.js';
 export type {
   AiDiagnostic,

@@ -20,7 +20,10 @@ import type {
   OAuthCredential,
   OAuthFlow,
 } from '../auth/oauth.js';
-import type { CredentialScopeAuthority } from '../auth/scope-authority.js';
+import type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+} from '../auth/scope-authority.js';
 import { AiRuntimeError } from '../core/errors.js';
 import type { ProviderSnapshot } from '../core/models.js';
 import type { ChatTransportBinding, ProviderAuth } from './registry.js';
@@ -48,6 +51,7 @@ export interface AuthCoordinator<TScopeHandle> {
   resolveStoredAuth(
     provider: ProviderAuthDescription,
     scope: TScopeHandle,
+    action: CredentialScopeAction,
     signal?: AbortSignal,
   ): Promise<StoredRequestAuth>;
   assertCurrent(auth: StoredRequestAuth, signal?: AbortSignal): Promise<void>;
@@ -72,7 +76,7 @@ export function createAuthCoordinator<TScopeHandle>(options: {
   const resolveScope = async (
     providerInstanceId: string,
     handle: TScopeHandle,
-    action: 'use' | 'inspect_auth' | 'manage_auth',
+    action: CredentialScopeAction,
     signal?: AbortSignal,
   ) => {
     const scope = await options.scopeAuthority.resolve(
@@ -275,11 +279,11 @@ export function createAuthCoordinator<TScopeHandle>(options: {
 
   const coordinator: AuthCoordinator<TScopeHandle> = {
     api,
-    resolveStoredAuth: async (provider, handle, signal) => {
+    resolveStoredAuth: async (provider, handle, action, signal) => {
       const scope = await resolveScope(
         provider.snapshot.id,
         handle,
-        'use',
+        action,
         signal,
       );
       let active = requireReadyRecord(await options.store.read(scope, signal));

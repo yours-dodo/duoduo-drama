@@ -71,7 +71,7 @@ describe('cli inventory and auth', () => {
     }
   });
 
-  it('separates offline inventory from scope-aware available models', async () => {
+  it('separates offline inventory from scope-aware configured models', async () => {
     const runtime = createAi();
     const provider = createOpenAiProvider();
     runtime.providers.register(provider);
@@ -93,7 +93,10 @@ describe('cli inventory and auth', () => {
       models: [{ availability: 'unknown', capability: 'chat' }],
     });
     expect(
-      await runCli(['models', 'openai', '--available', '--json'], dependencies),
+      await runCli(
+        ['models', 'openai', '--configured', '--json'],
+        dependencies,
+      ),
     ).toBe(CLI_UNAVAILABLE_EXIT_CODE);
     expect(stderr.text()).toContain('CREDENTIAL_CODEC_KEY_UNAVAILABLE');
     await runtime.dispose();

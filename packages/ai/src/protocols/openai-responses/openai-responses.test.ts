@@ -389,7 +389,7 @@ describe('OpenAI Responses normalized failures', () => {
       const response = await fixture.ai.complete(
         fixture.model,
         { messages: [] },
-        { credentialOverride: fixture.credentialOverride },
+        { credentialOverride: fixture.credentialOverride, retry: false },
       );
 
       expect(response).toMatchObject({ status: 'failed', error: expected });

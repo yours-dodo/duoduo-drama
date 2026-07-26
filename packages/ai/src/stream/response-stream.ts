@@ -42,6 +42,7 @@ export class ResponseStream implements AiResponseStream {
       this.resolveResult = resolve;
       this.rejectResult = reject;
     });
+    void this.resultPromise.catch(() => undefined);
   }
 
   get signal(): AbortSignal {

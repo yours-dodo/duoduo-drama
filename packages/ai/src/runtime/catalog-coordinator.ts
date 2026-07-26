@@ -7,6 +7,7 @@ import type {
   CatalogStore,
   CatalogWriteValue,
 } from '../catalog/catalog-store.js';
+const DEFAULT_CATALOG_STALE_IF_ERROR_MS = 24 * 60 * 60 * 1_000;
 
 export interface CatalogResolution {
   readonly source: 'fresh' | 'cached' | 'stale';
@@ -28,8 +29,15 @@ export function createCatalogCoordinator(
   options: {
     readonly persistentStore?: CatalogStore;
     readonly ephemeralStore?: CatalogStore;
+    readonly catalogPolicy?: Readonly<{ staleIfErrorMs: number }>;
   } = {},
 ): CatalogCoordinator {
+  const staleIfErrorMs =
+    options.catalogPolicy?.staleIfErrorMs ?? DEFAULT_CATALOG_STALE_IF_ERROR_MS;
+  if (!Number.isInteger(staleIfErrorMs) || staleIfErrorMs < 0)
+    throw new TypeError(
+      'catalog staleIfErrorMs must be a non-negative integer',
+    );
   const ephemeralStore =
     options.ephemeralStore ?? createEphemeralCatalogStore();
   const inFlight = new Map<string, Promise<CatalogResolution>>();
@@ -52,6 +60,7 @@ export function createCatalogCoordinator(
         key,
         refresh,
         cached,
+        staleIfErrorMs,
         callOptions?.signal,
       );
       inFlight.set(cacheId, promise);
@@ -70,6 +79,7 @@ async function refreshAndCommit(
   key: CatalogCacheKey,
   refresh: () => Promise<CatalogWriteValue>,
   cached: CachedCatalog | undefined,
+  staleIfErrorMs: number,
   signal?: AbortSignal,
 ): Promise<CatalogResolution> {
   try {
@@ -88,6 +98,9 @@ async function refreshAndCommit(
     return { source: 'cached', payload: latest.payload, record: latest };
   } catch (error) {
     if (!cached) throw error;
+    const now = await store.now(signal);
+    if (staleIfErrorMs === 0 || now - cached.expiresAt > staleIfErrorMs)
+      throw error;
     return {
       source: 'stale',
       payload: cached.payload,

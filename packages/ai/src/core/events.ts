@@ -180,9 +180,15 @@ export type ProtocolTerminal =
 export interface ResolvedStreamOptions<TProtocol extends string = string> {
   readonly signal: AbortSignal;
   readonly maxOutputTokens: number;
+  readonly temperature?: number;
+  readonly topP?: number;
   readonly stop: readonly string[];
+  readonly toolChoice: import('./models.js').ToolChoice;
+  readonly reasoning: import('./models.js').ReasoningLevel;
+  readonly cacheRetention: import('./models.js').CacheRetention;
   readonly timeoutMs: number;
   readonly retry: false | RetryPolicy;
+  readonly contextPolicy: import('./models.js').ContextNormalizationPolicy;
   readonly sessionId?: string;
   readonly protocolOptions: TProtocol extends string
     ? Readonly<Record<string, unknown>>

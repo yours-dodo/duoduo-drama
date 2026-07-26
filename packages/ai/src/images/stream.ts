@@ -71,8 +71,10 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
   private readonly waiters: Waiter[] = [];
   private readonly resultPromise: Promise<ImageGenerationResult>;
   private resolveResult!: (result: ImageGenerationResult) => void;
+  private rejectResult!: (error: unknown) => void;
   private operation?: ImageOperationRef;
   private detachPromise?: Promise<ImageOperationRef>;
+  private operationLease?: Readonly<{ release(): void }>;
 
   constructor(
     private readonly producer: (
@@ -83,10 +85,15 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
       stream: DirectImageGenerationStream,
       operation: ImageOperationRef,
     ) => Promise<void>,
+    private readonly onStart?: (
+      stream: DirectImageGenerationStream,
+    ) => Readonly<{ release(): void }>,
   ) {
-    this.resultPromise = new Promise((resolve) => {
+    this.resultPromise = new Promise((resolve, reject) => {
       this.resolveResult = resolve;
+      this.rejectResult = reject;
     });
+    void this.resultPromise.catch(() => undefined);
     if (signal) {
       if (signal.aborted) this.controller.abort(signal.reason);
       else
@@ -122,6 +129,7 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
     }
     this.resolveResult(result);
     this.flushDone();
+    if (event.type !== 'generation_detached') this.releaseOperationLease();
   }
 
   result(): Promise<ImageGenerationResult> {
@@ -160,6 +168,9 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
     if (!this.detachPromise)
       this.detachPromise = (async () => {
         await this.onDetach!(this, this.operation!);
+        if (!this.controller.signal.aborted)
+          this.controller.abort('image generation detached');
+        this.releaseOperationLease();
         return this.operation!;
       })();
     return this.detachPromise;
@@ -194,7 +205,15 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
   private start(): void {
     if (this.started) return;
     this.started = true;
-    void this.producer(this).catch(() => undefined);
+    try {
+      this.operationLease = this.onStart?.(this);
+    } catch (error) {
+      this.fail(error);
+      return;
+    }
+    void this.producer(this)
+      .catch((error: unknown) => this.fail(error))
+      .finally(() => this.releaseOperationLease());
   }
 
   private next(): Promise<IteratorResult<ImageGenerationEvent>> {
@@ -212,5 +231,18 @@ export class DirectImageGenerationStream implements ImageGenerationStream {
     if (this.queue.length > 0) return;
     for (const waiter of this.waiters.splice(0))
       waiter.resolve({ done: true, value: undefined });
+  }
+
+  private fail(error: unknown): void {
+    if (this.terminal) return;
+    this.terminal = true;
+    this.queue.length = 0;
+    this.rejectResult(error);
+    for (const waiter of this.waiters.splice(0)) waiter.reject(error);
+  }
+
+  private releaseOperationLease(): void {
+    this.operationLease?.release();
+    this.operationLease = undefined;
   }
 }

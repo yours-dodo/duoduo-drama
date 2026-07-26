@@ -10,8 +10,10 @@ import {
   type RequestCredentialOverride,
 } from '../auth/api-key.js';
 import type { CredentialOverridePolicy } from '../auth/override-policy.js';
+import type { CredentialScopeAction } from '../auth/scope-authority.js';
 import { revealSecret } from '../auth/secret-value.js';
 import { AiRuntimeError, type AiError } from '../core/errors.js';
+import { toPublicAiError, toPublicDiagnostics } from '../core/public-errors.js';
 import type {
   CredentialIdentityLifetime,
   ProviderSnapshot,
@@ -121,9 +123,14 @@ export interface CreateImagesApiOptions<TScopeHandle> {
   readonly operationCredentialVerifier?: OperationCredentialVerifier;
   readonly generationOperationPolicy?: GenerationOperationPolicy;
   readonly now?: () => number;
+  readonly beginOperation?: (
+    abort: () => void,
+  ) => Readonly<{ release(): void }>;
   readonly resolveAuth?: (input: {
+    readonly binding: ImageProtocolBinding;
     readonly provider: ProviderSnapshot;
     readonly scope: TScopeHandle;
+    readonly action: CredentialScopeAction;
     readonly override?: RequestCredentialOverride;
     readonly signal?: AbortSignal;
   }) => Promise<Readonly<ResolvedImageAuth>>;
@@ -131,7 +138,7 @@ export interface CreateImagesApiOptions<TScopeHandle> {
 
 export function createImagesApi<TScopeHandle>(
   options: CreateImagesApiOptions<TScopeHandle>,
-): ImagesApi<TScopeHandle> {
+): ImagesApi<TScopeHandle> & Readonly<{ dispose(): void }> {
   const credentialKey = randomBytes(32);
   const policy = resolveGenerationOperationPolicy(
     options.generationOperationPolicy,
@@ -143,13 +150,16 @@ export function createImagesApi<TScopeHandle>(
     binding: ImageProtocolBinding;
     provider: ProviderSnapshot;
     scope: TScopeHandle;
+    action: CredentialScopeAction;
     override?: RequestCredentialOverride;
     signal?: AbortSignal;
   }): Promise<Readonly<ResolvedImageAuth>> => {
     if (options.resolveAuth)
       return options.resolveAuth({
+        binding: input.binding,
         provider: input.provider,
         scope: input.scope,
+        action: input.action,
         ...(input.override ? { override: input.override } : {}),
         ...(input.signal ? { signal: input.signal } : {}),
       });
@@ -163,49 +173,64 @@ export function createImagesApi<TScopeHandle>(
     });
   };
 
+  const findModel = async <TProtocol extends string>(
+    ref: ImageModelRef<TProtocol>,
+    scope: TScopeHandle,
+    readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
+    action: CredentialScopeAction,
+  ): Promise<ImageModelHandle<TProtocol> | undefined> => {
+    const entry = options.registry.get(ref.providerInstanceId);
+    const definition = entry?.provider.images?.models.find((candidate) =>
+      sameImageModelRef(candidate, ref),
+    );
+    if (!entry || !definition) return undefined;
+    const binding = findBinding(
+      entry.provider.images!.protocols,
+      definition.protocol,
+    );
+    const auth = await resolveAuth({
+      binding,
+      provider: entry.snapshot,
+      scope,
+      action,
+      override: readOptions?.credentialOverride,
+      signal: readOptions?.signal,
+    });
+    return makeHandle(
+      definition as ImageModelDefinition<TProtocol>,
+      entry.snapshot,
+      options.runtimeId,
+      bindHandleAuth(auth, credentialKey, entry.snapshot),
+    );
+  };
+
+  const requireModel = async <TProtocol extends string>(
+    ref: ImageModelRef<TProtocol>,
+    scope: TScopeHandle,
+    readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
+    action: CredentialScopeAction,
+  ): Promise<ImageModelHandle<TProtocol>> => {
+    const model = await findModel(ref, scope, readOptions, action);
+    if (!model)
+      throw new AiRuntimeError(
+        'IMAGE_MODEL_NOT_FOUND',
+        'invalid_request',
+        `image model not found: ${ref.providerInstanceId}/${ref.modelId}`,
+      );
+    return model;
+  };
+
   const models: ImageModelsApi<TScopeHandle> = {
-    find: async <TProtocol extends string>(
+    find: <TProtocol extends string>(
       ref: ImageModelRef<TProtocol>,
       scope: TScopeHandle,
       readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
-    ) => {
-      const entry = options.registry.get(ref.providerInstanceId);
-      const definition = entry?.provider.images?.models.find((candidate) =>
-        sameImageModelRef(candidate, ref),
-      );
-      if (!entry || !definition) return undefined;
-      const binding = findBinding(
-        entry.provider.images!.protocols,
-        definition.protocol,
-      );
-      const auth = await resolveAuth({
-        binding,
-        provider: entry.snapshot,
-        scope,
-        override: readOptions?.credentialOverride,
-        signal: readOptions?.signal,
-      });
-      return makeHandle(
-        definition as ImageModelDefinition<TProtocol>,
-        entry.snapshot,
-        options.runtimeId,
-        bindHandleAuth(auth, credentialKey, entry.snapshot),
-      );
-    },
-    require: async <TProtocol extends string>(
+    ) => findModel(ref, scope, readOptions, 'use'),
+    require: <TProtocol extends string>(
       ref: ImageModelRef<TProtocol>,
       scope: TScopeHandle,
       readOptions: import('./contracts.js').ImageModelReadOptions | undefined,
-    ) => {
-      const model = await models.find(ref, scope, readOptions);
-      if (!model)
-        throw new AiRuntimeError(
-          'IMAGE_MODEL_NOT_FOUND',
-          'invalid_request',
-          `image model not found: ${ref.providerInstanceId}/${ref.modelId}`,
-        );
-      return model;
-    },
+    ) => requireModel(ref, scope, readOptions, 'use'),
     list: async (
       scope: TScopeHandle,
       filter?: ImageModelListFilter,
@@ -237,6 +262,7 @@ export function createImagesApi<TScopeHandle>(
             binding,
             provider: snapshot,
             scope,
+            action: 'use',
             override: readOptions?.credentialOverride,
             signal: readOptions?.signal,
           });
@@ -307,6 +333,7 @@ export function createImagesApi<TScopeHandle>(
             machine.requestRemoteCancel()
           ) {
             try {
+              const cancellationSignal = createCancellationSignal();
               const transport = await resolveOperationTransport({
                 binding: resumableContext.binding,
                 action: 'cancel',
@@ -314,7 +341,7 @@ export function createImagesApi<TScopeHandle>(
                 provider: resumableContext.entry.snapshot,
                 model,
                 options: {
-                  signal: generationStream.signal,
+                  signal: cancellationSignal,
                   timeoutMs: resumableContext.resolvedOptions.timeoutMs,
                   retry: resumableContext.resolvedOptions.retry,
                   pollIntervalMs:
@@ -334,7 +361,7 @@ export function createImagesApi<TScopeHandle>(
                 model: model.definition,
                 compatibility: resumableContext.profile.compatibility,
                 transport,
-                signal: generationStream.signal,
+                signal: cancellationSignal,
               });
             } catch {
               // Cancellation is best-effort; the local terminal still wins.
@@ -716,6 +743,12 @@ export function createImagesApi<TScopeHandle>(
           result,
         });
       },
+      options.beginOperation
+        ? (generationStream) =>
+            options.beginOperation!(() =>
+              generationStream.abort('runtime disposal timeout'),
+            )
+        : undefined,
     );
   };
 
@@ -815,7 +848,7 @@ export function createImagesApi<TScopeHandle>(
 
     const effectiveOverride =
       resumeOptions.credentialOverride ?? record.requestCredential;
-    const model = await models.require(
+    const model = await requireModel(
       {
         providerInstanceId: definition.providerInstanceId,
         modelId: definition.id,
@@ -826,6 +859,7 @@ export function createImagesApi<TScopeHandle>(
         ...(resumeOptions.signal ? { signal: resumeOptions.signal } : {}),
         ...(effectiveOverride ? { credentialOverride: effectiveOverride } : {}),
       },
+      'resume_operation',
     );
     const auth = handleOperationAuth.get(model as object);
     if (
@@ -863,11 +897,15 @@ export function createImagesApi<TScopeHandle>(
 
     const resolvedOptions: ResolvedImageOperationResumeOptions = Object.freeze({
       signal: resumeOptions.signal ?? new AbortController().signal,
-      timeoutMs: resumeOptions.timeoutMs ?? 60_000,
+      timeoutMs: resumeOptions.timeoutMs ?? 600_000,
       retry: resumeOptions.retry ?? false,
-      pollIntervalMs: resumeOptions.pollIntervalMs ?? 1_000,
+      pollIntervalMs: resumeOptions.pollIntervalMs ?? 2_000,
       allowCatalogNetwork: resumeOptions.allowCatalogNetwork ?? false,
     });
+    validateImageTimingOptions(
+      resolvedOptions.timeoutMs,
+      resolvedOptions.pollIntervalMs,
+    );
     const pollTransport = await resolveOperationTransport({
       binding,
       action: 'poll',
@@ -919,13 +957,14 @@ export function createImagesApi<TScopeHandle>(
             machine.requestRemoteCancel()
           ) {
             try {
+              const cancellationSignal = createCancellationSignal();
               await adapter.cancel({
                 operation: claims,
                 provider: entry.snapshot,
                 model: definition,
                 compatibility: profile.compatibility,
                 transport: cancelTransport,
-                signal: generationStream.signal,
+                signal: cancellationSignal,
               });
             } catch {
               // Best effort only.
@@ -1052,6 +1091,12 @@ export function createImagesApi<TScopeHandle>(
           result,
         });
       },
+      options.beginOperation
+        ? (generationStream) =>
+            options.beginOperation!(() =>
+              generationStream.abort('runtime disposal timeout'),
+            )
+        : undefined,
     );
   };
 
@@ -1110,6 +1155,7 @@ export function createImagesApi<TScopeHandle>(
     },
     parseOperation: async (serialized: string) =>
       parseSerializedImageOperationRef(serialized),
+    dispose: () => credentialKey.fill(0),
   });
 }
 
@@ -1431,29 +1477,58 @@ function resolveOptions<TProtocol extends string>(
       'invalid_request',
       'image response format is not supported by this model',
     );
+  const timeoutMs =
+    input.timeoutMs ??
+    runtimeDefaults?.timeoutMs ??
+    model.requestDefaults?.timeoutMs ??
+    binding.requestDefaults?.timeoutMs ??
+    600_000;
+  const pollIntervalMs =
+    input.pollIntervalMs ??
+    runtimeDefaults?.pollIntervalMs ??
+    model.requestDefaults?.pollIntervalMs ??
+    binding.requestDefaults?.pollIntervalMs ??
+    2_000;
+  validateImageTimingOptions(timeoutMs, pollIntervalMs);
   return {
     signal,
-    timeoutMs:
-      input.timeoutMs ??
-      runtimeDefaults?.timeoutMs ??
-      model.requestDefaults?.timeoutMs ??
-      binding.requestDefaults?.timeoutMs ??
-      60_000,
+    timeoutMs,
     retry:
       input.retry ??
       model.requestDefaults?.retry ??
       binding.requestDefaults?.retry ??
       false,
     responseFormat,
-    pollIntervalMs:
-      input.pollIntervalMs ??
-      runtimeDefaults?.pollIntervalMs ??
-      model.requestDefaults?.pollIntervalMs ??
-      binding.requestDefaults?.pollIntervalMs ??
-      1_000,
+    pollIntervalMs,
     protocolOptions,
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
+}
+
+function validateImageTimingOptions(
+  timeoutMs: number,
+  pollIntervalMs: number,
+): void {
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1_000 ||
+    timeoutMs > 3_600_000
+  )
+    throw new AiRuntimeError(
+      'IMAGE_TIMEOUT_INVALID',
+      'invalid_request',
+      'image timeoutMs must be an integer between 1000 and 3600000',
+    );
+  if (
+    !Number.isInteger(pollIntervalMs) ||
+    pollIntervalMs < 0 ||
+    pollIntervalMs > 60_000
+  )
+    throw new AiRuntimeError(
+      'IMAGE_POLL_INTERVAL_INVALID',
+      'invalid_request',
+      'image pollIntervalMs must be an integer between 0 and 60000',
+    );
 }
 
 async function completeTerminal(input: {
@@ -1474,6 +1549,7 @@ async function completeTerminal(input: {
   const cost = input.terminal.usage
     ? calculateImageCost(input.base.model, input.terminal.usage)
     : undefined;
+  const diagnostics = toPublicDiagnostics(input.terminal.diagnostics);
   if (input.terminal.status === 'completed') {
     const result: Extract<ImageGenerationResult, { status: 'completed' }> =
       Object.freeze({
@@ -1487,9 +1563,7 @@ async function completeTerminal(input: {
           : {}),
         ...(input.terminal.usage ? { usage: input.terminal.usage } : {}),
         ...(cost ? { cost } : {}),
-        ...(input.terminal.diagnostics
-          ? { diagnostics: input.terminal.diagnostics }
-          : {}),
+        ...(diagnostics ? { diagnostics } : {}),
         completedAt,
       });
     await input.generationStream.complete(result, {
@@ -1504,12 +1578,15 @@ async function completeTerminal(input: {
     outputs: Object.freeze([...input.outputs]),
     completedAt,
     status: input.terminal.status,
-    error: input.terminal.error,
+    error: normalizeError(
+      input.terminal.error,
+      input.terminal.status === 'cancelled',
+    ),
     operation: input.operation,
     responseId: input.terminal.responseId,
     usage: input.terminal.usage,
     cost,
-    diagnostics: input.terminal.diagnostics,
+    diagnostics,
   });
   await input.generationStream.complete(result, {
     type: 'generation_error',
@@ -1568,7 +1645,9 @@ function failureResult(input: {
     ...(input.responseId ? { responseId: input.responseId } : {}),
     ...(input.usage ? { usage: input.usage } : {}),
     ...(input.cost ? { cost: input.cost } : {}),
-    ...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
+    ...(input.diagnostics
+      ? { diagnostics: toPublicDiagnostics(input.diagnostics) }
+      : {}),
   };
   return Object.freeze(
     input.status === 'cancelled'
@@ -1582,19 +1661,20 @@ function failureResult(input: {
 }
 
 function normalizeError(error: unknown, aborted: boolean): AiError {
-  if (aborted)
-    return new AiRuntimeError(
-      'IMAGE_GENERATION_CANCELLED',
-      'cancelled',
-      'image generation was cancelled',
-    );
-  return error instanceof AiRuntimeError
-    ? error
-    : new AiRuntimeError(
-        'IMAGE_GENERATION_INTERNAL_ERROR',
-        'internal',
-        error instanceof Error ? error.message : 'image generation failed',
-      );
+  return toPublicAiError(
+    error,
+    aborted
+      ? {
+          code: 'IMAGE_GENERATION_CANCELLED',
+          category: 'cancelled',
+          message: 'image generation was cancelled',
+        }
+      : {
+          code: 'IMAGE_GENERATION_INTERNAL_ERROR',
+          category: 'internal',
+          message: 'image generation failed internally',
+        },
+  );
 }
 
 function timeoutError(): AiError & { readonly category: 'cancelled' } {
@@ -1631,6 +1711,10 @@ function hasAsciiControlCharacter(value: string): boolean {
     const code = character.charCodeAt(0);
     return code <= 0x1f || code === 0x7f;
   });
+}
+
+function createCancellationSignal(): AbortSignal {
+  return AbortSignal.timeout(10_000);
 }
 
 function createRuntimeScopeFingerprinter<TScopeHandle>(): (

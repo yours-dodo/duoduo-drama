@@ -124,7 +124,7 @@ describe('Anthropic Messages compatibility profile', () => {
         {
           credentialOverride,
           maxOutputTokens: 32,
-          protocolOptions: { cacheRetention: 'one_hour' },
+          cacheRetention: 'long',
         },
       ),
     ).resolves.toMatchObject({ status: 'completed' });

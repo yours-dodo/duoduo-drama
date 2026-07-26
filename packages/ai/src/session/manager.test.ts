@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createSessionManager } from './manager.js';
 
@@ -50,6 +50,12 @@ describe('session manager', () => {
     expect(disposeCalls).toBe(1);
     await second.release();
     expect(disposeCalls).toBe(1);
+
+    const replacementHandle = manager.open(identity);
+    const replacement = await replacementHandle.acquire('socket', create);
+    expect(createCalls).toBe(2);
+    expect(replacement.value).not.toBe(first.value);
+    await replacement.release();
   });
 
   it('fences replaced credentials without affecting the replacement session', async () => {
@@ -128,5 +134,161 @@ describe('session manager', () => {
 
     const second = manager.open({ ...identity, sessionId: undefined });
     expect(second.getAffinity('response')).toBeUndefined();
+  });
+
+  it('disposes a newly created resource when acquisition is aborted', async () => {
+    const manager = createSessionManager();
+    const handle = manager.open(identity);
+    const controller = new AbortController();
+    let disposeCalls = 0;
+
+    await expect(
+      handle.acquire(
+        'resource',
+        async () => {
+          controller.abort('caller stopped');
+          return {
+            value: 'unclaimed',
+            dispose: () => {
+              disposeCalls += 1;
+            },
+          };
+        },
+        controller.signal,
+      ),
+    ).rejects.toBe('caller stopped');
+
+    expect(disposeCalls).toBe(1);
+    await manager.dispose();
+    expect(disposeCalls).toBe(1);
+  });
+
+  it('rejects a new resource before creation when a session reaches its limit', async () => {
+    const manager = createSessionManager({ maxResourcesPerSession: 1 });
+    const handle = manager.open(identity);
+    const first = await handle.acquire('first', async () => ({
+      value: 'first',
+      dispose() {},
+    }));
+    await first.release();
+    let createCalls = 0;
+
+    await expect(
+      handle.acquire('second', async () => {
+        createCalls += 1;
+        return { value: 'second', dispose() {} };
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_RESOURCE_LIMIT' });
+    expect(createCalls).toBe(0);
+
+    const reused = await handle.acquire('first', async () => {
+      createCalls += 1;
+      return { value: 'replacement', dispose() {} };
+    });
+    expect(reused.value).toBe('first');
+    expect(createCalls).toBe(0);
+    await reused.release();
+  });
+
+  it('evicts the least-recently-used idle session at capacity', async () => {
+    let now = 0;
+    const manager = createSessionManager({
+      maxSessions: 2,
+      clock: { now: () => now },
+    });
+    const first = manager.open(identity);
+    now = 1;
+    const second = manager.open({ ...identity, sessionId: 'session-2' });
+    now = 2;
+    first.getAffinity('touch');
+    now = 3;
+    const third = manager.open({ ...identity, sessionId: 'session-3' });
+
+    await expect(
+      second.acquire('resource', async () => ({ value: 2, dispose() {} })),
+    ).rejects.toMatchObject({ code: 'SESSION_CLOSING' });
+    const firstLease = await first.acquire('resource', async () => ({
+      value: 1,
+      dispose() {},
+    }));
+    const thirdLease = await third.acquire('resource', async () => ({
+      value: 3,
+      dispose() {},
+    }));
+    expect(firstLease.value).toBe(1);
+    expect(thirdLease.value).toBe(3);
+    await firstLease.release();
+    await thirdLease.release();
+    await manager.dispose();
+  });
+
+  it('rejects a new session when every capacity candidate is active', async () => {
+    const manager = createSessionManager({ maxSessions: 1 });
+    const first = manager.open(identity);
+    const held = await first.acquire('resource', async () => ({
+      value: 'held',
+      dispose() {},
+    }));
+
+    expect(() =>
+      manager.open({ ...identity, sessionId: 'session-2' }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'SESSION_CAPACITY_EXCEEDED' }),
+    );
+
+    await held.release();
+    const replacement = manager.open({
+      ...identity,
+      sessionId: 'session-2',
+    });
+    await expect(
+      first.acquire('resource', async () => ({ value: 'old', dispose() {} })),
+    ).rejects.toMatchObject({ code: 'SESSION_CLOSING' });
+    const replacementLease = await replacement.acquire(
+      'resource',
+      async () => ({ value: 'replacement', dispose() {} }),
+    );
+    await replacementLease.release();
+    await manager.dispose();
+  });
+
+  it('closes and removes an idle session after its TTL', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(1_000));
+      let createCalls = 0;
+      let disposeCalls = 0;
+      const manager = createSessionManager({ idleTtlMs: 60_000 });
+      const handle = manager.open(identity);
+      const lease = await handle.acquire('resource', async () => ({
+        value: ++createCalls,
+        dispose: () => {
+          disposeCalls += 1;
+        },
+      }));
+      await lease.release();
+
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(disposeCalls).toBe(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(disposeCalls).toBe(1);
+      await expect(
+        handle.acquire('resource', async () => ({ value: 0, dispose() {} })),
+      ).rejects.toMatchObject({ code: 'SESSION_CLOSING' });
+
+      const replacement = manager.open(identity);
+      const replacementLease = await replacement.acquire(
+        'resource',
+        async () => ({
+          value: ++createCalls,
+          dispose() {},
+        }),
+      );
+      expect(replacementLease.value).toBe(2);
+      await replacementLease.release();
+      await manager.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

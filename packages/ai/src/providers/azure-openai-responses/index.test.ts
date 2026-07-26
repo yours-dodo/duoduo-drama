@@ -155,7 +155,7 @@ describe('Azure OpenAI Responses provider', () => {
         jsonBody: {
           model: 'deployment-a',
           input: [],
-          max_output_tokens: 16_384,
+          max_output_tokens: 8_192,
           stream: true,
         },
       },

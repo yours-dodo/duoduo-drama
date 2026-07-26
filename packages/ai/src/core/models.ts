@@ -1,6 +1,19 @@
 export type ProviderInstanceId = string;
 export type CredentialIdentityLifetime = 'cross-runtime' | 'process-local';
-export type ReasoningLevel = 'none' | 'low' | 'medium' | 'high';
+export type ReasoningLevel =
+  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ToolChoice =
+  'auto' | 'none' | 'required' | Readonly<{ type: 'tool'; name: string }>;
+export type CacheRetention = 'none' | 'short' | 'long';
+
+export interface ContextNormalizationPolicy {
+  readonly unsupportedImage: 'reject' | 'placeholder';
+  readonly crossProviderReasoning: 'preserve-readable' | 'as-text' | 'drop';
+  readonly failedTurn: 'drop' | 'preserve-readable';
+  readonly incompleteToolCall: 'drop' | 'as-text';
+  readonly deferredTools: 'eager-fallback' | 'require-deferred';
+  readonly tokenBudget: 'reject' | 'truncate-oldest-safe-turns';
+}
 
 export interface ModelRef<TProtocol extends string = string> {
   readonly providerInstanceId: ProviderInstanceId;
@@ -30,8 +43,12 @@ export interface CommonStreamRequestDefaults {
   readonly temperature?: number;
   readonly topP?: number;
   readonly stop?: readonly string[];
+  readonly toolChoice?: ToolChoice;
   readonly reasoning?: ReasoningLevel;
+  readonly cacheRetention?: CacheRetention;
   readonly timeoutMs?: number;
+  readonly retry?: false | import('../transport/retry.js').RetryPolicy;
+  readonly contextPolicy?: ContextNormalizationPolicy;
 }
 
 export interface TokenRates {

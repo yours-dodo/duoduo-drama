@@ -4,6 +4,7 @@ import type { AiRuntime, AuthInteraction } from '../index.js';
 import type { LocalScopeHandle } from '../auth/node/index.js';
 import {
   CLI_EXIT_CREDENTIAL_KEY_UNAVAILABLE,
+  CLI_USAGE_EXIT_CODE,
   runCli,
   type CliWriter,
   type NodeCliDependencies,
@@ -87,4 +88,53 @@ describe('duoduo-ai CLI account selection', () => {
     expect(fixture.login).not.toHaveBeenCalled();
     expect(fixture.stderr.text()).toContain('CREDENTIAL_CODEC_KEY_UNAVAILABLE');
   });
+});
+
+describe('duoduo-ai CLI model listing', () => {
+  it('lists configured models without claiming remote availability', async () => {
+    const fixture = dependencies();
+    vi.mocked(fixture.deps.runtime.models.list).mockResolvedValue({
+      models: [
+        {
+          definition: {
+            providerInstanceId: 'openai',
+            id: 'gpt-test',
+            protocol: 'openai-responses',
+          },
+        } as never,
+      ],
+    });
+
+    expect(
+      await runCli(
+        ['models', 'openai', '--configured', '--json'],
+        fixture.deps,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(fixture.stdout.text())).toEqual({
+      mode: 'configured',
+      models: [
+        {
+          capability: 'chat',
+          providerInstanceId: 'openai',
+          modelId: 'gpt-test',
+          protocol: 'openai-responses',
+          configuration: 'configured',
+          availability: 'unknown',
+        },
+      ],
+    });
+  });
+
+  it.each([['refresh'], ['openai', '--available']])(
+    'rejects the removed models syntax: %s',
+    async (...args) => {
+      const fixture = dependencies();
+
+      expect(await runCli(['models', ...args, '--json'], fixture.deps)).toBe(
+        CLI_USAGE_EXIT_CODE,
+      );
+      expect(fixture.stderr.text()).toContain('CLI_USAGE');
+    },
+  );
 });

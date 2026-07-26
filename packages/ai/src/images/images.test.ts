@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createLocalScopeAuthority } from '../auth/node/local-scope.js';
 import { secret } from '../auth/secret-value.js';
 import type { ImageContent } from '../core/content.js';
+import { AiRuntimeError } from '../core/errors.js';
 import { createAi } from '../index.js';
 import {
   openRouterImageModelRef,
@@ -41,7 +42,9 @@ const mixedRequest = {
   stream: false,
 };
 
-function createRuntime() {
+function createRuntime(
+  provider: ReturnType<typeof openRouterProvider> = openRouterProvider(),
+) {
   const transport = createFixtureTransportDriver();
   const ai = createAi({
     transport,
@@ -50,7 +53,7 @@ function createRuntime() {
     }),
     credentialOverridePolicy: { allow: () => true },
   });
-  ai.providers.register(openRouterProvider());
+  ai.providers.register(provider);
   return { ai, transport };
 }
 
@@ -269,6 +272,168 @@ describe('images runtime', () => {
     expect(result.operation).toBeUndefined();
   });
 
+  it('does not expose an unexpected adapter error in the public result or event', async () => {
+    const canary = 'image-runtime-secret-canary';
+    const provider = openRouterProvider();
+    const images = provider.images!;
+    const protocol = images.protocols[0]!;
+    const throwingProvider = {
+      ...provider,
+      images: {
+        ...images,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async (): Promise<never> => {
+                  throw new Error(canary);
+                },
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai } = createRuntime(throwingProvider);
+    const model = await requireModel(ai);
+    const stream = ai.images.stream(model, mixedInput(), {
+      credentialOverride,
+    });
+    const events = [];
+    for await (const event of stream) events.push(event);
+    const result = await stream.result();
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'IMAGE_GENERATION_INTERNAL_ERROR',
+        category: 'internal',
+        message: 'image generation failed internally',
+      },
+    });
+    expect(result.error.message).not.toContain(canary);
+    expect(events.at(-1)).toMatchObject({
+      type: 'generation_error',
+      result: {
+        error: {
+          code: 'IMAGE_GENERATION_INTERNAL_ERROR',
+          message: 'image generation failed internally',
+        },
+      },
+    });
+  });
+
+  it('normalizes an adapter terminal error before publishing it', async () => {
+    const canary = 'image-terminal-secret-canary';
+    const provider = openRouterProvider();
+    const images = provider.images!;
+    const protocol = images.protocols[0]!;
+    const failingProvider = {
+      ...provider,
+      images: {
+        ...images,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async () => ({
+                  status: 'failed' as const,
+                  diagnostics: [
+                    { code: 'UPSTREAM_DIAGNOSTIC', message: canary },
+                  ],
+                  error: new AiRuntimeError(
+                    'IMAGE_UPSTREAM_FAILED',
+                    'provider',
+                    canary,
+                    true,
+                    { raw: canary },
+                  ),
+                }),
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai } = createRuntime(failingProvider);
+    const result = await ai.images.generate(
+      await requireModel(ai),
+      mixedInput(),
+      { credentialOverride },
+    );
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'IMAGE_UPSTREAM_FAILED',
+        category: 'provider',
+        retryable: true,
+        message: 'AI provider request failed',
+      },
+      diagnostics: [{ code: 'UPSTREAM_DIAGNOSTIC' }],
+    });
+    expect(result.diagnostics).toEqual([{ code: 'UPSTREAM_DIAGNOSTIC' }]);
+    expect(result.error.details).toBeUndefined();
+    expect(result.error.message).not.toContain(canary);
+  });
+
+  it('does not expose an adapter cancellation message', async () => {
+    const canary = 'image-cancellation-secret-canary';
+    const provider = openRouterProvider();
+    const images = provider.images!;
+    const protocol = images.protocols[0]!;
+    const cancellingProvider = {
+      ...provider,
+      images: {
+        ...images,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async () => ({
+                  status: 'cancelled' as const,
+                  error: new AiRuntimeError(
+                    'IMAGE_UPSTREAM_CANCELLED',
+                    'cancelled',
+                    canary,
+                    false,
+                    { raw: canary },
+                  ),
+                }),
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai } = createRuntime(cancellingProvider);
+    const result = await ai.images.generate(
+      await requireModel(ai),
+      mixedInput(),
+      { credentialOverride },
+    );
+
+    expect(result).toMatchObject({
+      status: 'cancelled',
+      error: {
+        code: 'IMAGE_UPSTREAM_CANCELLED',
+        category: 'cancelled',
+        message: 'image generation was cancelled',
+      },
+    });
+    expect(result.error.details).toBeUndefined();
+    expect(result.error.message).not.toContain(canary);
+  });
+
   it('publishes a monotonic stream with one terminal event', async () => {
     const { ai, transport } = createRuntime();
     await enqueueMixed(transport);
@@ -311,6 +476,47 @@ describe('images runtime', () => {
       error: { code: 'OPENROUTER_IMAGES_OPTIONS_INVALID' },
     });
     expect(transport.requests()).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      name: 'timeout below one second',
+      options: { timeoutMs: 999 },
+      code: 'IMAGE_TIMEOUT_INVALID',
+    },
+    {
+      name: 'timeout above one hour',
+      options: { timeoutMs: 3_600_001 },
+      code: 'IMAGE_TIMEOUT_INVALID',
+    },
+    {
+      name: 'negative poll interval',
+      options: { pollIntervalMs: -1 },
+      code: 'IMAGE_POLL_INTERVAL_INVALID',
+    },
+    {
+      name: 'poll interval above one minute',
+      options: { pollIntervalMs: 60_001 },
+      code: 'IMAGE_POLL_INTERVAL_INVALID',
+    },
+    {
+      name: 'fractional poll interval',
+      options: { pollIntervalMs: 1.5 },
+      code: 'IMAGE_POLL_INTERVAL_INVALID',
+    },
+  ])('rejects $name before image transport', async ({ options, code }) => {
+    const { ai } = createRuntime();
+    const model = await requireModel(ai);
+
+    const result = await ai.images.generate(model, mixedInput(), {
+      credentialOverride,
+      ...options,
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: { code },
+    });
   });
 
   it('rejects unsupported count before transport', async () => {
@@ -404,11 +610,11 @@ describe('images runtime', () => {
 
   it('enforces timeout as a cancelled terminal result', async () => {
     const { ai, transport } = createRuntime();
-    await enqueueMixed(transport, { chunkDelayMs: 50 });
+    await enqueueMixed(transport, { chunkDelayMs: 1_100 });
     const model = await requireModel(ai);
     const result = await ai.images.generate(model, mixedInput(), {
       credentialOverride,
-      timeoutMs: 5,
+      timeoutMs: 1_000,
     });
     expect(result).toMatchObject({
       status: 'cancelled',

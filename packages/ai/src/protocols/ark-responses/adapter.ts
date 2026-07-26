@@ -123,11 +123,9 @@ function decorateTransport(
       const previousResponseId = findPreviousResponseId(request);
       if (previousResponseId && compatibility.supportsPreviousResponseId)
         body.previous_response_id = previousResponseId;
+      delete body.reasoning;
       body.thinking = {
-        type:
-          request.model.requestDefaults?.reasoning === 'none'
-            ? 'disabled'
-            : 'enabled',
+        type: request.options.reasoning === 'none' ? 'disabled' : 'enabled',
       };
       assertFunctionTools(body.tools);
       const response = await transport.send({

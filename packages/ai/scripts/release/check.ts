@@ -4,6 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 type RedactCliValue = (value: unknown) => unknown;
+type ToPublicAiError = (
+  error: unknown,
+  fallback: {
+    code: string;
+    category: 'internal';
+    message: string;
+  },
+) => Error & { readonly details?: Readonly<Record<string, unknown>> };
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(scriptDirectory, '../..');
@@ -19,7 +27,7 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Release verified: production import graph fenced, secret canary redacted, fixtures sanitized, and live execution disabled by default.\n',
+    'Release verified: production import graph fenced, CLI and Runtime secret canaries redacted, fixtures sanitized, and live execution disabled by default.\n',
   );
 }
 
@@ -98,6 +106,41 @@ async function verifySecretCanary(): Promise<void> {
   );
   if (redacted.includes(canary))
     failures.push('CLI redaction leaked the release secret canary');
+
+  const publicErrorsPath = resolve(packageRoot, 'dist/core/public-errors.js');
+  const publicErrors = (await import(pathToFileURL(publicErrorsPath).href)) as {
+    toPublicAiError?: ToPublicAiError;
+  };
+  if (typeof publicErrors.toPublicAiError !== 'function') {
+    failures.push('Runtime does not build the public error normalizer');
+    return;
+  }
+  for (const media of ['image', 'video'] as const) {
+    const fallback = {
+      code: `${media.toUpperCase()}_GENERATION_INTERNAL_ERROR`,
+      category: 'internal' as const,
+      message: `${media} generation failed internally`,
+    };
+    const candidates = [
+      new Error(canary),
+      {
+        name: 'AiError',
+        code: `${media.toUpperCase()}_UPSTREAM_FAILED`,
+        category: 'provider',
+        retryable: false,
+        message: canary,
+        details: { raw: canary },
+      },
+    ];
+    for (const candidate of candidates) {
+      const publicError = publicErrors.toPublicAiError(candidate, fallback);
+      if (
+        publicError.message.includes(canary) ||
+        (JSON.stringify(publicError.details) ?? '').includes(canary)
+      )
+        failures.push(`${media} Runtime leaked the release secret canary`);
+    }
+  }
 }
 
 function verifyLiveDisabledByDefault(): void {

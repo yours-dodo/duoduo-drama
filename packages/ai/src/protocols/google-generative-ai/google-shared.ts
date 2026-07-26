@@ -251,10 +251,15 @@ export function makeGoogleRequestBody<TProtocol extends GoogleProtocolId>(
 ): Record<string, unknown> {
   const protocolOptions = object(request.options.protocolOptions);
   const thinkingBudget = number(protocolOptions.thinkingBudget);
-  const thinkingLevel = string(protocolOptions.thinkingLevel);
-  const temperature = number(protocolOptions.temperature);
-  const topP = number(protocolOptions.topP);
-  const toolChoice = protocolOptions.toolChoice;
+  const thinkingLevel =
+    request.options.reasoning === undefined ||
+    request.options.reasoning === 'none'
+      ? string(protocolOptions.thinkingLevel)
+      : request.options.reasoning;
+  const temperature =
+    request.options.temperature ?? number(protocolOptions.temperature);
+  const topP = request.options.topP ?? number(protocolOptions.topP);
+  const toolChoice = request.options.toolChoice ?? protocolOptions.toolChoice;
   const thinkingConfig =
     thinkingBudget !== undefined || thinkingLevel !== undefined
       ? {

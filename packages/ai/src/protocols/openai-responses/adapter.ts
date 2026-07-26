@@ -315,6 +315,17 @@ function makeRequestBody<TProtocol extends ResponsesProtocol>(
     model: request.model.upstreamModelId,
     input: request.context.messages.flatMap(mapMessage),
     max_output_tokens: request.options.maxOutputTokens,
+    ...(request.options.temperature === undefined
+      ? {}
+      : { temperature: request.options.temperature }),
+    ...(request.options.topP === undefined
+      ? {}
+      : { top_p: request.options.topP }),
+    ...mapToolChoice(request.options.toolChoice),
+    ...(request.options.reasoning === undefined ||
+    request.options.reasoning === 'none'
+      ? {}
+      : { reasoning: { effort: request.options.reasoning } }),
     stream: true,
     ...(request.context.systemPrompt
       ? { instructions: request.context.systemPrompt }
@@ -330,6 +341,14 @@ function makeRequestBody<TProtocol extends ResponsesProtocol>(
         }
       : {}),
   };
+}
+
+function mapToolChoice(
+  value: import('../../core/models.js').ToolChoice | undefined,
+): Record<string, unknown> {
+  if (value === undefined || value === 'auto') return {};
+  if (value === 'none' || value === 'required') return { tool_choice: value };
+  return { tool_choice: { type: 'function', name: value.name } };
 }
 
 function mapMessage(message: Message): readonly Record<string, unknown>[] {

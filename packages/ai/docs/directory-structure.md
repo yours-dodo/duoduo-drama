@@ -147,7 +147,7 @@ Node CLI 的命令执行、平台组装和安全策略。
 | `catalog-generator.test.ts` | 验证目录生成的确定性与安全字段的正常、边界和失败路径。                             |
 | `cli.test.ts`               | 验证CLI 端到端命令行为的正常、边界和失败路径。                                     |
 | `exports.test.ts`           | 验证CLI 公共导出的正常、边界和失败路径。                                           |
-| `file-catalog-store.ts`     | 实现 CLI 使用的本地文件目录缓存。                                                  |
+| `file-catalog-store.ts`     | 实现可显式注入的 Node 本地文件目录缓存；CLI 默认组装不使用它。                     |
 | `index.ts`                  | CLI 公共子路径入口，导出可嵌入的运行器、Node 组装和在线策略 API。                  |
 | `live-policy.test.ts`       | 验证在线执行预算和许可门槛的正常、边界和失败路径。                                 |
 | `live-policy.ts`            | 根据能力类型、预算、数量和显式许可评估在线执行是否允许。                           |
@@ -811,19 +811,22 @@ Provider 注册、认证、目录、会话与各通道 API 的组装协调。
 | `catalog-coordinator.ts`      | 协调静态目录、远程刷新、缓存、凭证身份和并发刷新结果。                                    |
 | `create-ai.test.ts`           | 验证AiRuntime 组装和公共 API的正常、边界和失败路径。                                      |
 | `create-ai.ts`                | 组装 AiRuntime 及 models、inventory、sessions、images、videos API，是 createAi() 的实现。 |
+| `lifecycle.ts`                | 统一 Runtime 准入、在途租约、优雅 drain、超时中止和幂等资源关闭。                         |
 | `registry.ts`                 | 定义 Provider、协议清单、聊天传输绑定及 ProviderRegistry 注册表。                         |
+| `resource-policy.test.ts`     | 验证运行时资源策略在公共装配入口的默认值、范围和失败路径。                                |
+| `resource-policy.ts`          | 归一化并冻结流队列、目录缓存和会话生命周期的资源策略。                                    |
 | `transport-session.test.ts`   | 验证传输资源与会话租约联动的正常、边界和失败路径。                                        |
 
 ### `src/session`
 
 会话资源、租约、隔离和生命周期。
 
-| 文件              | 作用                                                 |
-| ----------------- | ---------------------------------------------------- |
-| `index.ts`        | 会话公共子路径入口。                                 |
-| `lease.ts`        | 定义会话身份、句柄、资源、租约和清理选择器。         |
-| `manager.test.ts` | 验证会话租约、失效与资源清理的正常、边界和失败路径。 |
-| `manager.ts`      | 实现会话资源缓存、租约计数、失效隔离和延迟清理。     |
+| 文件              | 作用                                                               |
+| ----------------- | ------------------------------------------------------------------ |
+| `index.ts`        | 会话公共子路径入口。                                               |
+| `lease.ts`        | 定义会话身份、句柄、资源、租约和清理选择器。                       |
+| `manager.test.ts` | 验证会话租约、容量、TTL/LRU 淘汰与资源清理的正常、边界和失败路径。 |
+| `manager.ts`      | 实现会话资源缓存、租约计数、失效隔离、容量治理和自动清理。         |
 
 ### `src/stream`
 

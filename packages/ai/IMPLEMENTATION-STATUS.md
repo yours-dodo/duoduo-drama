@@ -1,12 +1,22 @@
 # @duoduo/ai 实施状态
 
-> 只有在对应命令通过后才记录证据。当前实现已完成 S01–S22，八项门禁均已通过。候选发布版本已在不依赖 `vendor/pi` 的情况下完成验证，默认采用离线、确定性行为，并通过显式许可机制保护在线执行。
+> 只有在对应命令通过后才记录证据。当前实现已完成 S01–S22，并于 2026 年 7 月 24 日完成一轮运行时逻辑硬化；八项门禁均已通过。候选发布版本已在不依赖 `vendor/pi` 的情况下完成验证，默认采用离线、确定性行为，并通过显式许可机制保护在线执行。
 >
 > 表格中的 `passed` 表示“通过”。该英文状态值由 `manifest:check` 作为机器可读标记使用，因此予以保留。
 
 ## 当前产品基线
 
 2026 年 7 月 22 日按 YAGNI 原则移除了未被产品使用的 Radius Provider、Radius OAuth 和 PI Messages 私有协议。当前发布面包含 39 个内建 Provider、62 个 manifest binding、77 个公共导出，以及 20 个公共协议子路径中的 51 个运行时协议符号；目录与 manifest 覆盖率仍为 100%，删除后的包测试为 69 个文件、345 项用例。下方 S01–S22 表格保留最初实施时的历史证据，因此其中 S10、S21 和 S22 的原始计数不代表当前发布面的计数。
+
+## 2026-07-24 运行时逻辑硬化
+
+- Ambient 会话身份同时绑定授权作用域与凭证身份，阻止相同 ambient 凭证下的跨租户 session affinity 复用。
+- Image/Video 鉴权改为使用当前协议 binding；纯媒体 Provider 不再绕过宿主凭证覆盖策略。
+- 可恢复媒体任务使用独立的 10 秒 best-effort cancellation signal，确保本地 abort 后仍可尝试远端取消。
+- SessionManager 在资源创建完成与 acquisition abort 竞态中可靠释放无人认领的资源。
+- 显式请求级 `protocolOptions` 会先归一化为通用 tool/reasoning 选项；请求级通用选项仍拥有最高优先级。
+- 已移除无消费者的 `RuntimeResourcePolicyInput.catalog`；旧配置在运行时显式报错，不再静默成为 no-op。
+- 当前证据：70 个测试文件/412 项测试通过；`typecheck`、`build`、`api:check`、`manifest:check`、`catalog:update -- --check --offline`、`lint`、`format:check`、`release:check`、`release:no-vendor` 和 `git diff --check` 均通过。
 
 ## 实施切片
 

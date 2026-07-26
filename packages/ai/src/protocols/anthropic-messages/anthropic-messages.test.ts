@@ -29,7 +29,13 @@ describe('Anthropic Messages tracer', () => {
         },
         jsonBody: {
           model: 'claude-sonnet-4-5',
-          system: 'Be concise.',
+          system: [
+            {
+              type: 'text',
+              text: 'Be concise.',
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
           messages: [
             {
               role: 'user',
@@ -344,9 +350,9 @@ describe('Anthropic Messages tracer', () => {
       {
         credentialOverride,
         maxOutputTokens: 2048,
+        cacheRetention: 'long',
         protocolOptions: {
           thinking: { type: 'enabled', budgetTokens: 1024 },
-          cacheRetention: 'one_hour',
         },
       },
     );

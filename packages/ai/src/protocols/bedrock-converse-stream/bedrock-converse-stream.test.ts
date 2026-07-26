@@ -112,9 +112,9 @@ describe('Bedrock Converse Stream protocol', () => {
       {
         credentialOverride,
         maxOutputTokens: 512,
+        cacheRetention: 'long',
         protocolOptions: {
           thinkingBudget: 1024,
-          cacheRetention: 'one_hour',
           requestMetadata: { tenant: 'test' },
         },
       },

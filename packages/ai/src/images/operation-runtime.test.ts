@@ -3,6 +3,10 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { createLocalScopeAuthority } from '../auth/node/local-scope.js';
+import type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+} from '../auth/scope-authority.js';
 import { secret } from '../auth/secret-value.js';
 import type { JsonValue } from '../core/content.js';
 import { AiRuntimeError } from '../core/errors.js';
@@ -181,6 +185,137 @@ function adapter(): ResumableImageProtocolAdapter<'test-image-tasks'> {
 }
 
 describe('resumable image operations', () => {
+  it('uses a live best-effort signal for remote cancellation', async () => {
+    let cancelSignalAborted: boolean | undefined;
+    const ai = createAi({
+      transport: createFixtureTransportDriver(),
+      networkPolicy: createAllowlistNetworkPolicy({
+        origins: ['https://images.example'],
+      }),
+      credentialOverridePolicy: { allow: () => true },
+      operationCredentialVerifier: credentialVerifier(),
+    });
+    const blockingAdapter = adapter();
+    ai.providers.register(
+      provider({
+        ...blockingAdapter,
+        cancel: async ({ signal }) => {
+          cancelSignalAborted = signal.aborted;
+        },
+      }),
+    );
+    const model = await ai.images.models.require(
+      {
+        providerInstanceId: 'test-images',
+        modelId: 'test-image@task',
+        protocol: 'test-image-tasks',
+      },
+      {},
+      { credentialOverride },
+    );
+    const controller = new AbortController();
+    const stream = ai.images.stream(
+      model,
+      { content: [{ type: 'text', text: 'draw' }] },
+      { credentialOverride, signal: controller.signal },
+    );
+    const iterator = stream[Symbol.asyncIterator]();
+    await iterator.next();
+    await iterator.next();
+
+    controller.abort('caller stopped');
+
+    await expect(stream.result()).resolves.toMatchObject({
+      status: 'cancelled',
+    });
+    expect(cancelSignalAborted).toBe(false);
+    await ai.dispose();
+  });
+
+  it('drains a started operation without admitting a dormant stream', async () => {
+    let finishGeneration!: () => void;
+    let markGenerationStarted!: () => void;
+    let disposalSettled = false;
+    const generationStarted = new Promise<void>((resolve) => {
+      markGenerationStarted = resolve;
+    });
+    const generationCanFinish = new Promise<void>((resolve) => {
+      finishGeneration = resolve;
+    });
+    const blockingAdapter = adapter();
+    const transport = createFixtureTransportDriver();
+    const local = createLocalScopeAuthority({
+      tenantId: 'tenant-runtime-drain',
+      subjectId: 'subject-runtime-drain',
+      activeKeyId: 'scope-k1',
+      keys: { 'scope-k1': Buffer.alloc(32, 9) },
+    });
+    const ai = createAi({
+      credentialStore: createMemoryCredentialStore(),
+      scopeAuthority: local.authority,
+      transport,
+      networkPolicy: createAllowlistNetworkPolicy({
+        origins: ['https://images.example'],
+      }),
+      credentialOverridePolicy: { allow: () => true },
+      operationCredentialVerifier: credentialVerifier(),
+    });
+    ai.providers.register(
+      provider({
+        ...blockingAdapter,
+        run: async (_request, sink) => {
+          await sink.setOperation({ operationId: 'draining-task' });
+          markGenerationStarted();
+          await generationCanFinish;
+          return { status: 'completed' };
+        },
+      }),
+    );
+    const model = await ai.images.models.require(
+      {
+        providerInstanceId: 'test-images',
+        modelId: 'test-image@task',
+        protocol: 'test-image-tasks',
+      },
+      local.scope,
+      { credentialOverride },
+    );
+    const active = ai.images.stream(
+      model,
+      { content: [{ type: 'text', text: 'active' }] },
+      { credentialOverride },
+    );
+    const dormant = ai.images.stream(
+      model,
+      { content: [{ type: 'text', text: 'dormant' }] },
+      { credentialOverride },
+    );
+    const activeResult = active.result();
+    await generationStarted;
+
+    const disposal = ai.dispose().then(() => {
+      disposalSettled = true;
+    });
+    await Promise.resolve();
+
+    expect(disposalSettled).toBe(false);
+    await expect(dormant.result()).rejects.toMatchObject({
+      code: 'RUNTIME_DRAINING',
+    });
+    expect(() =>
+      ai.images.stream(
+        model,
+        { content: [{ type: 'text', text: 'new' }] },
+        { credentialOverride },
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'RUNTIME_DRAINING' }));
+
+    finishGeneration();
+    await expect(activeResult).resolves.toMatchObject({ status: 'completed' });
+    await disposal;
+    expect(disposalSettled).toBe(true);
+  });
+
   it('detaches, serializes, parses, and resumes across runtimes', async () => {
     const codec = operationCodec();
     const verifier = credentialVerifier();
@@ -193,9 +328,21 @@ describe('resumable image operations', () => {
         activeKeyId: 'scope-k1',
         keys: { 'scope-k1': scopeKey },
       });
+      const actions: CredentialScopeAction[] = [];
+      const scopeAuthority: CredentialScopeAuthority<typeof local.scope> = {
+        fingerprintLifetime: local.authority.fingerprintLifetime,
+        resolve: async (scope, request, signal) => {
+          actions.push(request.action);
+          return local.authority.resolve(scope, request, signal);
+        },
+        fingerprint: (scope, signal) =>
+          local.authority.fingerprint(scope, signal),
+        verifyFingerprint: (scope, fingerprint, signal) =>
+          local.authority.verifyFingerprint(scope, fingerprint, signal),
+      };
       const ai = createAi({
         credentialStore: createMemoryCredentialStore(),
-        scopeAuthority: local.authority,
+        scopeAuthority,
         transport,
         networkPolicy: createAllowlistNetworkPolicy({
           origins: ['https://images.example'],
@@ -205,7 +352,7 @@ describe('resumable image operations', () => {
         operationCredentialVerifier: verifier,
       });
       ai.providers.register(provider(adapter()));
-      return { ai, scope: local.scope };
+      return { actions, ai, scope: local.scope };
     };
 
     const firstRuntime = createRuntime();
@@ -240,6 +387,7 @@ describe('resumable image operations', () => {
     expect(JSON.stringify(operation)).toBe('"[REDACTED]"');
     expect(Object.keys(operation)).toEqual(['version']);
     const serialized = await first.images.serializeOperation(operation);
+    await first.dispose({ timeoutMs: 20 });
 
     const secondRuntime = createRuntime();
     const second = secondRuntime.ai;
@@ -258,6 +406,7 @@ describe('resumable image operations', () => {
       responseId: 'task-1',
       outputs: [{ type: 'image' }],
     });
+    expect(secondRuntime.actions).toEqual(['resume_operation']);
   });
 
   it('rejects inconsistent resumable model and operation descriptors', () => {

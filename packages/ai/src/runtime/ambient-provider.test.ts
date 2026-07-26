@@ -127,4 +127,64 @@ describe('provider ambient authorization', () => {
       ),
     ).rejects.toMatchObject({ code: 'AMBIENT_AUTH_DENIED' });
   });
+
+  it('isolates ambient sessions across runtime-local scope handles', async () => {
+    const observedAffinity: Array<unknown> = [];
+    const provider = ambientProvider();
+    const ai = createAi({
+      transport: createFixtureTransportDriver(),
+      networkPolicy: createAllowlistNetworkPolicy({
+        origins: ['https://ambient.example.test'],
+      }),
+      ambientAuthPolicy: { allow: () => true },
+    });
+    ai.providers.register({
+      ...provider,
+      chat: {
+        ...provider.chat!,
+        runChat: async (request) => {
+          observedAffinity.push(request.session.getAffinity('tenant'));
+          const tenant = request.context.messages[0]?.content[0];
+          if (tenant?.type === 'text')
+            request.session.setAffinity('tenant', tenant.text);
+          return { status: 'completed', finishReason: 'stop' };
+        },
+      },
+    });
+    const ref = {
+      providerInstanceId: 'ambient-fixture',
+      modelId: 'model-a',
+      protocol: 'fixture-ambient',
+    } as const;
+    const tenantA = await ai.models.require(ref, { tenant: 'a' });
+    const tenantB = await ai.models.require(ref, { tenant: 'b' });
+
+    await ai.complete(
+      tenantA,
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'tenant-a' }],
+          },
+        ],
+      },
+      { sessionId: 'shared-session-id' },
+    );
+    await ai.complete(
+      tenantB,
+      {
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'tenant-b' }],
+          },
+        ],
+      },
+      { sessionId: 'shared-session-id' },
+    );
+
+    expect(observedAffinity).toEqual([undefined, undefined]);
+    await ai.dispose();
+  });
 });

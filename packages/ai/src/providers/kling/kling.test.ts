@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createAi, secret } from '../../index.js';
 import {
   klingProvider,
   klingVideoModelRef,
@@ -65,5 +66,26 @@ describe('Kling provider', () => {
         videoModels: [{ protocolProfileId: 'not-kling' as never }],
       }),
     ).toThrow(/profile/);
+  });
+
+  it('applies the host credential override policy to video-only providers', async () => {
+    const ai = createAi({
+      credentialOverridePolicy: { allow: () => false },
+    });
+    ai.providers.register(klingProvider());
+
+    await expect(
+      ai.videos.models.require(
+        klingVideoModelRef(),
+        {},
+        {
+          credentialOverride: {
+            type: 'api_key',
+            secret: secret('denied-kling-key'),
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'CREDENTIAL_OVERRIDE_DENIED' });
+    await ai.dispose();
   });
 });

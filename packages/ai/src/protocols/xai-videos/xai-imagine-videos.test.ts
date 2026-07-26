@@ -5,7 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createLocalScopeAuthority } from '../../auth/node/local-scope.js';
+import type {
+  CredentialScopeAction,
+  CredentialScopeAuthority,
+} from '../../auth/scope-authority.js';
 import { secret } from '../../auth/secret-value.js';
+import { AiRuntimeError } from '../../core/errors.js';
 import {
   createOperationCredentialVerifier,
   type GenerationOperationCodec,
@@ -75,7 +80,11 @@ function verifier() {
   });
 }
 
-function runtime(onSeal?: (envelope: GenerationOperationEnvelope) => void) {
+function runtime(
+  onSeal?: (envelope: GenerationOperationEnvelope) => void,
+  provider: ReturnType<typeof xAiProvider> = xAiProvider(),
+  actions?: CredentialScopeAction[],
+) {
   const transport = createFixtureTransportDriver();
   const local = createLocalScopeAuthority({
     tenantId: 'xai-tenant',
@@ -83,6 +92,16 @@ function runtime(onSeal?: (envelope: GenerationOperationEnvelope) => void) {
     activeKeyId: 'scope-k1',
     keys: { 'scope-k1': Buffer.alloc(32, 9) },
   });
+  const scopeAuthority: CredentialScopeAuthority<typeof local.scope> = {
+    fingerprintLifetime: local.authority.fingerprintLifetime,
+    resolve: async (scope, request, signal) => {
+      actions?.push(request.action);
+      return local.authority.resolve(scope, request, signal);
+    },
+    fingerprint: (scope, signal) => local.authority.fingerprint(scope, signal),
+    verifyFingerprint: (scope, fingerprint, signal) =>
+      local.authority.verifyFingerprint(scope, fingerprint, signal),
+  };
   const ai = createAi({
     transport,
     networkPolicy: createAllowlistNetworkPolicy({
@@ -90,11 +109,11 @@ function runtime(onSeal?: (envelope: GenerationOperationEnvelope) => void) {
     }),
     credentialOverridePolicy: { allow: () => true },
     credentialStore: createMemoryCredentialStore(),
-    scopeAuthority: local.authority,
+    scopeAuthority,
     generationOperationCodec: codec(onSeal),
     operationCredentialVerifier: verifier(),
   });
-  ai.providers.register(xAiProvider());
+  ai.providers.register(provider);
   return { ai, transport, scope: local.scope };
 }
 
@@ -157,6 +176,284 @@ function enqueueSuccessfulVideo(
 }
 
 describe('xAI Grok Imagine videos', () => {
+  it.each([
+    {
+      name: 'timeout below one second',
+      options: { timeoutMs: 999 },
+      code: 'VIDEO_TIMEOUT_INVALID',
+    },
+    {
+      name: 'timeout above six hours',
+      options: { timeoutMs: 21_600_001 },
+      code: 'VIDEO_TIMEOUT_INVALID',
+    },
+    {
+      name: 'negative poll interval',
+      options: { pollIntervalMs: -1 },
+      code: 'VIDEO_POLL_INTERVAL_INVALID',
+    },
+    {
+      name: 'poll interval above one minute',
+      options: { pollIntervalMs: 60_001 },
+      code: 'VIDEO_POLL_INTERVAL_INVALID',
+    },
+    {
+      name: 'fractional poll interval',
+      options: { pollIntervalMs: 1.5 },
+      code: 'VIDEO_POLL_INTERVAL_INVALID',
+    },
+  ])('rejects $name before video transport', async ({ options, code }) => {
+    const { ai, scope } = runtime();
+    const model = await videoModel(ai, scope);
+
+    const result = await ai.videos.generate(
+      model,
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'a paper dragon flies' }],
+        durationSeconds: 6,
+      },
+      { credentialOverride, ...options },
+    );
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: { code },
+    });
+  });
+
+  it('authorizes a cross-runtime resume with the resume_operation action', async () => {
+    const firstRuntime = runtime();
+    firstRuntime.transport.enqueue({
+      expectedRequest: {
+        method: 'POST',
+        url: 'https://api.x.ai/v1/videos/generations',
+      },
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      bodyChunks: [readFileSync(`${fixtures}/create.json`)],
+    });
+    const stream = firstRuntime.ai.videos.stream(
+      await videoModel(firstRuntime.ai, firstRuntime.scope),
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'a paper dragon flies' }],
+        durationSeconds: 6,
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+    const iterator = stream[Symbol.asyncIterator]();
+    await iterator.next();
+    await iterator.next();
+    const operation = await stream.detach();
+    const serialized =
+      await firstRuntime.ai.videos.serializeOperation(operation);
+
+    const actions: CredentialScopeAction[] = [];
+    const secondRuntime = runtime(undefined, xAiProvider(), actions);
+    secondRuntime.transport.enqueue({
+      expectedRequest: {
+        method: 'GET',
+        url: 'https://api.x.ai/v1/videos/video-request-1',
+      },
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      bodyChunks: [readFileSync(`${fixtures}/completed.json`)],
+    });
+    const parsed = await secondRuntime.ai.videos.parseOperation(serialized);
+    const resumed = await secondRuntime.ai.videos.resume(parsed, {
+      scope: secondRuntime.scope,
+      credentialOverride,
+      pollIntervalMs: 0,
+    });
+
+    await expect(resumed.result()).resolves.toMatchObject({
+      status: 'completed',
+      responseId: 'video-request-1',
+    });
+    expect(actions).toEqual(['resume_operation']);
+  });
+
+  it('does not expose an unexpected adapter error in the public result or event', async () => {
+    const canary = 'video-runtime-secret-canary';
+    const provider = xAiProvider();
+    const videos = provider.videos!;
+    const protocol = videos.protocols[0]!;
+    const throwingProvider = {
+      ...provider,
+      videos: {
+        ...videos,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async (): Promise<never> => {
+                  throw new Error(canary);
+                },
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai, scope } = runtime(undefined, throwingProvider);
+    const stream = ai.videos.stream(
+      await videoModel(ai, scope),
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'a paper dragon flies' }],
+        durationSeconds: 6,
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+    const events = [];
+    for await (const event of stream) events.push(event);
+    const result = await stream.result();
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'VIDEO_GENERATION_INTERNAL_ERROR',
+        category: 'internal',
+        message: 'video generation failed internally',
+      },
+    });
+    expect(result.error.message).not.toContain(canary);
+    expect(events.at(-1)).toMatchObject({
+      type: 'generation_error',
+      result: {
+        error: {
+          code: 'VIDEO_GENERATION_INTERNAL_ERROR',
+          message: 'video generation failed internally',
+        },
+      },
+    });
+  });
+
+  it('normalizes an adapter terminal error before publishing it', async () => {
+    const canary = 'video-terminal-secret-canary';
+    const provider = xAiProvider();
+    const videos = provider.videos!;
+    const protocol = videos.protocols[0]!;
+    const failingProvider = {
+      ...provider,
+      videos: {
+        ...videos,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async () => ({
+                  status: 'failed' as const,
+                  diagnostics: [
+                    { code: 'UPSTREAM_DIAGNOSTIC', message: canary },
+                  ],
+                  error: new AiRuntimeError(
+                    'VIDEO_UPSTREAM_FAILED',
+                    'provider',
+                    canary,
+                    true,
+                    { raw: canary },
+                  ),
+                }),
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai, scope } = runtime(undefined, failingProvider);
+    const result = await ai.videos.generate(
+      await videoModel(ai, scope),
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'a paper dragon flies' }],
+        durationSeconds: 6,
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'VIDEO_UPSTREAM_FAILED',
+        category: 'provider',
+        retryable: true,
+        message: 'AI provider request failed',
+      },
+      diagnostics: [{ code: 'UPSTREAM_DIAGNOSTIC' }],
+    });
+    expect(result.diagnostics).toEqual([{ code: 'UPSTREAM_DIAGNOSTIC' }]);
+    expect(result.error.details).toBeUndefined();
+    expect(result.error.message).not.toContain(canary);
+  });
+
+  it('does not expose an adapter cancellation message', async () => {
+    const canary = 'video-cancellation-secret-canary';
+    const provider = xAiProvider();
+    const videos = provider.videos!;
+    const protocol = videos.protocols[0]!;
+    const cancellingProvider = {
+      ...provider,
+      videos: {
+        ...videos,
+        protocols: [
+          {
+            ...protocol,
+            loadAdapter: async () => {
+              const adapter = await protocol.loadAdapter();
+              return {
+                ...adapter,
+                run: async (...args: Parameters<typeof adapter.run>) => {
+                  await args[1].setOperation({
+                    operationId: 'video-request-cancelled',
+                  });
+                  return {
+                    status: 'cancelled' as const,
+                    error: new AiRuntimeError(
+                      'VIDEO_UPSTREAM_CANCELLED',
+                      'cancelled',
+                      canary,
+                      false,
+                      { raw: canary },
+                    ),
+                  };
+                },
+              };
+            },
+          },
+        ],
+      },
+    };
+    const { ai, scope } = runtime(undefined, cancellingProvider);
+    const result = await ai.videos.generate(
+      await videoModel(ai, scope),
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'a paper dragon flies' }],
+        durationSeconds: 6,
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+
+    expect(result).toMatchObject({
+      status: 'cancelled',
+      error: {
+        code: 'VIDEO_UPSTREAM_CANCELLED',
+        category: 'cancelled',
+        message: 'video generation was cancelled',
+      },
+    });
+    expect(result.error.details).toBeUndefined();
+    expect(result.error.message).not.toContain(canary);
+  });
+
   it('creates, polls, and returns a temporary video with usage and cost', async () => {
     const { ai, transport, scope } = runtime();
     enqueueSuccessfulVideo(transport);

@@ -71,8 +71,10 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
   private readonly waiters: Waiter[] = [];
   private readonly resultPromise: Promise<VideoGenerationResult>;
   private resolveResult!: (result: VideoGenerationResult) => void;
+  private rejectResult!: (error: unknown) => void;
   private operation?: VideoOperationRef;
   private detachPromise?: Promise<VideoOperationRef>;
+  private operationLease?: Readonly<{ release(): void }>;
 
   constructor(
     private readonly producer: (
@@ -83,10 +85,15 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
       stream: DirectVideoGenerationStream,
       operation: VideoOperationRef,
     ) => Promise<void>,
+    private readonly onStart?: (
+      stream: DirectVideoGenerationStream,
+    ) => Readonly<{ release(): void }>,
   ) {
-    this.resultPromise = new Promise((resolve) => {
+    this.resultPromise = new Promise((resolve, reject) => {
       this.resolveResult = resolve;
+      this.rejectResult = reject;
     });
+    void this.resultPromise.catch(() => undefined);
     if (signal) {
       if (signal.aborted) this.controller.abort(signal.reason);
       else
@@ -122,6 +129,7 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
     }
     this.resolveResult(result);
     this.flushDone();
+    if (event.type !== 'generation_detached') this.releaseOperationLease();
   }
 
   result(): Promise<VideoGenerationResult> {
@@ -160,6 +168,9 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
     if (!this.detachPromise)
       this.detachPromise = (async () => {
         await this.onDetach!(this, this.operation!);
+        if (!this.controller.signal.aborted)
+          this.controller.abort('video generation detached');
+        this.releaseOperationLease();
         return this.operation!;
       })();
     return this.detachPromise;
@@ -194,7 +205,15 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
   private start(): void {
     if (this.started) return;
     this.started = true;
-    void this.producer(this).catch(() => undefined);
+    try {
+      this.operationLease = this.onStart?.(this);
+    } catch (error) {
+      this.fail(error);
+      return;
+    }
+    void this.producer(this)
+      .catch((error: unknown) => this.fail(error))
+      .finally(() => this.releaseOperationLease());
   }
 
   private next(): Promise<IteratorResult<VideoGenerationEvent>> {
@@ -212,5 +231,18 @@ export class DirectVideoGenerationStream implements VideoGenerationStream {
     if (this.queue.length > 0) return;
     for (const waiter of this.waiters.splice(0))
       waiter.resolve({ done: true, value: undefined });
+  }
+
+  private fail(error: unknown): void {
+    if (this.terminal) return;
+    this.terminal = true;
+    this.queue.length = 0;
+    this.rejectResult(error);
+    for (const waiter of this.waiters.splice(0)) waiter.reject(error);
+  }
+
+  private releaseOperationLease(): void {
+    this.operationLease?.release();
+    this.operationLease = undefined;
   }
 }

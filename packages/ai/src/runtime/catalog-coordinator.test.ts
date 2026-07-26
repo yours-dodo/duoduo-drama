@@ -123,4 +123,46 @@ describe('catalog coordinator', () => {
       refreshError: expect.any(Error),
     });
   });
+
+  it('rejects expired data after the stale-if-error window closes', async () => {
+    const clock = createFakeClock(1_000);
+    const persistent = createMemoryCatalogStore({ clock });
+    const coordinator = createCatalogCoordinator({
+      persistentStore: persistent,
+      catalogPolicy: { staleIfErrorMs: 20 },
+    });
+    await coordinator.resolve(key, 'cross-runtime', async () => ({
+      payload: { models: ['too-old'] },
+      ttlMs: 10,
+      digest: 'too-old',
+    }));
+    clock.advance(31);
+
+    await expect(
+      coordinator.resolve(key, 'cross-runtime', async () => {
+        throw new Error('refresh unavailable');
+      }),
+    ).rejects.toThrow('refresh unavailable');
+  });
+
+  it('disables stale fallback when stale-if-error is zero', async () => {
+    const clock = createFakeClock(1_000);
+    const persistent = createMemoryCatalogStore({ clock });
+    const coordinator = createCatalogCoordinator({
+      persistentStore: persistent,
+      catalogPolicy: { staleIfErrorMs: 0 },
+    });
+    await coordinator.resolve(key, 'cross-runtime', async () => ({
+      payload: { models: ['expired'] },
+      ttlMs: 10,
+      digest: 'expired',
+    }));
+    clock.advance(10);
+
+    await expect(
+      coordinator.resolve(key, 'cross-runtime', async () => {
+        throw new Error('offline');
+      }),
+    ).rejects.toThrow('offline');
+  });
 });

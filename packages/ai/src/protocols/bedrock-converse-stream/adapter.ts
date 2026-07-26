@@ -263,10 +263,13 @@ export function makeBedrockRequestBody(
   request: ChatRequest<'bedrock-converse-stream'>,
 ): Record<string, unknown> {
   const options = object(request.options.protocolOptions);
-  const temperature = number(options.temperature);
-  const topP = number(options.topP);
+  const temperature =
+    request.options.temperature ?? number(options.temperature);
+  const topP = request.options.topP ?? number(options.topP);
   const thinkingBudget = number(options.thinkingBudget);
-  const cacheRetention = string(options.cacheRetention);
+  const cacheRetention =
+    string(options.cacheRetention) ??
+    mapCommonCacheRetention(request.options.cacheRetention);
   const requestMetadata = objectOrUndefined(options.requestMetadata);
   return {
     messages: request.context.messages.map((message) =>
@@ -307,7 +310,7 @@ export function makeBedrockRequestBody(
                 inputSchema: { json: tool.inputSchema },
               },
             })),
-            ...mapToolChoice(options.toolChoice),
+            ...mapToolChoice(request.options.toolChoice ?? options.toolChoice),
           },
         }
       : {}),
@@ -320,6 +323,16 @@ export function makeBedrockRequestBody(
         }),
     ...(requestMetadata ? { requestMetadata } : {}),
   };
+}
+
+function mapCommonCacheRetention(
+  value: import('../../core/models.js').CacheRetention | undefined,
+): 'standard' | 'one_hour' | undefined {
+  return value === 'short'
+    ? 'standard'
+    : value === 'long'
+      ? 'one_hour'
+      : undefined;
 }
 
 async function ensureTextBlock(

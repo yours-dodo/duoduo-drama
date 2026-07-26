@@ -151,6 +151,79 @@ async function assertPublicConsumerContract(gateway: FakeGenerationGateway) {
 }
 
 describe('self-hosted generation gateway', () => {
+  it('drains a started video without admitting a dormant video stream', async () => {
+    const gateway = createFakeGenerationGateway({ pollDelayMs: 20 });
+    const ai = await runtime(gateway);
+    const model = await ai.videos.models.require(
+      selfHostedVideoModelRef('wan-video'),
+      {},
+      { credentialOverride },
+    );
+    const active = ai.videos.stream(
+      model,
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'active video' }],
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+    const activeIterator = active[Symbol.asyncIterator]();
+    await activeIterator.next();
+    await activeIterator.next();
+    const dormant = ai.videos.stream(
+      model,
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'dormant video' }],
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+    let disposalSettled = false;
+
+    const disposal = ai.dispose().then(() => {
+      disposalSettled = true;
+    });
+    await Promise.resolve();
+
+    expect(disposalSettled).toBe(false);
+    await expect(dormant.result()).rejects.toMatchObject({
+      code: 'RUNTIME_DRAINING',
+    });
+    await expect(active.result()).resolves.toMatchObject({
+      status: 'completed',
+    });
+    await disposal;
+    expect(disposalSettled).toBe(true);
+  });
+
+  it('cancels an owned video task when runtime draining times out', async () => {
+    const gateway = createFakeGenerationGateway({ pollDelayMs: 100 });
+    const ai = await runtime(gateway);
+    const model = await ai.videos.models.require(
+      selfHostedVideoModelRef('wan-video'),
+      {},
+      { credentialOverride },
+    );
+    const stream = ai.videos.stream(
+      model,
+      {
+        operation: 'generate',
+        content: [{ type: 'text', text: 'cancel on shutdown' }],
+      },
+      { credentialOverride, pollIntervalMs: 0 },
+    );
+    const iterator = stream[Symbol.asyncIterator]();
+    await iterator.next();
+    await iterator.next();
+
+    await ai.dispose({ timeoutMs: 5 });
+
+    await expect(stream.result()).resolves.toMatchObject({
+      status: 'cancelled',
+    });
+    expect(gateway.taskState('task-1')).toMatchObject({ status: 'cancelled' });
+  });
+
   it('runs the same image/video consumer contract through replaceable gateway adapters', async () => {
     await assertPublicConsumerContract(
       createFakeGenerationGateway({ adapterId: 'memory-a' }),

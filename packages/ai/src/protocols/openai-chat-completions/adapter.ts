@@ -368,7 +368,11 @@ function makeRequestBody(
 ): Record<string, unknown> {
   const options = object(request.options.protocolOptions);
   const maxTokensField = compatibility.maxTokensField ?? 'max_tokens';
-  const cacheControl = resolveCacheControl(options, compatibility);
+  const cacheControl = resolveCacheControl(
+    request.options.cacheRetention,
+    options,
+    compatibility,
+  );
   const body: Record<string, unknown> = {
     model: request.model.upstreamModelId,
     messages: mapMessages(
@@ -394,6 +398,16 @@ function makeRequestBody(
         }
       : {}),
     [maxTokensField]: request.options.maxOutputTokens,
+    ...(request.options.temperature === undefined
+      ? {}
+      : { temperature: request.options.temperature }),
+    ...(request.options.topP === undefined
+      ? {}
+      : { top_p: request.options.topP }),
+    ...(request.options.stop.length === 0
+      ? {}
+      : { stop: request.options.stop }),
+    ...mapToolChoice(request.options.toolChoice),
     stream: true,
     ...(compatibility.supportsUsageInStreaming === false
       ? {}
@@ -401,7 +415,7 @@ function makeRequestBody(
   };
   if (compatibility.supportsStore && boolean(options.store) !== undefined)
     body.store = boolean(options.store);
-  applyThinking(body, options, compatibility);
+  applyThinking(body, request.options.reasoning, options, compatibility);
   if (compatibility.openRouterRouting)
     body.provider = compatibility.openRouterRouting;
   if (compatibility.vercelGatewayRouting)
@@ -493,11 +507,18 @@ function mapToolResultContent(
 }
 
 function resolveCacheControl(
+  commonRetention: import('../../core/models.js').CacheRetention | undefined,
   options: Record<string, unknown>,
   compatibility: OpenAiChatCompatibility,
 ): Readonly<Record<string, string>> | undefined {
   if (compatibility.cacheControlFormat !== 'anthropic') return undefined;
-  const retention = string(options.cacheRetention);
+  const retention =
+    string(options.cacheRetention) ??
+    (commonRetention === 'short'
+      ? 'standard'
+      : commonRetention === 'long'
+        ? 'one_hour'
+        : undefined);
   if (retention !== 'standard' && retention !== 'one_hour') return undefined;
   return retention === 'one_hour' && compatibility.supportsLongCacheRetention
     ? { type: 'ephemeral', ttl: '1h' }
@@ -506,11 +527,18 @@ function resolveCacheControl(
 
 function applyThinking(
   body: Record<string, unknown>,
+  commonReasoning: import('../../core/models.js').ReasoningLevel | undefined,
   options: Record<string, unknown>,
   compatibility: OpenAiChatCompatibility,
 ): void {
-  const enabled = boolean(options.thinkingEnabled) ?? false;
-  const effort = string(options.reasoningEffort) ?? 'medium';
+  const enabled =
+    commonReasoning === undefined
+      ? (boolean(options.thinkingEnabled) ?? false)
+      : commonReasoning !== 'none';
+  const effort =
+    commonReasoning === undefined || commonReasoning === 'none'
+      ? (string(options.reasoningEffort) ?? 'medium')
+      : commonReasoning;
   const format = compatibility.thinkingFormat;
   if (!format) return;
   switch (format) {
@@ -541,6 +569,19 @@ function applyThinking(
       body.thinking = enabled ? 'enabled' : 'disabled';
       break;
   }
+}
+
+function mapToolChoice(
+  value: import('../../core/models.js').ToolChoice | undefined,
+): Record<string, unknown> {
+  if (value === undefined || value === 'auto') return {};
+  if (value === 'none' || value === 'required') return { tool_choice: value };
+  return {
+    tool_choice: {
+      type: 'function',
+      function: { name: value.name },
+    },
+  };
 }
 
 function resolveChatTemplateKwargs(

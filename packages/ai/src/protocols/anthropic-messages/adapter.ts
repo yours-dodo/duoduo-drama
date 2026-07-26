@@ -392,7 +392,9 @@ function makeRequestBody(
   compatibility: AnthropicMessagesCompatibility,
 ): Record<string, unknown> {
   const options = object(request.options.protocolOptions);
-  const cacheRetention = string(options.cacheRetention);
+  const cacheRetention =
+    string(options.cacheRetention) ??
+    mapCommonCacheRetention(request.options.cacheRetention);
   const cacheControl =
     cacheRetention === 'one_hour'
       ? { type: 'ephemeral', ttl: '1h' }
@@ -429,12 +431,41 @@ function makeRequestBody(
               ? { cache_control: cacheControl }
               : {}),
           })),
+          ...mapToolChoice(request.options.toolChoice),
         }
       : {}),
     ...(thinking ? { thinking } : {}),
     max_tokens: request.options.maxOutputTokens,
+    ...(request.options.temperature === undefined
+      ? {}
+      : { temperature: request.options.temperature }),
+    ...(request.options.topP === undefined
+      ? {}
+      : { top_p: request.options.topP }),
+    ...(request.options.stop.length === 0
+      ? {}
+      : { stop_sequences: request.options.stop }),
     stream: true,
   };
+}
+
+function mapCommonCacheRetention(
+  value: import('../../core/models.js').CacheRetention | undefined,
+): 'standard' | 'one_hour' | undefined {
+  return value === 'short'
+    ? 'standard'
+    : value === 'long'
+      ? 'one_hour'
+      : undefined;
+}
+
+function mapToolChoice(
+  value: import('../../core/models.js').ToolChoice | undefined,
+): Record<string, unknown> {
+  if (value === undefined || value === 'auto') return {};
+  if (value === 'none') return { tool_choice: { type: 'none' } };
+  if (value === 'required') return { tool_choice: { type: 'any' } };
+  return { tool_choice: { type: 'tool', name: value.name } };
 }
 
 function mapMessage(message: Message): readonly Record<string, unknown>[] {

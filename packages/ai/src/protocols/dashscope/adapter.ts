@@ -324,10 +324,11 @@ function makeRequestBody(
       options.thinkingBudget,
       'thinkingBudget',
     );
-  if (options.temperature !== undefined)
-    parameters.temperature = finiteNumber(options.temperature, 'temperature');
-  if (options.topP !== undefined)
-    parameters.top_p = finiteNumber(options.topP, 'topP');
+  const temperature = request.options.temperature ?? options.temperature;
+  const topP = request.options.topP ?? options.topP;
+  if (temperature !== undefined)
+    parameters.temperature = finiteNumber(temperature, 'temperature');
+  if (topP !== undefined) parameters.top_p = finiteNumber(topP, 'topP');
   if (options.seed !== undefined)
     parameters.seed = positiveInteger(options.seed, 'seed');
   if (compatibility.supportsTools && request.context.tools?.length)
@@ -339,8 +340,16 @@ function makeRequestBody(
         parameters: tool.inputSchema,
       },
     }));
-  if (compatibility.supportsTools && options.toolChoice)
-    parameters.tool_choice = options.toolChoice;
+  const toolChoice = request.options.toolChoice ?? options.toolChoice;
+  if (
+    compatibility.supportsTools &&
+    toolChoice !== undefined &&
+    toolChoice !== 'auto'
+  )
+    parameters.tool_choice =
+      typeof toolChoice === 'object'
+        ? { type: 'function', function: { name: toolChoice.name } }
+        : toolChoice;
   return {
     model: request.model.upstreamModelId,
     input: { messages },

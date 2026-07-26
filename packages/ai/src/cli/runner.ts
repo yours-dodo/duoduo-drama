@@ -163,64 +163,35 @@ async function modelsCommand<TScopeHandle>(
   json: boolean,
 ): Promise<number> {
   if (args[0] === 'refresh')
-    return refreshModels(args.slice(1), dependencies, json);
+    return usageError(
+      dependencies,
+      json,
+      'models refresh was removed because model catalogs are statically registered',
+    );
+  if (args.includes('--available'))
+    return usageError(
+      dependencies,
+      json,
+      'models --available was replaced by models --configured',
+    );
   const provider = args.find((argument) => !argument.startsWith('--'));
-  const available = args.includes('--available');
-  const rows = available
-    ? await availableModels(provider, dependencies)
+  const configured = args.includes('--configured');
+  const rows = configured
+    ? await configuredModels(provider, dependencies)
     : dependencies.inventory
         .filter(
           (entry) =>
             !provider || entry.definition.providerInstanceId === provider,
         )
-        .map((entry) => modelRow(entry, 'unknown'));
+        .map(modelRow);
   writeResult(dependencies.stdout, json, {
-    mode: available ? 'available' : 'inventory',
+    mode: configured ? 'configured' : 'inventory',
     models: rows,
   });
   return 0;
 }
 
-async function refreshModels<TScopeHandle>(
-  args: readonly string[],
-  dependencies: NodeCliDependencies<TScopeHandle>,
-  json: boolean,
-): Promise<number> {
-  requireCredentialKey(dependencies);
-  const provider = args.find((argument) => !argument.startsWith('--'));
-  const providers = provider
-    ? [provider]
-    : dependencies.runtime.providers.list().map((item) => item.id);
-  const refreshed: string[] = [];
-  const unavailable: Array<{ provider: string; code: string }> = [];
-  for (const providerInstanceId of providers) {
-    try {
-      await dependencies.runtime.models.list(
-        dependencies.scope,
-        { providerInstanceId },
-        { allowNetwork: true, force: true },
-      );
-      await dependencies.runtime.images.models.list(dependencies.scope, {
-        providerInstanceId,
-      });
-      await dependencies.runtime.videos.models.list(dependencies.scope, {
-        providerInstanceId,
-      });
-      refreshed.push(providerInstanceId);
-    } catch (error) {
-      unavailable.push({
-        provider: providerInstanceId,
-        code: safeError(error).code,
-      });
-    }
-  }
-  writeResult(dependencies.stdout, json, { refreshed, unavailable });
-  return unavailable.length === providers.length && providers.length > 0
-    ? CLI_UNAVAILABLE_EXIT_CODE
-    : 0;
-}
-
-async function availableModels<TScopeHandle>(
+async function configuredModels<TScopeHandle>(
   provider: string | undefined,
   dependencies: NodeCliDependencies<TScopeHandle>,
 ): Promise<readonly Record<string, unknown>[]> {
@@ -258,7 +229,8 @@ async function availableModels<TScopeHandle>(
             providerInstanceId: handle.definition.providerInstanceId,
             modelId: handle.definition.id,
             protocol: handle.definition.protocol,
-            availability: 'available',
+            configuration: 'configured',
+            availability: 'unknown',
           })),
         );
       } catch {
@@ -371,16 +343,13 @@ async function diagnoseCommand<TScopeHandle>(
   return snapshot && inventory.length > 0 ? 0 : CLI_UNAVAILABLE_EXIT_CODE;
 }
 
-function modelRow(
-  entry: CliModelDefinition,
-  availability: 'unknown' | 'available',
-): Record<string, unknown> {
+function modelRow(entry: CliModelDefinition): Record<string, unknown> {
   return {
     capability: entry.capability,
     providerInstanceId: entry.definition.providerInstanceId,
     modelId: entry.definition.id,
     protocol: entry.definition.protocol,
-    availability,
+    availability: 'unknown',
   };
 }
 

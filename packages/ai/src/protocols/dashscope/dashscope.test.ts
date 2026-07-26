@@ -59,6 +59,8 @@ describe('DashScope native protocol', () => {
             incremental_output: true,
             max_tokens: 256,
             enable_thinking: true,
+            temperature: 0.7,
+            top_p: 0.8,
             tools: [
               {
                 type: 'function',
@@ -73,6 +75,7 @@ describe('DashScope native protocol', () => {
                 },
               },
             ],
+            tool_choice: 'required',
           },
         },
       },
@@ -121,6 +124,9 @@ describe('DashScope native protocol', () => {
       {
         credentialOverride,
         maxOutputTokens: 256,
+        temperature: 0.7,
+        topP: 0.8,
+        toolChoice: 'required',
         protocolOptions: {
           enableThinking: true,
           route: '/services/aigc/evil',
@@ -149,6 +155,80 @@ describe('DashScope native protocol', () => {
         data: { requestId: 'req-qwen' },
       },
     });
+  });
+
+  it('honors request protocol tool choice ahead of common defaults', async () => {
+    const transport = createFixtureTransportDriver();
+    transport.enqueue({
+      expectedRequest: {
+        method: 'POST',
+        url: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+        jsonBody: {
+          model: 'qwen-plus',
+          input: { messages: [{ role: 'user', content: 'Weather?' }] },
+          parameters: {
+            result_format: 'message',
+            incremental_output: true,
+            max_tokens: 64,
+            tools: [
+              {
+                type: 'function',
+                function: {
+                  name: 'weather',
+                  parameters: { type: 'object' },
+                },
+              },
+            ],
+            tool_choice: 'none',
+          },
+        },
+      },
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+      bodyChunks: await fixture('text/native-thinking-tool.sse'),
+    });
+    const ai = createAi({
+      transport,
+      networkPolicy: createAllowlistNetworkPolicy({
+        origins: ['https://dashscope.aliyuncs.com'],
+      }),
+      credentialOverridePolicy: { allow: () => true },
+    });
+    ai.providers.register(
+      qwenProvider({ region: 'cn-beijing', protocolPreference: 'dashscope' }),
+    );
+    const model = await ai.models.require(
+      {
+        providerInstanceId: 'qwen',
+        modelId: 'qwen-plus',
+        protocol: 'dashscope',
+      },
+      {},
+      { credentialOverride },
+    );
+
+    const response = await ai.complete(
+      model,
+      {
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'Weather?' }] },
+        ],
+        tools: [
+          {
+            name: 'weather',
+            inputSchema: { type: 'object' },
+          },
+        ],
+      },
+      {
+        credentialOverride,
+        maxOutputTokens: 64,
+        protocolOptions: { toolChoice: 'none' },
+      },
+    );
+
+    expect(response.status).toBe('completed');
+    await ai.dispose();
   });
 
   it('maps multimodal input and array output on the curated native route', async () => {
