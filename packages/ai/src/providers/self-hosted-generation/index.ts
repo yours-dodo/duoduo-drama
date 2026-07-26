@@ -141,8 +141,7 @@ export async function selfHostedGenerationProvider(
           sources: Object.freeze([
             Object.freeze({
               kind: 'official' as const,
-              locator:
-                'docs/superpowers/specs/2026-07-19-duoduo-ai-design.md#self-hosted-generation',
+              locator: 'packages/ai/README.md',
             }),
             Object.freeze({
               kind: 'fixture' as const,
@@ -174,8 +173,7 @@ export async function selfHostedGenerationProvider(
           sources: Object.freeze([
             Object.freeze({
               kind: 'official' as const,
-              locator:
-                'docs/superpowers/specs/2026-07-19-duoduo-ai-design.md#self-hosted-generation',
+              locator: 'packages/ai/README.md',
             }),
             Object.freeze({
               kind: 'fixture' as const,

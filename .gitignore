@@ -8,6 +8,8 @@ coverage/
 !.env.example
 .DS_Store
 .idea/
+/.duoduo-drama/
+/docs/superpowers/
 
 vendor/*
 !vendor/AGENTS.md

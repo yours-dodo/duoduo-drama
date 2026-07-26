@@ -99,8 +99,8 @@
 - [ ] 选择 Web 工作台技术栈和 UI 基础设施。
 - [ ] 设计单体、模块化单体或服务化的初期架构方案。
 - [ ] 设计同步 API、实时通信和异步任务的职责边界。
-- [x] 设计模型网关和第三方 AI 服务接入方式（见 [`Duoduo AI 单包模块化设计`](docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)）。
-- [ ] 按 [`Duoduo AI 可执行实施计划`](docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md) 的 S01–S22 实现并验收 `@duoduo/ai` 单包。
+- [x] 设计模型网关和第三方 AI 服务接入方式。
+- [x] 完成并验收 `@duoduo/ai` 的 S01–S22 实现切片。
 
 ### 4.2 数据与基础设施
 

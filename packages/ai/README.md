@@ -172,4 +172,4 @@ pnpm --filter @duoduo/ai release:no-vendor
 
 `release:check` 会约束生产导入图、运行密钥脱敏金丝雀测试、扫描夹具中的疑似密钥值和未脱敏签名 URL，并证明在线测试运行器默认关闭。`release:no-vendor` 会复制一份不含 `vendor` 的干净临时检出，从 pnpm 存储中使用 `--offline --frozen-lockfile` 重新安装，并运行包的类型检查、测试和构建。所有默认验证都离线且确定性执行，不会发送任何付费在线请求。
 
-权威范围和证据记录在[设计规范](../../docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)、[实施计划](../../docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)和[实施状态](./IMPLEMENTATION-STATUS.md)中。
+当前发布范围和逐切片证据记录在[实施状态](./IMPLEMENTATION-STATUS.md)中。

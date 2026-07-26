@@ -239,8 +239,7 @@ HarmonyOS 客户端 ─┘
 ## 项目文档
 
 - [`PROJECT-PLAN.md`](PROJECT-PLAN.md)：项目级规划、已确认决策和讨论记录。
-- [`Duoduo AI 单包模块化设计`](docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)：`@duoduo/ai` 的权威设计规范。
-- [`Duoduo AI 可执行实施计划`](docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)：按依赖关系拆分的纵向实现切片、验收命令与 gate 证据要求。
+- [`Pi Agent 技术架构拆解`](docs/architecture/pi-agent-architecture.md)：对本地 vendor 参考实现的 Agent Loop、Harness、会话树、工具执行、上下文压缩与扩展边界进行源码级拆解。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
 - [`CLAUDE.md`](CLAUDE.md)：面向 AI 编码工具的仓库上下文说明。
@@ -345,4 +344,4 @@ pnpm --filter @duoduo/ai release:check
 pnpm --filter @duoduo/ai release:no-vendor
 ```
 
-S01–S22 和八个 gate 已全部通过。CLI、鉴权、Provider 清单、自建生成网关、live 安全开关与验证命令详见 [`packages/ai/README.md`](packages/ai/README.md)，逐切片证据见 [`packages/ai/IMPLEMENTATION-STATUS.md`](packages/ai/IMPLEMENTATION-STATUS.md)。权威范围和验收要求以 [`Duoduo AI 单包模块化设计`](docs/superpowers/specs/2026-07-19-duoduo-ai-design.md)及其[`可执行实施计划`](docs/superpowers/plans/2026-07-19-duoduo-ai-implementation-plan.md)为准。默认测试、构建、目录生成和发布检查绝不运行付费 live 请求。
+S01–S22 和八个 gate 已全部通过。CLI、鉴权、Provider 清单、自建生成网关、live 安全开关与验证命令详见 [`packages/ai/README.md`](packages/ai/README.md)，逐切片证据见 [`packages/ai/IMPLEMENTATION-STATUS.md`](packages/ai/IMPLEMENTATION-STATUS.md)。默认测试、构建、目录生成和发布检查绝不运行付费 live 请求。
