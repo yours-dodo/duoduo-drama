@@ -4,8 +4,8 @@ import {
   createHash,
   randomBytes,
 } from 'node:crypto';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { lstatSync, type Stats } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { constants, lstat, open } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 
@@ -41,7 +41,6 @@ import type {
   CliWriter,
   NodeCliDependencies,
 } from './runner.js';
-import { createFileCatalogStore } from './file-catalog-store.js';
 
 export interface NodeCliPaths {
   readonly stateDirectory: string;
@@ -78,7 +77,7 @@ export interface CreateNodeCliOptions {
   readonly providerOptions?: BuiltinProvidersOptions;
   readonly transport?: TransportDriver;
   readonly platform?: NodeJS.Platform;
-  readonly homeDirectory?: string;
+  readonly projectDirectory?: string;
 }
 
 interface NodeCliConfig {
@@ -89,13 +88,12 @@ interface NodeCliConfig {
 
 export function resolveNodeCliPaths(
   environment: EnvironmentSource = processEnvironmentSource(),
-  platform: NodeJS.Platform = process.platform,
-  homeDirectory: string = homedir(),
+  projectDirectory: string = process.cwd(),
 ): NodeCliPaths {
   const override = trim(environment.get('DUODUO_AI_HOME'));
   const stateDirectory = override
-    ? resolve(override)
-    : defaultStateDirectory(environment, platform, homeDirectory);
+    ? resolveStateDirectoryOverride(override)
+    : join(discoverProjectRoot(projectDirectory), '.duoduo-drama');
   return Object.freeze({
     stateDirectory,
     configFile: join(stateDirectory, 'config.json'),
@@ -202,11 +200,7 @@ export async function createNodeCliDependencies(
   options: CreateNodeCliOptions = {},
 ): Promise<NodeCliDependencies<LocalScopeHandle>> {
   const environment = options.environment ?? processEnvironmentSource();
-  const defaults = resolveNodeCliPaths(
-    environment,
-    options.platform,
-    options.homeDirectory,
-  );
+  const defaults = resolveNodeCliPaths(environment, options.projectDirectory);
   const paths = resolvePaths(defaults, options.paths);
   const config = await readConfig(paths.configFile, options.platform);
   const providerOptions = Object.freeze({
@@ -243,12 +237,6 @@ export async function createNodeCliDependencies(
           ...(options.clock ? { clock: options.clock } : {}),
         })
       : undefined;
-  // Construct the public catalog store during assembly so path and permission
-  // policy are validated independently from encrypted credential persistence.
-  createFileCatalogStore({
-    directory: paths.catalogDirectory,
-    ...(options.clock ? { clock: options.clock } : {}),
-  });
   const runtime = createAi<LocalScopeHandle>({
     ...createRuntimeAssemblyOptions(
       builtins.providers,
@@ -294,23 +282,60 @@ export function collectProviderInventory(
   );
 }
 
-function defaultStateDirectory(
-  environment: EnvironmentSource,
-  platform: NodeJS.Platform,
-  homeDirectory: string,
-): string {
-  if (platform === 'win32')
-    return join(
-      trim(environment.get('LOCALAPPDATA')) ?? homeDirectory,
-      'duoduo-ai',
-    );
-  if (platform === 'darwin')
-    return join(homeDirectory, 'Library', 'Application Support', 'duoduo-ai');
-  return join(
-    trim(environment.get('XDG_STATE_HOME')) ??
-      join(homeDirectory, '.local', 'state'),
-    'duoduo-ai',
+function discoverProjectRoot(projectDirectory: string): string {
+  const start = resolve(projectDirectory);
+  const metadata = readDiscoveryPath(
+    start,
+    'CLI project directory does not exist or cannot be inspected',
   );
+  if (!metadata.isDirectory())
+    throw new Error('CLI project directory must be a directory');
+
+  let current = start;
+  let nearestGitRoot: string | undefined;
+  while (true) {
+    if (hasDiscoveryMarker(current, 'pnpm-workspace.yaml')) return current;
+    if (!nearestGitRoot && hasDiscoveryMarker(current, '.git'))
+      nearestGitRoot = current;
+    const parent = dirname(current);
+    if (parent === current) return nearestGitRoot ?? start;
+    current = parent;
+  }
+}
+
+function resolveStateDirectoryOverride(override: string): string {
+  const stateDirectory = resolve(override);
+  let metadata: Stats;
+  try {
+    metadata = lstatSync(stateDirectory);
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT')) return stateDirectory;
+    throw new Error('DUODUO_AI_HOME cannot be inspected', { cause: error });
+  }
+  if (!metadata.isDirectory())
+    throw new Error('DUODUO_AI_HOME must identify a directory');
+  return stateDirectory;
+}
+
+function hasDiscoveryMarker(directory: string, name: string): boolean {
+  const path = join(directory, name);
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT')) return false;
+    throw new Error('CLI workspace marker cannot be inspected: ' + path, {
+      cause: error,
+    });
+  }
+}
+
+function readDiscoveryPath(path: string, message: string): Stats {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    throw new Error(message, { cause: error });
+  }
 }
 
 function resolvePaths(

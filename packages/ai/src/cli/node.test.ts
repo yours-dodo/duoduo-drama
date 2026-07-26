@@ -1,4 +1,4 @@
-import { access, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,11 +13,57 @@ import {
 import { CLI_EXIT_CREDENTIAL_KEY_UNAVAILABLE, runCli } from './runner.js';
 
 describe('Node CLI assembly', () => {
-  it('resolves platform state paths and honors DUODUO_AI_HOME', () => {
+  it('resolves project-local state paths from a nested workspace directory', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'duoduo-cli-workspace-'));
+    const projectDirectory = join(workspace, 'apps', 'agent', 'src');
+    await mkdir(projectDirectory, { recursive: true });
+    await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages: []\n');
+
+    expect(
+      resolveNodeCliPaths(createNodeEnvironmentSource({}), projectDirectory),
+    ).toEqual({
+      stateDirectory: join(workspace, '.duoduo-drama'),
+      configFile: join(workspace, '.duoduo-drama', 'config.json'),
+      credentialDirectory: join(workspace, '.duoduo-drama', 'credentials'),
+      catalogDirectory: join(workspace, '.duoduo-drama', 'catalogs'),
+    });
+  });
+
+  it('prefers a pnpm workspace marker over a nested git marker', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'duoduo-cli-markers-'));
+    const nestedRepository = join(workspace, 'vendor', 'nested');
+    const projectDirectory = join(nestedRepository, 'src');
+    await mkdir(projectDirectory, { recursive: true });
+    await mkdir(join(nestedRepository, '.git'));
+    await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages: []\n');
+
+    expect(
+      resolveNodeCliPaths(createNodeEnvironmentSource({}), projectDirectory)
+        .stateDirectory,
+    ).toBe(join(workspace, '.duoduo-drama'));
+  });
+
+  it('falls back to a git root and then to the discovery start directory', async () => {
+    const gitRoot = await mkdtemp(join(tmpdir(), 'duoduo-cli-git-'));
+    const gitProject = join(gitRoot, 'packages', 'ai');
+    await mkdir(gitProject, { recursive: true });
+    await writeFile(join(gitRoot, '.git'), 'gitdir: elsewhere\n');
+    expect(
+      resolveNodeCliPaths(createNodeEnvironmentSource({}), gitProject)
+        .stateDirectory,
+    ).toBe(join(gitRoot, '.duoduo-drama'));
+
+    const standalone = await mkdtemp(join(tmpdir(), 'duoduo-cli-standalone-'));
+    expect(
+      resolveNodeCliPaths(createNodeEnvironmentSource({}), standalone)
+        .stateDirectory,
+    ).toBe(join(standalone, '.duoduo-drama'));
+  });
+
+  it('honors DUODUO_AI_HOME before project discovery', () => {
     const override = resolveNodeCliPaths(
       createNodeEnvironmentSource({ DUODUO_AI_HOME: '/tmp/duoduo-explicit' }),
-      'linux',
-      '/home/example',
+      '/path/that/does/not/exist',
     );
     expect(override).toEqual({
       stateDirectory: '/tmp/duoduo-explicit',
@@ -25,25 +71,35 @@ describe('Node CLI assembly', () => {
       credentialDirectory: '/tmp/duoduo-explicit/credentials',
       catalogDirectory: '/tmp/duoduo-explicit/catalogs',
     });
-    expect(
+  });
+
+  it('rejects a DUODUO_AI_HOME override that is not a directory', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'duoduo-cli-home-file-'));
+    const file = join(directory, 'state-file');
+    await writeFile(file, 'not a directory');
+
+    expect(() =>
       resolveNodeCliPaths(
-        createNodeEnvironmentSource({ XDG_STATE_HOME: '/state' }),
-        'linux',
-        '/home/example',
-      ).stateDirectory,
-    ).toBe('/state/duoduo-ai');
-    expect(
-      resolveNodeCliPaths(undefined, 'darwin', '/Users/example').stateDirectory,
-    ).toBe('/Users/example/Library/Application Support/duoduo-ai');
-    expect(
+        createNodeEnvironmentSource({ DUODUO_AI_HOME: file }),
+        '/path/that/does/not/exist',
+      ),
+    ).toThrow(/DUODUO_AI_HOME.*directory/i);
+  });
+
+  it('rejects a missing or non-directory project discovery start', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'duoduo-cli-invalid-'));
+    const file = join(directory, 'file.txt');
+    await writeFile(file, 'not a directory');
+
+    expect(() =>
       resolveNodeCliPaths(
-        createNodeEnvironmentSource({
-          LOCALAPPDATA: 'C:\\Users\\e\\AppData\\Local',
-        }),
-        'win32',
-        'C:\\Users\\e',
-      ).stateDirectory,
-    ).toBe('C:\\Users\\e\\AppData\\Local/duoduo-ai');
+        createNodeEnvironmentSource({}),
+        join(directory, 'missing'),
+      ),
+    ).toThrow(/project directory/i);
+    expect(() =>
+      resolveNodeCliPaths(createNodeEnvironmentSource({}), file),
+    ).toThrow(/project directory/i);
   });
 
   it('does not create a plaintext credential store when no non-interactive key exists', async () => {
@@ -67,6 +123,28 @@ describe('Node CLI assembly', () => {
       await expect(access(join(home, 'credentials'))).rejects.toMatchObject({
         code: 'ENOENT',
       });
+    } finally {
+      await dependencies.runtime.dispose();
+    }
+  });
+
+  it('keeps the project-local state and catalog directories lazy', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'duoduo-cli-lazy-'));
+    const projectDirectory = join(workspace, 'packages', 'ai');
+    await mkdir(projectDirectory, { recursive: true });
+    await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages: []\n');
+
+    const dependencies = await createNodeCliDependencies({
+      projectDirectory,
+      environment: createNodeEnvironmentSource({}),
+    });
+    try {
+      await expect(
+        access(join(workspace, '.duoduo-drama')),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(
+        access(join(workspace, '.duoduo-drama', 'catalogs')),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       await dependencies.runtime.dispose();
     }

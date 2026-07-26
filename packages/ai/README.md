@@ -113,7 +113,7 @@ pnpm --filter @duoduo/ai exec duoduo-ai auth status openai --json
 
 支持的命令包括 `providers`、`models`、`models --configured`、`auth status`、`auth login`、`auth logout` 和 `diagnose`。`models` 返回静态已知模型；`models --configured` 返回当前凭证作用域能够完成认证绑定的模型，但不会访问远端或宣称模型实际可用。Runtime 目前不支持远程模型目录刷新。使用 `--json` 输出机器可读结果时，还会经过第二层脱敏处理。
 
-凭证持久化采用故障关闭策略。将 `DUODUO_AI_MASTER_KEY` 设置为经过 base64url 编码的 32 字节密钥，才能启用加密文件存储。如果没有可用密钥，修改凭证的命令会返回 `CREDENTIAL_CODEC_KEY_UNAVAILABLE`，退出码为 69。`DUODUO_AI_HOME` 可以覆盖本地状态目录。`config.json` 只能包含非敏感的 Provider 选项；疑似敏感字段会被拒绝，而不是持久化。
+凭证持久化采用故障关闭策略。将 `DUODUO_AI_MASTER_KEY` 设置为经过 base64url 编码的 32 字节密钥，才能启用加密文件存储。如果没有可用密钥，修改凭证的命令会返回 `CREDENTIAL_CODEC_KEY_UNAVAILABLE`，退出码为 69。默认状态目录是工作区根目录下的 `.duoduo-drama/`，包含 `config.json`、加密的 `credentials/` 和按需创建的公开模型元数据 `catalogs/`；`DUODUO_AI_HOME` 可以显式覆盖该目录。`config.json` 只能包含非敏感的 Provider 选项；疑似敏感字段会被拒绝，而不是持久化。
 
 ## 图像、视频与可恢复生成
 
