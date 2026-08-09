@@ -12,6 +12,9 @@ const SERVER_CONFIG: ServerConfig = {
   trustedOrigins: ['http://localhost:3000'],
   databaseUrl:
     'postgresql://duoduo_server:test@127.0.0.1:1/unreachable_server_test',
+  publicWebUrl: 'http://localhost:3000',
+  loginTokenPepper: 'local-test-login-token-pepper-change-me',
+  trustedProxyHops: 0,
 };
 
 describe('PrismaService', () => {

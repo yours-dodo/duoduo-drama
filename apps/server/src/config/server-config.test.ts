@@ -14,6 +14,9 @@ describe('parseServerConfig', () => {
       cookieSecret: 'local-development-cookie-secret-change-me',
       trustedOrigins: ['http://localhost:3000'],
       databaseUrl: TEST_DATABASE_URL,
+      publicWebUrl: 'http://localhost:3000',
+      loginTokenPepper: 'local-development-login-token-pepper-change-me',
+      trustedProxyHops: 0,
     });
   });
 
@@ -26,6 +29,9 @@ describe('parseServerConfig', () => {
         TRUSTED_ORIGINS: 'https://app.example.com, https://admin.example.com',
         SERVER_DATABASE_URL:
           'postgresql://duoduo_server:production@db.example.com:5432/duoduo_server',
+        PUBLIC_WEB_URL: 'https://app.example.com',
+        LOGIN_TOKEN_PEPPER: 'a-production-login-token-pepper-32-chars',
+        TRUST_PROXY_HOPS: '1',
       }),
     ).toEqual({
       environment: 'production',
@@ -34,6 +40,9 @@ describe('parseServerConfig', () => {
       trustedOrigins: ['https://app.example.com', 'https://admin.example.com'],
       databaseUrl:
         'postgresql://duoduo_server:production@db.example.com:5432/duoduo_server',
+      publicWebUrl: 'https://app.example.com',
+      loginTokenPepper: 'a-production-login-token-pepper-32-chars',
+      trustedProxyHops: 1,
     });
   });
 
@@ -52,6 +61,61 @@ describe('parseServerConfig', () => {
       parseServerConfig({ SERVER_DATABASE_URL: databaseUrl }),
     ).toThrow('SERVER_DATABASE_URL must be a valid PostgreSQL database URL');
   });
+
+  it.each([undefined, 'too-short'])(
+    'requires a strong login token pepper in production',
+    (loginTokenPepper) => {
+      expect(() =>
+        parseServerConfig({
+          ...TEST_DATABASE_ENVIRONMENT,
+          NODE_ENV: 'production',
+          COOKIE_SECRET: 'a-production-cookie-secret-with-32-chars',
+          TRUSTED_ORIGINS: 'https://app.example.com',
+          PUBLIC_WEB_URL: 'https://app.example.com',
+          LOGIN_TOKEN_PEPPER: loginTokenPepper,
+        }),
+      ).toThrow(
+        'LOGIN_TOKEN_PEPPER must contain at least 32 characters in production',
+      );
+    },
+  );
+
+  it('requires a public Web URL in production', () => {
+    expect(() =>
+      parseServerConfig({
+        ...TEST_DATABASE_ENVIRONMENT,
+        NODE_ENV: 'production',
+        COOKIE_SECRET: 'a-production-cookie-secret-with-32-chars',
+        TRUSTED_ORIGINS: 'https://app.example.com',
+        LOGIN_TOKEN_PEPPER: 'a-production-login-token-pepper-32-chars',
+      }),
+    ).toThrow('PUBLIC_WEB_URL is required in production');
+  });
+
+  it('requires HTTPS for the production public Web URL', () => {
+    expect(() =>
+      parseServerConfig({
+        ...TEST_DATABASE_ENVIRONMENT,
+        NODE_ENV: 'production',
+        COOKIE_SECRET: 'a-production-cookie-secret-with-32-chars',
+        TRUSTED_ORIGINS: 'https://app.example.com',
+        LOGIN_TOKEN_PEPPER: 'a-production-login-token-pepper-32-chars',
+        PUBLIC_WEB_URL: 'http://app.example.com',
+      }),
+    ).toThrow('PUBLIC_WEB_URL must use HTTPS in production');
+  });
+
+  it.each(['-1', '1.5', '11', 'many'])(
+    'rejects an invalid trusted proxy hop count: %s',
+    (trustedProxyHops) => {
+      expect(() =>
+        parseServerConfig({
+          ...TEST_DATABASE_ENVIRONMENT,
+          TRUST_PROXY_HOPS: trustedProxyHops,
+        }),
+      ).toThrow('TRUST_PROXY_HOPS must be an integer between 0 and 10');
+    },
+  );
 
   it.each(['0', '65536', '3001.5', 'not-a-port'])(
     'rejects an invalid port: %s',

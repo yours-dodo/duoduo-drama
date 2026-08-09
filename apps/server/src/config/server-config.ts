@@ -8,12 +8,19 @@ export interface ServerConfig {
   cookieSecret: string;
   trustedOrigins: string[];
   databaseUrl: string;
+  publicWebUrl: string;
+  loginTokenPepper: string;
+  trustedProxyHops: number;
 }
 
 const DEFAULT_PORT = 3001;
 const DEFAULT_COOKIE_SECRET = 'local-development-cookie-secret-change-me';
 const DEFAULT_TRUSTED_ORIGINS = ['http://localhost:3000'];
+const DEFAULT_PUBLIC_WEB_URL = 'http://localhost:3000';
+const DEFAULT_LOGIN_TOKEN_PEPPER =
+  'local-development-login-token-pepper-change-me';
 const PRODUCTION_COOKIE_SECRET_MIN_LENGTH = 32;
+const LOGIN_TOKEN_PEPPER_MIN_LENGTH = 32;
 
 export class ServerConfigError extends Error {
   constructor(message: string) {
@@ -39,7 +46,103 @@ export function parseServerConfig(
       runtimeEnvironment,
     ),
     databaseUrl: parseDatabaseUrl(environment.SERVER_DATABASE_URL),
+    publicWebUrl: parsePublicWebUrl(
+      environment.PUBLIC_WEB_URL,
+      runtimeEnvironment,
+    ),
+    loginTokenPepper: parseLoginTokenPepper(
+      environment.LOGIN_TOKEN_PEPPER,
+      runtimeEnvironment,
+    ),
+    trustedProxyHops: parseTrustedProxyHops(environment.TRUST_PROXY_HOPS),
   };
+}
+
+function parseTrustedProxyHops(value: string | undefined): number {
+  if (value === undefined) {
+    return 0;
+  }
+
+  if (!/^\d+$/.test(value)) {
+    throw invalidTrustedProxyHops();
+  }
+
+  const hops = Number(value);
+  if (!Number.isSafeInteger(hops) || hops < 0 || hops > 10) {
+    throw invalidTrustedProxyHops();
+  }
+
+  return hops;
+}
+
+function invalidTrustedProxyHops(): ServerConfigError {
+  return new ServerConfigError(
+    'TRUST_PROXY_HOPS must be an integer between 0 and 10',
+  );
+}
+
+function parsePublicWebUrl(
+  value: string | undefined,
+  environment: ServerEnvironment,
+): string {
+  if (value === undefined || value.trim() === '') {
+    if (environment === 'production') {
+      throw new ServerConfigError('PUBLIC_WEB_URL is required in production');
+    }
+
+    return DEFAULT_PUBLIC_WEB_URL;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new ServerConfigError(
+      'PUBLIC_WEB_URL must be a valid HTTP(S) origin',
+    );
+  }
+
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.pathname !== '/' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
+    throw new ServerConfigError(
+      'PUBLIC_WEB_URL must be a valid HTTP(S) origin',
+    );
+  }
+
+  if (environment === 'production' && url.protocol !== 'https:') {
+    throw new ServerConfigError('PUBLIC_WEB_URL must use HTTPS in production');
+  }
+
+  return url.origin;
+}
+
+function parseLoginTokenPepper(
+  value: string | undefined,
+  environment: ServerEnvironment,
+): string {
+  if (value === undefined) {
+    if (environment === 'production') {
+      throw new ServerConfigError(
+        'LOGIN_TOKEN_PEPPER must contain at least 32 characters in production',
+      );
+    }
+
+    return DEFAULT_LOGIN_TOKEN_PEPPER;
+  }
+
+  if (value.length < LOGIN_TOKEN_PEPPER_MIN_LENGTH) {
+    throw new ServerConfigError(
+      environment === 'production'
+        ? 'LOGIN_TOKEN_PEPPER must contain at least 32 characters in production'
+        : 'LOGIN_TOKEN_PEPPER must contain at least 32 characters',
+    );
+  }
+
+  return value;
 }
 
 function parseDatabaseUrl(value: string | undefined): string {

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline plus the Prisma/PostgreSQL runtime boundary: validated startup configuration, URI-versioned APIs, DTO validation, Cookie parsing, trusted-origin CORS, request IDs, structured request logs, safe error envelopes, database-backed readiness, explicit migrations, and a narrow transaction runner. Authentication, business modules, and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, and the first half of passwordless identity: normalized email addresses, protected one-time login challenges, shared PostgreSQL rate limits, a local delivery adapter, and `POST /v1/auth/email-login-requests`. Login verification, sessions, authorization, other business modules, and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -16,6 +16,7 @@ Create directories only when real code needs them. Use these boundaries as the S
 
 - `src/domain/` for framework-independent entities, value objects, policies, and invariants.
 - `src/modules/` for NestJS modules and application use cases grouped by business capability.
+- `src/modules/identity/` for passwordless login application flows, ports, transport DTOs, and identity infrastructure adapters.
 - `src/integrations/agent/` for the Agent client and request/response mapping.
 - `src/config/` for Server-owned environment parsing and validation.
 - `src/platform/http/` for transport-wide middleware, filters, versioning, and health probes.
@@ -49,6 +50,8 @@ Co-locate tests as `*.test.ts`. Add focused unit tests for domain invariants and
 
 Validate environment variables during startup. Do not expose stack traces, credentials, model keys, or internal dependency errors in API responses. External Agent calls must eventually define timeouts, idempotency, and retry behavior explicitly rather than relying on client defaults.
 
-Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret of at least 32 characters and an explicit comma-separated trusted-origin list. Never log request bodies, authorization headers, Cookies, or URL query values.
+Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret and login-token pepper of at least 32 characters, an HTTPS public Web URL, and an explicit comma-separated trusted-origin list. Configure `TRUST_PROXY_HOPS` to the deployment's exact trusted reverse-proxy count; keep the default `0` when the Server is directly exposed. Never log request bodies, authorization headers, Cookies, or URL query values.
+
+Raw login tokens may exist only long enough to reach the email-delivery port. Persist HMAC digests only; never add raw token, verification code, magic-link URL, or source address columns or logs. Shared login limits must remain atomic in PostgreSQL and use the database clock. The local email adapter is non-production only, and production startup must remain blocked until a real delivery adapter is configured.
 
 The Server database must use `SERVER_DATABASE_URL`; the Agent database uses its own `AGENT_*` variables, database, and credentials. Never share Prisma models, migration history, database users, or connection strings across those services. Application startup does not apply migrations automatically: deploy migrations explicitly before starting code that depends on them.

@@ -16,7 +16,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "pretest:postgres": "pnpm db:generate",
-    "test:postgres": "SERVER_DATABASE_URL=$SERVER_TEST_POSTGRES_URL SERVER_TEST_POSTGRES_REQUIRED=1 prisma migrate deploy && SERVER_TEST_POSTGRES_REQUIRED=1 vitest run src/platform/database/prisma.service.postgres.test.ts"
+    "test:postgres": "SERVER_DATABASE_URL=$SERVER_TEST_POSTGRES_URL SERVER_TEST_POSTGRES_REQUIRED=1 prisma migrate deploy && SERVER_TEST_POSTGRES_REQUIRED=1 vitest run src/platform/database/prisma.service.postgres.test.ts src/modules/identity/infrastructure/prisma-login-challenge.repository.postgres.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",

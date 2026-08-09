@@ -26,6 +26,9 @@ describe.skipIf(!databaseUrl)('Prisma PostgreSQL boundary', () => {
       cookieSecret: 'local-test-cookie-secret-change-me',
       trustedOrigins: ['http://localhost:3000'],
       databaseUrl: requireDatabaseUrl(databaseUrl),
+      publicWebUrl: 'http://localhost:3000',
+      loginTokenPepper: 'local-test-login-token-pepper-change-me',
+      trustedProxyHops: 0,
     };
 
     context = new PostgresTestContext(serverConfig.databaseUrl);
@@ -87,6 +90,9 @@ describe.skipIf(!databaseUrl)('Prisma PostgreSQL boundary', () => {
       cookieSecret: 'local-test-cookie-secret-change-me',
       trustedOrigins: ['http://localhost:3000'],
       databaseUrl: requireDatabaseUrl(databaseUrl),
+      publicWebUrl: 'http://localhost:3000',
+      loginTokenPepper: 'local-test-login-token-pepper-change-me',
+      trustedProxyHops: 0,
     });
 
     await disposablePrisma.ping();

@@ -4,6 +4,7 @@ import {
   VersioningType,
 } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import type { Application } from 'express';
 
 import type { ServerConfig } from '../../config/server-config.js';
 import {
@@ -23,6 +24,8 @@ export function configureHttpApp(
   config: ServerConfig,
   options: ConfigureHttpAppOptions = {},
 ): void {
+  const expressApplication = app.getHttpAdapter().getInstance() as Application;
+  expressApplication.set('trust proxy', config.trustedProxyHops);
   app.use(requestIdMiddleware);
   app.enableCors({
     credentials: true,

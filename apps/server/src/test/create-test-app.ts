@@ -1,4 +1,4 @@
-import type { INestApplication, Type } from '@nestjs/common';
+import type { INestApplication, InjectionToken, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { AppModule } from '../app.module.js';
@@ -16,17 +16,24 @@ const TEST_SERVER_CONFIG: ServerConfig = {
   trustedOrigins: ['http://localhost:3000'],
   databaseUrl:
     'postgresql://duoduo_server:test@127.0.0.1:55433/duoduo_server_test',
+  publicWebUrl: 'http://localhost:3000',
+  loginTokenPepper: 'local-test-login-token-pepper-change-me',
+  trustedProxyHops: 1,
 };
 
 export interface CreateTestAppOptions extends ConfigureHttpAppOptions {
   controllers?: Type<unknown>[];
   databaseReady?: boolean;
+  providerOverrides?: Array<{
+    token: InjectionToken<unknown>;
+    value: unknown;
+  }>;
 }
 
 export async function createTestApp(
   options: CreateTestAppOptions = {},
 ): Promise<INestApplication> {
-  const testingModule = await Test.createTestingModule({
+  let testingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
     controllers: options.controllers ?? [],
   })
@@ -35,8 +42,15 @@ export async function createTestApp(
     .overrideProvider(DatabaseReadinessService)
     .useValue({
       isReady: async () => options.databaseReady ?? true,
-    })
-    .compile();
+    });
+
+  for (const override of options.providerOverrides ?? []) {
+    testingModuleBuilder = testingModuleBuilder
+      .overrideProvider(override.token)
+      .useValue(override.value);
+  }
+
+  const testingModule = await testingModuleBuilder.compile();
   const app = testingModule.createNestApplication();
 
   configureHttpApp(app, TEST_SERVER_CONFIG, {
