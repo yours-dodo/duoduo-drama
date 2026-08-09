@@ -5,8 +5,8 @@
 ## 1. 当前状态
 
 - 记录开始日期：2026-07-16
-- 项目阶段：Agent Core A4c 外部副作用对账已完成，已进入多租户故事创作业务后端设计与实现准备
-- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4c 已通过内存、PostgreSQL 和真实进程恢复验收。
+- 项目阶段：Agent Core A4c 已完成，多租户故事创作业务后端正在实施；无密码身份与安全会话已完成，下一步进入团队租户上下文。
+- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4c 已通过验收，Server 已具备 HTTP、PostgreSQL 和无密码 Web 身份基座。
 
 ## 2. 规划目标
 

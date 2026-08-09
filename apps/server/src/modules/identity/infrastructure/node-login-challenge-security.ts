@@ -1,8 +1,8 @@
 import { createHmac, randomBytes } from 'node:crypto';
 
-import type { LoginChallengeSecurity } from '../application/request-email-login.js';
+import type { IdentityTokenSecurity } from '../ports/identity-token-security.js';
 
-export class NodeLoginChallengeSecurity implements LoginChallengeSecurity {
+export class NodeLoginChallengeSecurity implements IdentityTokenSecurity {
   constructor(private readonly pepper: string) {}
 
   issueToken(): string {
@@ -11,6 +11,18 @@ export class NodeLoginChallengeSecurity implements LoginChallengeSecurity {
 
   hashToken(token: string): string {
     return this.digest('login-token', token);
+  }
+
+  issueSessionToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  hashLoginToken(token: string): string {
+    return this.hashToken(token);
+  }
+
+  hashSessionToken(token: string): string {
+    return this.digest('session-token', token);
   }
 
   digestSource(sourceAddress: string): string {

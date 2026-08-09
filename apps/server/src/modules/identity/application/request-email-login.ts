@@ -1,17 +1,12 @@
 import { EmailAddress } from '../../../domain/identity/email-address.js';
 import { LoginChallenge } from '../../../domain/identity/login-challenge.js';
 import type { EmailDelivery } from '../ports/email-delivery.js';
+import type { IdentityTokenSecurity } from '../ports/identity-token-security.js';
 import type { LoginChallengeRepository } from '../ports/login-challenge-repository.js';
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1_000;
 const EMAIL_RATE_LIMIT = 5;
 const SOURCE_RATE_LIMIT = 20;
-
-export interface LoginChallengeSecurity {
-  issueToken(): string;
-  hashToken(token: string): string;
-  digestSource(sourceAddress: string): string;
-}
 
 export interface Clock {
   now(): Date;
@@ -34,7 +29,10 @@ export class RequestEmailLogin {
   constructor(
     private readonly challenges: LoginChallengeRepository,
     private readonly emailDelivery: EmailDelivery,
-    private readonly security: LoginChallengeSecurity,
+    private readonly security: Pick<
+      IdentityTokenSecurity,
+      'issueToken' | 'hashToken' | 'digestSource'
+    >,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}

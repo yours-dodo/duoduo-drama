@@ -24,6 +24,7 @@ const TEST_SERVER_CONFIG: ServerConfig = {
 export interface CreateTestAppOptions extends ConfigureHttpAppOptions {
   controllers?: Type<unknown>[];
   databaseReady?: boolean;
+  serverConfig?: ServerConfig;
   providerOverrides?: Array<{
     token: InjectionToken<unknown>;
     value: unknown;
@@ -33,12 +34,13 @@ export interface CreateTestAppOptions extends ConfigureHttpAppOptions {
 export async function createTestApp(
   options: CreateTestAppOptions = {},
 ): Promise<INestApplication> {
+  const serverConfig = options.serverConfig ?? TEST_SERVER_CONFIG;
   let testingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
     controllers: options.controllers ?? [],
   })
     .overrideProvider(SERVER_CONFIG)
-    .useValue(TEST_SERVER_CONFIG)
+    .useValue(serverConfig)
     .overrideProvider(DatabaseReadinessService)
     .useValue({
       isReady: async () => options.databaseReady ?? true,
@@ -53,7 +55,7 @@ export async function createTestApp(
   const testingModule = await testingModuleBuilder.compile();
   const app = testingModule.createNestApplication();
 
-  configureHttpApp(app, TEST_SERVER_CONFIG, {
+  configureHttpApp(app, serverConfig, {
     requestLogSink: options.requestLogSink,
   });
   await app.init();

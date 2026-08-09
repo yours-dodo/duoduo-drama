@@ -14,6 +14,10 @@ describe('NodeLoginChallengeSecurity', () => {
     expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(second).not.toBe(first);
+
+    const sessionToken = security.issueSessionToken();
+    expect(sessionToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(sessionToken).not.toBe(first);
   });
 
   it('uses deterministic, purpose-separated HMAC digests', () => {
@@ -23,6 +27,12 @@ describe('NodeLoginChallengeSecurity', () => {
 
     expect(security.hashToken('raw-login-token')).toBe(
       'c00b24b0650ff7b533c76770f889c4554d65e7c0924b643068dbb3154647f01c',
+    );
+    expect(security.hashLoginToken('raw-login-token')).toBe(
+      'c00b24b0650ff7b533c76770f889c4554d65e7c0924b643068dbb3154647f01c',
+    );
+    expect(security.hashSessionToken('raw-session-token')).toBe(
+      '4cb9fee951ccc2178ccd187af1d5ba6680e9a8d7adad28e19a733d876f29cc6b',
     );
     expect(security.digestSource('203.0.113.9')).toBe(
       '1258e06257d5ce57f5bd4b658e2afcbbc1dfcb8b47124df7027932d4d9e460bb',

@@ -50,7 +50,9 @@ describe.skipIf(!databaseUrl)('PrismaLoginChallengeRepository', () => {
   });
 
   beforeEach(async () => {
-    await pool.query('TRUNCATE TABLE "email_login_challenges", "users"');
+    await pool.query(
+      'TRUNCATE TABLE "identity_security_events", "sessions", "email_login_challenges", "users"',
+    );
   });
 
   afterAll(async () => {

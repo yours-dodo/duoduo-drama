@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, and the first half of passwordless identity: normalized email addresses, protected one-time login challenges, shared PostgreSQL rate limits, a local delivery adapter, and `POST /v1/auth/email-login-requests`. Login verification, sessions, authorization, other business modules, and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, and passwordless Web identity: normalized email addresses, protected one-time login challenges, shared PostgreSQL request limits, single-use verification, persistent sessions, local delivery, `/v1/auth` endpoints, and `/v1/me`. Team tenancy, business authorization, other business modules, and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -52,6 +52,6 @@ Validate environment variables during startup. Do not expose stack traces, crede
 
 Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret and login-token pepper of at least 32 characters, an HTTPS public Web URL, and an explicit comma-separated trusted-origin list. Configure `TRUST_PROXY_HOPS` to the deployment's exact trusted reverse-proxy count; keep the default `0` when the Server is directly exposed. Never log request bodies, authorization headers, Cookies, or URL query values.
 
-Raw login tokens may exist only long enough to reach the email-delivery port. Persist HMAC digests only; never add raw token, verification code, magic-link URL, or source address columns or logs. Shared login limits must remain atomic in PostgreSQL and use the database clock. The local email adapter is non-production only, and production startup must remain blocked until a real delivery adapter is configured.
+Raw login and session tokens may exist only at their delivery or HTTP Cookie boundaries. Persist purpose-separated HMAC digests only; never add raw token, verification code, magic-link URL, Cookie value, or source address columns or logs. Challenge consumption, user/session creation, revocation, and identity security events must keep their current transaction boundaries and use the database clock. Web session Cookies remain `HttpOnly`, `SameSite=Lax`, and `Secure` in production; every Cookie-authenticated write must pass the global exact-Origin check. The local email adapter is non-production only, and production startup must remain blocked until a real delivery adapter is configured.
 
 The Server database must use `SERVER_DATABASE_URL`; the Agent database uses its own `AGENT_*` variables, database, and credentials. Never share Prisma models, migration history, database users, or connection strings across those services. Application startup does not apply migrations automatically: deploy migrations explicitly before starting code that depends on them.

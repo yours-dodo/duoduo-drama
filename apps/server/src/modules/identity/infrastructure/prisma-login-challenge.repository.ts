@@ -7,6 +7,8 @@ import {
 import type { DatabaseClient } from '../../../platform/database/prisma.service.js';
 import { TransactionRunner } from '../../../platform/database/transaction-runner.js';
 import type {
+  ConsumeLoginChallengeRequest,
+  ConsumeLoginChallengeResult,
   CreateLoginChallengeRequest,
   CreateLoginChallengeResult,
   LoginChallengeRepository,
@@ -91,6 +93,86 @@ export class PrismaLoginChallengeRepository implements LoginChallengeRepository 
       });
 
       return challenge === null ? null : challenge;
+    });
+  }
+
+  consumeForVerification(
+    request: ConsumeLoginChallengeRequest,
+  ): Promise<ConsumeLoginChallengeResult> {
+    return this.database.withClient(async (client) => {
+      const [challenge] = await client.$queryRaw<
+        Array<{
+          id: string;
+          email: string;
+          expiresAt: Date;
+          attemptCount: number;
+          consumedAt: Date | null;
+          databaseNow: Date;
+        }>
+      >`
+        SELECT
+          id,
+          email,
+          expires_at AS "expiresAt",
+          attempt_count AS "attemptCount",
+          consumed_at AS "consumedAt",
+          clock_timestamp() AS "databaseNow"
+        FROM email_login_challenges
+        WHERE token_hash = ${request.tokenHash}
+        FOR UPDATE
+      `;
+
+      if (!challenge) {
+        return { status: 'invalid' };
+      }
+
+      const databaseNow = new Date(challenge.databaseNow);
+      if (challenge.consumedAt !== null) {
+        return { status: 'consumed' };
+      }
+
+      if (challenge.attemptCount >= request.maximumAttempts) {
+        return {
+          status: 'locked',
+          challengeId: challenge.id,
+          occurredAt: databaseNow,
+          newlyLocked: false,
+        };
+      }
+
+      if (challenge.expiresAt.getTime() <= databaseNow.getTime()) {
+        const attemptCount = challenge.attemptCount + 1;
+        await client.emailLoginChallenge.update({
+          where: { id: challenge.id },
+          data: { attemptCount },
+        });
+
+        if (attemptCount >= request.maximumAttempts) {
+          return {
+            status: 'locked',
+            challengeId: challenge.id,
+            occurredAt: databaseNow,
+            newlyLocked: true,
+          };
+        }
+
+        return { status: 'expired' };
+      }
+
+      await client.emailLoginChallenge.update({
+        where: { id: challenge.id },
+        data: {
+          attemptCount: { increment: 1 },
+          consumedAt: databaseNow,
+        },
+      });
+
+      return {
+        status: 'verified',
+        challengeId: challenge.id,
+        email: challenge.email,
+        consumedAt: databaseNow,
+      };
     });
   }
 }
