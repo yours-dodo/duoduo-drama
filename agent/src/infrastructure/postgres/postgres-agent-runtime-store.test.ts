@@ -37,6 +37,7 @@ describe.skipIf(!databaseUrl)('PostgreSQL Agent Runtime Store', () => {
         { version: '0005', state: 'applied' },
         { version: '0006', state: 'applied' },
         { version: '0007', state: 'applied' },
+        { version: '0008', state: 'applied' },
       ],
     });
     const firstStore = createPostgresAgentRuntimeStore({ connectionString });
@@ -335,7 +336,7 @@ describe.skipIf(!databaseUrl)('PostgreSQL Agent Runtime Store', () => {
     }
   });
 
-  it('atomically retries safe orphan tools and quarantines external effects', async () => {
+  it('persists and reconciles quarantined external effects across Store instances', async () => {
     const connectionString = requireDatabaseUrl(databaseUrl);
     await migrateAgentRuntime({ connectionString });
     const store = createPostgresAgentRuntimeStore({ connectionString });
@@ -512,7 +513,7 @@ describe.skipIf(!databaseUrl)('PostgreSQL Agent Runtime Store', () => {
         { status: 'running', attempts: [{ status: 'running' }] },
       ]);
 
-      await store.commitTask({
+      receipt = await store.commitTask({
         ...query,
         commitId: `resolve-orphan-${suffix}`,
         expectedVersion: receipt.version,
@@ -530,6 +531,32 @@ describe.skipIf(!databaseUrl)('PostgreSQL Agent Runtime Store', () => {
             toolExecutionId: `external-execution-${suffix}`,
             attemptId: `external-attempt-${suffix}`,
             reasonCode: 'OWNER_LEASE_EXPIRED',
+          },
+        ],
+        reconciliations: [
+          {
+            type: 'reconciliation_case_created',
+            reconciliationCaseId: `external-case-${suffix}`,
+            toolExecutionId: `external-execution-${suffix}`,
+            attemptId: `external-attempt-${suffix}`,
+            reasonCode: 'EXTERNAL_EFFECT_UNKNOWN',
+          },
+        ],
+        events: [
+          {
+            eventId: `reconciliation-required-${suffix}`,
+            ...query,
+            turnId: `turn-${suffix}`,
+            turnIndex: 1,
+            sequence: 1,
+            occurredAt: now,
+            payload: {
+              type: 'run_reconciliation_required',
+              toolCallId: `external-call-${suffix}`,
+              toolExecutionId: `external-execution-${suffix}`,
+              attemptId: `external-attempt-${suffix}`,
+              reasonCode: 'EXTERNAL_EFFECT_UNKNOWN',
+            },
           },
         ],
         lease: recoveryGuard,
@@ -577,6 +604,132 @@ describe.skipIf(!databaseUrl)('PostgreSQL Agent Runtime Store', () => {
           attempts: [{ status: 'unknown', effectOutcome: 'unknown' }],
         },
       ]);
+      await expect(store.readReconciliationCases(query)).resolves.toMatchObject(
+        [
+          {
+            reconciliationCaseId: `external-case-${suffix}`,
+            toolExecutionId: `external-execution-${suffix}`,
+            status: 'waiting',
+            reasonCode: 'EXTERNAL_EFFECT_UNKNOWN',
+          },
+        ],
+      );
+
+      const secondStore = createPostgresAgentRuntimeStore({ connectionString });
+      try {
+        const observation = await secondStore.appendReconciliationObservation({
+          ...query,
+          reconciliationCaseId: `external-case-${suffix}`,
+          adapterId: 'payment-read-model',
+          adapterVersion: 'v1',
+          outcome: 'inconclusive',
+          reasonCode: 'PROVIDER_LAG',
+          presentation: { title: 'Provider is still reconciling' },
+          observedAt: now,
+        });
+        expect(observation).toMatchObject({
+          sequence: 1,
+          outcome: 'inconclusive',
+        });
+        await expect(
+          store.readReconciliationObservations({
+            ...query,
+            reconciliationCaseId: `external-case-${suffix}`,
+          }),
+        ).resolves.toHaveLength(1);
+
+        const decision = {
+          ...query,
+          reconciliationCaseId: `external-case-${suffix}`,
+          resolutionId: `resolution-${suffix}`,
+          resolution: 'confirmed_not_applied' as const,
+          resolvedBy: 'ops-reviewer',
+          reasonCode: 'PROVIDER_CONFIRMED_ABSENT',
+          presentation: { title: 'Provider confirmed no external effect' },
+          now,
+        };
+        const resolved = await secondStore.decideReconciliation(decision);
+        await expect(store.decideReconciliation(decision)).resolves.toEqual(
+          resolved,
+        );
+        await expect(
+          store.decideReconciliation({
+            ...decision,
+            resolution: 'confirmed_applied',
+          }),
+        ).rejects.toMatchObject({
+          code: 'AGENT_RECONCILIATION_RESOLUTION_MISMATCH',
+        });
+
+        await store.releaseRunLease({
+          ...query,
+          releaseId: `release-resolved-${suffix}`,
+          ownerId: recoveryLease.ownerId,
+          leaseToken: recoveryGuard.leaseToken,
+          fencingToken: recoveryGuard.fencingToken,
+          now,
+          availableAt: now,
+        });
+        const resumed = await store.claimRecoverableRuns({
+          claimId: `claim-resolved-${suffix}`,
+          ownerId: `worker-reconciliation-${suffix}`,
+          configFingerprint,
+          limit: 1,
+          now,
+          leaseExpiresAt: deadline,
+        });
+        const reconciliationLease = resumed.leases[0]!;
+        const snapshot = await store.readRecoverySnapshot({
+          ...query,
+          ownerId: reconciliationLease.ownerId,
+          leaseToken: reconciliationLease.leaseToken,
+          fencingToken: reconciliationLease.fencingToken,
+          now,
+        });
+        expect(snapshot.reconciliationCases).toMatchObject([
+          { status: 'resolved', resolutionId: decision.resolutionId },
+        ]);
+
+        await expect(
+          secondStore.cancelReconciliation({
+            ...query,
+            cancellationId: `cancel-${suffix}`,
+            now,
+          }),
+        ).resolves.toMatchObject([{ status: 'cancelled' }]);
+        await expect(
+          store.decideReconciliation(decision),
+        ).resolves.toMatchObject({
+          status: 'cancelled',
+        });
+        await expect(
+          store.decideReconciliation({
+            ...decision,
+            resolutionId: `late-resolution-${suffix}`,
+          }),
+        ).rejects.toMatchObject({ code: 'AGENT_RECONCILIATION_CANCELLED' });
+        await store.releaseRunLease({
+          ...query,
+          releaseId: `release-cancelled-${suffix}`,
+          ownerId: reconciliationLease.ownerId,
+          leaseToken: reconciliationLease.leaseToken,
+          fencingToken: reconciliationLease.fencingToken,
+          now,
+          availableAt: now,
+        });
+        await expect(
+          store.claimRecoverableRuns({
+            claimId: `claim-cancelled-${suffix}`,
+            ownerId: `worker-after-cancel-${suffix}`,
+            configFingerprint,
+            limit: 1,
+            now,
+            leaseExpiresAt: deadline,
+          }),
+        ).resolves.toEqual({ leases: [] });
+      } finally {
+        await secondStore.dispose();
+      }
     } finally {
       await store.dispose();
     }

@@ -15,11 +15,13 @@ import {
 } from '../../core/harness/runtime-aggregate.js';
 import type {
   AcknowledgeAgentOutboxCommand,
+  AppendAgentReconciliationObservationCommand,
   AgentApprovalDecisionReceipt,
   AgentApprovalMutation,
   AgentApprovalSnapshot,
   AgentApprovalTransitionSnapshot,
   AgentReconciliationCaseSnapshot,
+  AgentReconciliationMutation,
   AgentReconciliationObservationSnapshot,
   AgentOutboxBatch,
   AgentOutboxUpdateResult,
@@ -59,6 +61,7 @@ import type {
   AgentTurnStatus,
   ScopedTaskQuery,
 } from '../../core/harness/types.js';
+import type { AgentReconciliationPresentation } from '../../core/types.js';
 import { resolvePool } from './migrations.js';
 import type { PostgresAgentRuntimeOptions } from './types.js';
 
@@ -73,7 +76,7 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
   readonly durability = 'durable' as const;
   readonly runLeaseSupport = 'v1' as const;
   readonly checkpointResumeSupport = 'v3' as const;
-  readonly reconciliationSupport = 'none' as const;
+  readonly reconciliationSupport = 'v1' as const;
   private disposed = false;
 
   constructor(
@@ -178,20 +181,17 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
     command: CommitAgentRuntimeTaskCommand,
   ): Promise<AgentRuntimeCommitReceipt> {
     this.assertNotDisposed();
-    if ((command.reconciliations?.length ?? 0) > 0)
-      throw new AgentError(
-        'AGENT_RECONCILIATION_UNAVAILABLE',
-        'Agent reconciliation requires migration 0008',
-      );
     const commandHash = hashRuntimeCommit(command);
     if (
       command.mutations.length === 0 &&
       (command.events?.length ?? 0) === 0 &&
       (command.toolExecutions?.length ?? 0) === 0 &&
       (command.approvals?.length ?? 0) === 0 &&
+      (command.reconciliations?.length ?? 0) === 0 &&
       !command.checkpoint
     )
       throw new TypeError('Agent runtime commit has no changes');
+    assertReconciliationCommit(command);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -234,6 +234,8 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
         await applyToolExecutionMutation(client, command, mutation);
       for (const mutation of command.approvals ?? [])
         await applyApprovalMutation(client, command, task, mutation);
+      for (const mutation of command.reconciliations ?? [])
+        await applyReconciliationMutation(client, command, task, mutation);
       for (const event of command.events ?? [])
         await insertEventAndOutbox(client, event);
       const checkpointVersion = command.checkpoint
@@ -462,54 +464,280 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
     );
   }
 
-  async readReconciliationCases(): Promise<
-    readonly AgentReconciliationCaseSnapshot[]
-  > {
+  async readReconciliationCases(
+    query: ScopedRunQuery,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]> {
     this.assertNotDisposed();
-    throw new AgentError(
-      'AGENT_RECONCILIATION_UNAVAILABLE',
-      'Agent reconciliation requires migration 0008',
+    return loadReconciliationCases(this.pool, query);
+  }
+
+  async readReconciliationObservations(
+    query: ScopedRunQuery & { readonly reconciliationCaseId: string },
+  ): Promise<readonly AgentReconciliationObservationSnapshot[]> {
+    this.assertNotDisposed();
+    const result = await this.pool.query<ReconciliationObservationRow>(
+      `SELECT * FROM agent_runtime.reconciliation_observations
+        WHERE tenant_id = $1 AND project_id = $2
+          AND task_id = $3 AND run_id = $4
+          AND reconciliation_case_id = $5
+        ORDER BY observation_sequence`,
+      [
+        query.tenantId,
+        query.projectId,
+        query.taskId,
+        query.runId,
+        query.reconciliationCaseId,
+      ],
+    );
+    return Object.freeze(
+      result.rows.map((row) => reconciliationObservationFromRow(query, row)),
     );
   }
 
-  async readReconciliationObservations(): Promise<
-    readonly AgentReconciliationObservationSnapshot[]
-  > {
+  async appendReconciliationObservation(
+    command: AppendAgentReconciliationObservationCommand,
+  ): Promise<AgentReconciliationObservationSnapshot> {
     this.assertNotDisposed();
-    throw new AgentError(
-      'AGENT_RECONCILIATION_UNAVAILABLE',
-      'Agent reconciliation requires migration 0008',
-    );
-  }
-
-  async appendReconciliationObservation(): Promise<AgentReconciliationObservationSnapshot> {
-    this.assertNotDisposed();
-    throw new AgentError(
-      'AGENT_RECONCILIATION_UNAVAILABLE',
-      'Agent reconciliation requires migration 0008',
-    );
+    assertReconciliationObservation(command);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const reconciliationCase = await loadReconciliationCaseForUpdate(
+        client,
+        command,
+      );
+      if (!reconciliationCase)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+          'Agent reconciliation Case not found',
+        );
+      if (reconciliationCase.status !== 'waiting')
+        throw new TypeError(
+          'Agent reconciliation Observation requires a waiting Case',
+        );
+      const result = await client.query<ReconciliationObservationRow>(
+        `INSERT INTO agent_runtime.reconciliation_observations (
+           tenant_id, project_id, task_id, run_id, reconciliation_case_id,
+           observation_sequence, adapter_id, adapter_version, outcome,
+           reason_code, presentation, observed_at
+         )
+         SELECT $1, $2, $3, $4, $5,
+                COALESCE(MAX(observation_sequence), 0) + 1,
+                $6, $7, $8, $9, $10::jsonb, $11
+           FROM agent_runtime.reconciliation_observations
+          WHERE tenant_id = $1 AND project_id = $2
+            AND task_id = $3 AND run_id = $4
+            AND reconciliation_case_id = $5
+         RETURNING *`,
+        [
+          command.tenantId,
+          command.projectId,
+          command.taskId,
+          command.runId,
+          command.reconciliationCaseId,
+          command.adapterId,
+          command.adapterVersion,
+          command.outcome,
+          command.reasonCode,
+          command.presentation ? JSON.stringify(command.presentation) : null,
+          command.observedAt,
+        ],
+      );
+      const observation = reconciliationObservationFromRow(
+        command,
+        requireRow(result.rows[0]),
+      );
+      await client.query('COMMIT');
+      return observation;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async decideReconciliation(
     command: DecideAgentRuntimeReconciliationCommand,
   ): Promise<AgentReconciliationCaseSnapshot> {
     this.assertNotDisposed();
-    void command;
-    throw new AgentError(
-      'AGENT_RECONCILIATION_UNAVAILABLE',
-      'Agent reconciliation requires migration 0008',
-    );
+    assertReconciliationResolution(command);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const task = await loadRuntimeTask(client, command, true);
+      const existingResolution = await loadReconciliationCaseByResolutionId(
+        client,
+        command,
+        command.resolutionId,
+      );
+      if (existingResolution) {
+        if (!matchesReconciliationResolution(existingResolution, command))
+          throw new AgentError(
+            'AGENT_RECONCILIATION_RESOLUTION_MISMATCH',
+            'Agent reconciliation Resolution ID was reused with different content',
+          );
+        await client.query('COMMIT');
+        return reconciliationCaseFromRow(command, existingResolution);
+      }
+      const reconciliationCase = await loadReconciliationCaseForUpdate(
+        client,
+        command,
+      );
+      const run = task?.runs.find(
+        (candidate) => candidate.runId === command.runId,
+      );
+      if (!task || !run || !reconciliationCase)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+          'Agent reconciliation Case not found',
+        );
+      if (reconciliationCase.status === 'cancelled')
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CANCELLED',
+          'Agent reconciliation Case is cancelled',
+        );
+      if (reconciliationCase.status !== 'waiting')
+        throw new AgentError(
+          'AGENT_RECONCILIATION_ALREADY_RESOLVED',
+          'Agent reconciliation Case is already resolved',
+        );
+      if (
+        task.status !== 'waiting_for_reconciliation' ||
+        run.status !== 'waiting_for_reconciliation'
+      )
+        throw new TypeError(
+          'Agent reconciliation Resolution requires a waiting run',
+        );
+      const updated = await client.query<ReconciliationCaseRow>(
+        `UPDATE agent_runtime.reconciliation_cases
+            SET status = 'resolved',
+                row_version = row_version + 1,
+                resolution_id = $6,
+                resolution = $7,
+                resolved_by = $8,
+                resolution_reason_code = $9,
+                resolution_presentation = $10::jsonb,
+                resolved_at = $11
+          WHERE tenant_id = $1 AND project_id = $2
+            AND task_id = $3 AND run_id = $4
+            AND reconciliation_case_id = $5 AND status = 'waiting'
+          RETURNING *`,
+        [
+          command.tenantId,
+          command.projectId,
+          command.taskId,
+          command.runId,
+          command.reconciliationCaseId,
+          command.resolutionId,
+          command.resolution,
+          command.resolvedBy,
+          command.reasonCode ?? null,
+          command.presentation ? JSON.stringify(command.presentation) : null,
+          command.now,
+        ],
+      );
+      const resolved = requireRow(updated.rows[0]);
+      await insertReconciliationTransition(client, command, {
+        reconciliationCaseId: command.reconciliationCaseId,
+        from: 'waiting',
+        to: 'resolved',
+        reasonCode: command.reasonCode ?? 'RESOLVED',
+        resolutionId: command.resolutionId,
+      });
+      await client.query('COMMIT');
+      return reconciliationCaseFromRow(command, resolved);
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async cancelReconciliation(
     command: CancelAgentRuntimeReconciliationCommand,
   ): Promise<readonly AgentReconciliationCaseSnapshot[]> {
     this.assertNotDisposed();
-    void command;
-    throw new AgentError(
-      'AGENT_RECONCILIATION_UNAVAILABLE',
-      'Agent reconciliation requires migration 0008',
-    );
+    if (!hasBoundedUtf8(command.cancellationId, 256))
+      throw new TypeError('Agent reconciliation cancellation ID is invalid');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const task = await loadRuntimeTask(client, command, true);
+      const cases = await loadReconciliationCasesForUpdate(client, command);
+      const run = task?.runs.find(
+        (candidate) => candidate.runId === command.runId,
+      );
+      if (!task || !run || cases.length === 0)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+          'Agent reconciliation Case not found',
+        );
+      if (task.status === 'cancelled' && run.status === 'cancelled') {
+        await client.query('COMMIT');
+        return Object.freeze(
+          cases.map((row) => reconciliationCaseFromRow(command, row)),
+        );
+      }
+      if (
+        task.status !== 'waiting_for_reconciliation' ||
+        run.status !== 'waiting_for_reconciliation'
+      )
+        throw new TypeError(
+          'Agent reconciliation cancellation requires a waiting run',
+        );
+      task.status = 'cancelled';
+      task.activeRunId = undefined;
+      task.version += 1;
+      task.updatedAt = command.now;
+      run.status = 'cancelled';
+      run.updatedAt = command.now;
+      for (const turn of run.turns)
+        if (turn.status === 'running') {
+          turn.status = 'cancelled';
+          turn.updatedAt = command.now;
+        }
+      await persistRuntimeTask(client, task, command.runId);
+      const cancelled = await client.query<ReconciliationCaseRow>(
+        `UPDATE agent_runtime.reconciliation_cases
+            SET status = 'cancelled',
+                cancelled_at = $5,
+                row_version = row_version + 1
+          WHERE tenant_id = $1 AND project_id = $2
+            AND task_id = $3 AND run_id = $4
+            AND status IN ('waiting', 'resolved')
+          RETURNING *`,
+        [
+          command.tenantId,
+          command.projectId,
+          command.taskId,
+          command.runId,
+          command.now,
+        ],
+      );
+      for (const reconciliationCase of cases)
+        if (
+          reconciliationCase.status === 'waiting' ||
+          reconciliationCase.status === 'resolved'
+        )
+          await insertReconciliationTransition(client, command, {
+            reconciliationCaseId: reconciliationCase.reconciliation_case_id,
+            from: reconciliationCase.status,
+            to: 'cancelled',
+            reasonCode: 'CANCELLED',
+            cancellationId: command.cancellationId,
+          });
+      await client.query('COMMIT');
+      return Object.freeze(
+        cancelled.rows.map((row) => reconciliationCaseFromRow(command, row)),
+      );
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async decideApproval(
@@ -825,17 +1053,42 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
          SELECT run.tenant_id, run.project_id, run.task_id, run.run_id,
                 $1, checkpoint.config_fingerprint
            FROM agent_runtime.runs AS run
+           JOIN agent_runtime.tasks AS task
+             ON task.tenant_id = run.tenant_id
+            AND task.project_id = run.project_id
+            AND task.task_id = run.task_id
            JOIN agent_runtime.run_checkpoints AS checkpoint
              ON checkpoint.tenant_id = run.tenant_id
             AND checkpoint.project_id = run.project_id
             AND checkpoint.task_id = run.task_id
             AND checkpoint.run_id = run.run_id
             AND checkpoint.checkpoint_version = run.latest_checkpoint_version
-          WHERE run.status NOT IN (
+          WHERE checkpoint.config_fingerprint = $2
+            AND (
+              (
+                task.status = 'waiting_for_reconciliation'
+                AND run.status = 'waiting_for_reconciliation'
+                AND EXISTS (
+                  SELECT 1
+                    FROM agent_runtime.reconciliation_cases AS reconciliation_case
+                   WHERE reconciliation_case.tenant_id = run.tenant_id
+                     AND reconciliation_case.project_id = run.project_id
+                     AND reconciliation_case.task_id = run.task_id
+                     AND reconciliation_case.run_id = run.run_id
+                     AND reconciliation_case.status = 'resolved'
+                )
+              )
+              OR (
+                task.status NOT IN (
                   'completed', 'failed', 'cancelled',
                   'waiting_for_reconciliation', 'recovery_blocked'
                 )
-            AND checkpoint.config_fingerprint = $2
+                AND run.status NOT IN (
+                  'completed', 'failed', 'cancelled',
+                  'waiting_for_reconciliation', 'recovery_blocked'
+                )
+              )
+            )
          ON CONFLICT (tenant_id, project_id, task_id, run_id) DO NOTHING`,
         [databaseNow, command.configFingerprint],
       );
@@ -854,13 +1107,30 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
           WHERE lease.config_fingerprint = $1
             AND lease.available_at <= $2
             AND (lease.owner_id IS NULL OR lease.lease_expires_at <= $2)
-            AND task.status NOT IN (
-              'completed', 'failed', 'cancelled',
-              'waiting_for_reconciliation', 'recovery_blocked'
-            )
-            AND run.status NOT IN (
-              'completed', 'failed', 'cancelled',
-              'waiting_for_reconciliation', 'recovery_blocked'
+            AND (
+              (
+                task.status = 'waiting_for_reconciliation'
+                AND run.status = 'waiting_for_reconciliation'
+                AND EXISTS (
+                  SELECT 1
+                    FROM agent_runtime.reconciliation_cases AS reconciliation_case
+                   WHERE reconciliation_case.tenant_id = lease.tenant_id
+                     AND reconciliation_case.project_id = lease.project_id
+                     AND reconciliation_case.task_id = lease.task_id
+                     AND reconciliation_case.run_id = lease.run_id
+                     AND reconciliation_case.status = 'resolved'
+                )
+              )
+              OR (
+                task.status NOT IN (
+                  'completed', 'failed', 'cancelled',
+                  'waiting_for_reconciliation', 'recovery_blocked'
+                )
+                AND run.status NOT IN (
+                  'completed', 'failed', 'cancelled',
+                  'waiting_for_reconciliation', 'recovery_blocked'
+                )
+              )
             )
           ORDER BY lease.available_at, lease.tenant_id, lease.project_id,
                    lease.task_id, lease.run_id
@@ -1102,6 +1372,10 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
         );
       const toolExecutions = await loadToolExecutionSnapshots(client, command);
       const approvals = await loadApprovalSnapshots(client, command);
+      const reconciliationCases = await loadReconciliationCases(
+        client,
+        command,
+      );
       const events = await client.query<EventRow>(
         `SELECT event FROM agent_runtime.run_events
           WHERE tenant_id = $1 AND project_id = $2
@@ -1118,7 +1392,7 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
         checkpoint,
         toolExecutions,
         approvals,
-        reconciliationCases: Object.freeze([]),
+        reconciliationCases,
         modelAttempts: snapshotModelAttempts(
           events.rows.map((row) => row.event),
         ),
@@ -1597,6 +1871,271 @@ async function loadApprovalSnapshots(
         transitionsByApproval.get(row.approval_id) ?? [],
       ),
     ),
+  );
+}
+
+async function loadReconciliationCases(
+  client: Pool | PoolClient,
+  query: ScopedRunQuery,
+): Promise<readonly AgentReconciliationCaseSnapshot[]> {
+  const result = await client.query<ReconciliationCaseRow>(
+    `SELECT * FROM agent_runtime.reconciliation_cases
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4
+      ORDER BY created_at, reconciliation_case_id`,
+    [query.tenantId, query.projectId, query.taskId, query.runId],
+  );
+  return Object.freeze(
+    result.rows.map((row) => reconciliationCaseFromRow(query, row)),
+  );
+}
+
+async function loadReconciliationCasesForUpdate(
+  client: PoolClient,
+  query: ScopedRunQuery,
+): Promise<readonly ReconciliationCaseRow[]> {
+  const result = await client.query<ReconciliationCaseRow>(
+    `SELECT * FROM agent_runtime.reconciliation_cases
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4
+      ORDER BY created_at, reconciliation_case_id
+      FOR UPDATE`,
+    [query.tenantId, query.projectId, query.taskId, query.runId],
+  );
+  return result.rows;
+}
+
+async function loadReconciliationCaseForUpdate(
+  client: PoolClient,
+  query: ScopedRunQuery & { readonly reconciliationCaseId: string },
+): Promise<ReconciliationCaseRow | undefined> {
+  const result = await client.query<ReconciliationCaseRow>(
+    `SELECT * FROM agent_runtime.reconciliation_cases
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4
+        AND reconciliation_case_id = $5
+      FOR UPDATE`,
+    [
+      query.tenantId,
+      query.projectId,
+      query.taskId,
+      query.runId,
+      query.reconciliationCaseId,
+    ],
+  );
+  return result.rows[0];
+}
+
+async function loadReconciliationCaseByResolutionId(
+  client: PoolClient,
+  query: ScopedRunQuery,
+  resolutionId: string,
+): Promise<ReconciliationCaseRow | undefined> {
+  const result = await client.query<ReconciliationCaseRow>(
+    `SELECT * FROM agent_runtime.reconciliation_cases
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4 AND resolution_id = $5
+      FOR UPDATE`,
+    [query.tenantId, query.projectId, query.taskId, query.runId, resolutionId],
+  );
+  return result.rows[0];
+}
+
+async function applyReconciliationMutation(
+  client: PoolClient,
+  command: CommitAgentRuntimeTaskCommand,
+  task: MutableAgentTask,
+  mutation: AgentReconciliationMutation,
+): Promise<void> {
+  const run = task.runs.find((candidate) => candidate.runId === command.runId);
+  if (!run) throw new TypeError('Agent run not found for reconciliation');
+
+  if (mutation.type === 'reconciliation_case_created') {
+    if (
+      task.status !== 'waiting_for_reconciliation' ||
+      run.status !== 'waiting_for_reconciliation' ||
+      !hasBoundedUtf8(mutation.reconciliationCaseId, 256)
+    )
+      throw new TypeError('Agent reconciliation Case requires a waiting run');
+    const inserted = await client.query<ReconciliationCaseRow>(
+      `INSERT INTO agent_runtime.reconciliation_cases (
+         tenant_id, project_id, task_id, run_id, reconciliation_case_id,
+         tool_execution_id, attempt_id, tool_name, status, reason_code,
+         created_at
+       )
+       SELECT $1, $2, $3, $4, $5, execution.tool_execution_id,
+              attempt.attempt_id, execution.tool_name, 'waiting', $8, $9
+         FROM agent_runtime.tool_executions AS execution
+         JOIN agent_runtime.tool_execution_attempts AS attempt
+           ON attempt.tenant_id = execution.tenant_id
+          AND attempt.project_id = execution.project_id
+          AND attempt.task_id = execution.task_id
+          AND attempt.run_id = execution.run_id
+          AND attempt.tool_execution_id = execution.tool_execution_id
+        WHERE execution.tenant_id = $1 AND execution.project_id = $2
+          AND execution.task_id = $3 AND execution.run_id = $4
+          AND execution.tool_execution_id = $6 AND attempt.attempt_id = $7
+          AND execution.side_effect IN ('reversible', 'external')
+          AND execution.status = 'unknown'
+          AND execution.effect_outcome = 'unknown'
+          AND execution.retryable = false
+          AND attempt.status = 'unknown'
+          AND attempt.effect_outcome = 'unknown'
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [
+        command.tenantId,
+        command.projectId,
+        command.taskId,
+        command.runId,
+        mutation.reconciliationCaseId,
+        mutation.toolExecutionId,
+        mutation.attemptId,
+        mutation.reasonCode,
+        command.now,
+      ],
+    );
+    if (inserted.rowCount !== 1)
+      throw new TypeError(
+        'Agent reconciliation Case does not match an unknown ToolExecution Attempt',
+      );
+    await insertReconciliationTransition(client, command, {
+      reconciliationCaseId: mutation.reconciliationCaseId,
+      to: 'waiting',
+      reasonCode: mutation.reasonCode,
+    });
+    return;
+  }
+
+  if (
+    task.status !== 'running' ||
+    run.status !== 'running' ||
+    !hasBoundedUtf8(mutation.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(mutation.resolutionId, 256) ||
+    !hasBoundedUtf8(mutation.consumeId, 256)
+  )
+    throw new TypeError('Agent reconciliation consumption is invalid');
+  const result = await client.query<ReconciliationConsumptionRow>(
+    `SELECT reconciliation_case.*, execution.status AS execution_status,
+            execution.effect_outcome AS execution_effect_outcome,
+            execution.retryable AS execution_retryable,
+            attempt.status AS attempt_status,
+            attempt.effect_outcome AS attempt_effect_outcome
+       FROM agent_runtime.reconciliation_cases AS reconciliation_case
+       JOIN agent_runtime.tool_executions AS execution
+         ON execution.tenant_id = reconciliation_case.tenant_id
+        AND execution.project_id = reconciliation_case.project_id
+        AND execution.task_id = reconciliation_case.task_id
+        AND execution.run_id = reconciliation_case.run_id
+        AND execution.tool_execution_id = reconciliation_case.tool_execution_id
+       JOIN agent_runtime.tool_execution_attempts AS attempt
+         ON attempt.tenant_id = reconciliation_case.tenant_id
+        AND attempt.project_id = reconciliation_case.project_id
+        AND attempt.task_id = reconciliation_case.task_id
+        AND attempt.run_id = reconciliation_case.run_id
+        AND attempt.tool_execution_id = reconciliation_case.tool_execution_id
+        AND attempt.attempt_id = reconciliation_case.attempt_id
+      WHERE reconciliation_case.tenant_id = $1
+        AND reconciliation_case.project_id = $2
+        AND reconciliation_case.task_id = $3
+        AND reconciliation_case.run_id = $4
+        AND reconciliation_case.reconciliation_case_id = $5
+        AND reconciliation_case.tool_execution_id = $6
+        AND reconciliation_case.attempt_id = $7
+      FOR UPDATE OF reconciliation_case`,
+    [
+      command.tenantId,
+      command.projectId,
+      command.taskId,
+      command.runId,
+      mutation.reconciliationCaseId,
+      mutation.toolExecutionId,
+      mutation.attemptId,
+    ],
+  );
+  const reconciliationCase = result.rows[0];
+  if (
+    !reconciliationCase ||
+    reconciliationCase.status !== 'resolved' ||
+    reconciliationCase.resolution_id !== mutation.resolutionId ||
+    reconciliationCase.resolution === null ||
+    reconciliationCase.execution_status !== 'unknown' ||
+    reconciliationCase.execution_effect_outcome !== 'unknown' ||
+    reconciliationCase.execution_retryable !== false ||
+    reconciliationCase.attempt_status !== 'unknown' ||
+    reconciliationCase.attempt_effect_outcome !== 'unknown'
+  )
+    throw new TypeError('Agent reconciliation Case cannot be consumed');
+  const consumed = await client.query(
+    `UPDATE agent_runtime.reconciliation_cases
+        SET status = 'consumed', consume_id = $6, consumed_at = $7,
+            row_version = row_version + 1
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4
+        AND reconciliation_case_id = $5 AND status = 'resolved'
+        AND consume_id IS NULL`,
+    [
+      command.tenantId,
+      command.projectId,
+      command.taskId,
+      command.runId,
+      mutation.reconciliationCaseId,
+      mutation.consumeId,
+      command.now,
+    ],
+  );
+  if (consumed.rowCount !== 1)
+    throw new TypeError('Agent reconciliation Case cannot be consumed');
+  await insertReconciliationTransition(client, command, {
+    reconciliationCaseId: mutation.reconciliationCaseId,
+    from: 'resolved',
+    to: 'consumed',
+    reasonCode: 'CONSUMED',
+    resolutionId: mutation.resolutionId,
+    consumeId: mutation.consumeId,
+  });
+}
+
+async function insertReconciliationTransition(
+  client: PoolClient,
+  command: ScopedRunQuery & { readonly now: string },
+  transition: {
+    readonly reconciliationCaseId: string;
+    readonly from?: string;
+    readonly to: string;
+    readonly reasonCode?: string;
+    readonly resolutionId?: string;
+    readonly consumeId?: string;
+    readonly cancellationId?: string;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO agent_runtime.reconciliation_transitions (
+       tenant_id, project_id, task_id, run_id, reconciliation_case_id,
+       transition_sequence, from_status, to_status, occurred_at,
+       reason_code, resolution_id, consume_id, cancellation_id
+     )
+     SELECT $1, $2, $3, $4, $5,
+            COALESCE(MAX(transition_sequence), 0) + 1,
+            $6, $7, $8, $9, $10, $11, $12
+       FROM agent_runtime.reconciliation_transitions
+      WHERE tenant_id = $1 AND project_id = $2
+        AND task_id = $3 AND run_id = $4
+        AND reconciliation_case_id = $5`,
+    [
+      command.tenantId,
+      command.projectId,
+      command.taskId,
+      command.runId,
+      transition.reconciliationCaseId,
+      transition.from ?? null,
+      transition.to,
+      command.now,
+      transition.reasonCode ?? null,
+      transition.resolutionId ?? null,
+      transition.consumeId ?? null,
+      transition.cancellationId ?? null,
+    ],
   );
 }
 
@@ -2876,6 +3415,254 @@ function freezeApprovalPresentation(
   });
 }
 
+function reconciliationCaseFromRow(
+  query: ScopedRunQuery,
+  row: ReconciliationCaseRow,
+): AgentReconciliationCaseSnapshot {
+  return Object.freeze({
+    ...query,
+    reconciliationCaseId: row.reconciliation_case_id,
+    toolExecutionId: row.tool_execution_id,
+    attemptId: row.attempt_id,
+    toolName: row.tool_name,
+    status: row.status as AgentReconciliationCaseSnapshot['status'],
+    reasonCode: row.reason_code as 'EXTERNAL_EFFECT_UNKNOWN',
+    createdAt: toIso(row.created_at),
+    rowVersion: Number(row.row_version),
+    resolutionId: row.resolution_id ?? undefined,
+    resolution:
+      (row.resolution as AgentReconciliationCaseSnapshot['resolution']) ??
+      undefined,
+    resolvedBy: row.resolved_by ?? undefined,
+    resolutionReasonCode: row.resolution_reason_code ?? undefined,
+    resolutionPresentation: row.resolution_presentation
+      ? freezeReconciliationPresentation(row.resolution_presentation)
+      : undefined,
+    resolvedAt: row.resolved_at ? toIso(row.resolved_at) : undefined,
+    consumeId: row.consume_id ?? undefined,
+    consumedAt: row.consumed_at ? toIso(row.consumed_at) : undefined,
+    cancelledAt: row.cancelled_at ? toIso(row.cancelled_at) : undefined,
+  });
+}
+
+function reconciliationObservationFromRow(
+  query: ScopedRunQuery & { readonly reconciliationCaseId: string },
+  row: ReconciliationObservationRow,
+): AgentReconciliationObservationSnapshot {
+  return Object.freeze({
+    ...query,
+    sequence: Number(row.observation_sequence),
+    adapterId: row.adapter_id,
+    adapterVersion: row.adapter_version,
+    outcome: row.outcome as AgentReconciliationObservationSnapshot['outcome'],
+    reasonCode: row.reason_code,
+    presentation: row.presentation
+      ? freezeReconciliationPresentation(row.presentation)
+      : undefined,
+    observedAt: toIso(row.observed_at),
+  });
+}
+
+function freezeReconciliationPresentation(
+  value: unknown,
+): AgentReconciliationPresentation {
+  if (typeof value !== 'object' || value === null)
+    throw new TypeError('Stored Agent reconciliation presentation is invalid');
+  const presentation = value as Partial<AgentReconciliationPresentation>;
+  if (
+    typeof presentation.title !== 'string' ||
+    presentation.title.trim() === '' ||
+    (presentation.description !== undefined &&
+      typeof presentation.description !== 'string') ||
+    (presentation.fields !== undefined && !Array.isArray(presentation.fields))
+  )
+    throw new TypeError('Stored Agent reconciliation presentation is invalid');
+  const fields = presentation.fields?.map((field) => {
+    if (
+      typeof field !== 'object' ||
+      field === null ||
+      typeof field.label !== 'string' ||
+      typeof field.value !== 'string'
+    )
+      throw new TypeError(
+        'Stored Agent reconciliation presentation is invalid',
+      );
+    return Object.freeze({ label: field.label, value: field.value });
+  });
+  return Object.freeze({
+    title: presentation.title,
+    description: presentation.description,
+    fields: fields ? Object.freeze(fields) : undefined,
+  });
+}
+
+function matchesReconciliationResolution(
+  reconciliationCase: ReconciliationCaseRow,
+  command: DecideAgentRuntimeReconciliationCommand,
+): boolean {
+  return (
+    reconciliationCase.reconciliation_case_id ===
+      command.reconciliationCaseId &&
+    reconciliationCase.resolution_id === command.resolutionId &&
+    reconciliationCase.resolution === command.resolution &&
+    reconciliationCase.resolved_by === command.resolvedBy &&
+    (reconciliationCase.resolution_reason_code ?? undefined) ===
+      command.reasonCode &&
+    hashRuntimeCommit(
+      reconciliationCase.resolution_presentation ?? undefined,
+    ) === hashRuntimeCommit(command.presentation ?? undefined)
+  );
+}
+
+function assertReconciliationObservation(
+  command: AppendAgentReconciliationObservationCommand,
+): void {
+  if (
+    !hasBoundedUtf8(command.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(command.adapterId, 256) ||
+    !hasBoundedUtf8(command.adapterVersion, 256) ||
+    !hasReasonCode(command.reasonCode) ||
+    !isReconciliationObservationOutcome(command.outcome) ||
+    !Number.isFinite(Date.parse(command.observedAt)) ||
+    (command.presentation !== undefined &&
+      !isReconciliationPresentation(command.presentation))
+  )
+    throw new TypeError('Agent reconciliation Observation is invalid');
+}
+
+function assertReconciliationResolution(
+  command: DecideAgentRuntimeReconciliationCommand,
+): void {
+  if (
+    !hasBoundedUtf8(command.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(command.resolutionId, 256) ||
+    !hasBoundedUtf8(command.resolvedBy, 256) ||
+    !isReconciliationResolution(command.resolution) ||
+    (command.reasonCode !== undefined && !hasReasonCode(command.reasonCode)) ||
+    !Number.isFinite(Date.parse(command.now)) ||
+    (command.presentation !== undefined &&
+      !isReconciliationPresentation(command.presentation))
+  )
+    throw new TypeError('Agent reconciliation Resolution is invalid');
+}
+
+function assertReconciliationCommit(
+  command: CommitAgentRuntimeTaskCommand,
+): void {
+  const reconciliations = command.reconciliations ?? [];
+  const createdCases = reconciliations.filter(
+    (
+      mutation,
+    ): mutation is Extract<
+      AgentReconciliationMutation,
+      { readonly type: 'reconciliation_case_created' }
+    > => mutation.type === 'reconciliation_case_created',
+  );
+  const consumedCases = reconciliations.filter(
+    (
+      mutation,
+    ): mutation is Extract<
+      AgentReconciliationMutation,
+      { readonly type: 'reconciliation_case_consumed' }
+    > => mutation.type === 'reconciliation_case_consumed',
+  );
+  const startsReconciliation = command.mutations.some(
+    (mutation) => mutation.type === 'reconciliation_wait_started',
+  );
+  const resumesReconciliation = command.mutations.some(
+    (mutation) => mutation.type === 'reconciliation_wait_resumed',
+  );
+  if (startsReconciliation && createdCases.length !== 1)
+    throw new TypeError(
+      'Agent reconciliation wait must create exactly one Case',
+    );
+  if (startsReconciliation && consumedCases.length !== 0)
+    throw new TypeError('Agent reconciliation wait cannot consume a Case');
+  if (resumesReconciliation && consumedCases.length !== 1)
+    throw new TypeError(
+      'Agent reconciliation resume must consume exactly one resolved Case',
+    );
+  if (resumesReconciliation && createdCases.length !== 0)
+    throw new TypeError('Agent reconciliation resume cannot create a Case');
+
+  for (const mutation of createdCases)
+    if (
+      !startsReconciliation ||
+      command.checkpoint?.kind !== 'reconciliation_waiting' ||
+      command.checkpoint.resumeState?.kind !== 'reconciliation' ||
+      command.checkpoint.resumeState.toolExecutionId !==
+        mutation.toolExecutionId ||
+      command.checkpoint.resumeState.attemptId !== mutation.attemptId ||
+      !command.toolExecutions?.some(
+        (toolExecution) =>
+          toolExecution.type === 'tool_execution_orphan_quarantined' &&
+          toolExecution.toolExecutionId === mutation.toolExecutionId &&
+          toolExecution.attemptId === mutation.attemptId,
+      ) ||
+      !command.events?.some(
+        (event) =>
+          event.payload.type === 'run_reconciliation_required' &&
+          event.payload.toolExecutionId === mutation.toolExecutionId &&
+          event.payload.attemptId === mutation.attemptId &&
+          event.payload.reasonCode === mutation.reasonCode,
+      )
+    )
+      throw new TypeError(
+        'Agent reconciliation Case must be created with its quarantine boundary',
+      );
+
+  for (const mutation of consumedCases)
+    if (
+      !resumesReconciliation ||
+      command.checkpoint?.kind !== 'tool_result_appended' ||
+      command.checkpoint.executionPosition !== 'model' ||
+      command.checkpoint.resumeState?.kind !== 'model' ||
+      command.toolExecutions?.length ||
+      !command.events?.some(
+        (event) =>
+          event.payload.type === 'tool_execution_end' &&
+          event.payload.toolExecutionId === mutation.toolExecutionId &&
+          event.payload.attemptId === mutation.attemptId &&
+          event.payload.status === 'unknown' &&
+          event.payload.effectOutcome === 'unknown',
+      )
+    )
+      throw new TypeError(
+        'Agent reconciliation Case must be consumed with a sanitized ToolResult boundary',
+      );
+}
+
+function hasReasonCode(value: string): boolean {
+  return value.length <= 128 && /^[A-Z][A-Z0-9_]*$/.test(value);
+}
+
+function isReconciliationResolution(value: string): boolean {
+  return (
+    value === 'confirmed_applied' ||
+    value === 'confirmed_not_applied' ||
+    value === 'confirmed_compensated' ||
+    value === 'abandoned'
+  );
+}
+
+function isReconciliationObservationOutcome(value: string): boolean {
+  return (
+    value === 'applied' ||
+    value === 'not_applied' ||
+    value === 'inconclusive' ||
+    value === 'failed'
+  );
+}
+
+function isReconciliationPresentation(value: unknown): boolean {
+  try {
+    freezeReconciliationPresentation(value);
+    return Buffer.byteLength(JSON.stringify(value), 'utf8') <= 32 * 1024;
+  } catch {
+    return false;
+  }
+}
+
 function freezeApprovalDecisionReceipt(
   value: unknown,
 ): AgentApprovalDecisionReceipt {
@@ -3056,6 +3843,44 @@ interface ApprovalTransitionRow extends QueryResultRow {
   reason_code: string | null;
   decision_id: string | null;
   consume_id: string | null;
+}
+
+interface ReconciliationCaseRow extends QueryResultRow {
+  reconciliation_case_id: string;
+  tool_execution_id: string;
+  attempt_id: string;
+  tool_name: string;
+  status: string;
+  reason_code: string;
+  row_version: string | number;
+  created_at: Date | string;
+  resolution_id: string | null;
+  resolution: string | null;
+  resolved_by: string | null;
+  resolution_reason_code: string | null;
+  resolution_presentation: unknown | null;
+  resolved_at: Date | string | null;
+  consume_id: string | null;
+  consumed_at: Date | string | null;
+  cancelled_at: Date | string | null;
+}
+
+interface ReconciliationConsumptionRow extends ReconciliationCaseRow {
+  execution_status: string;
+  execution_effect_outcome: string | null;
+  execution_retryable: boolean | null;
+  attempt_status: string;
+  attempt_effect_outcome: string | null;
+}
+
+interface ReconciliationObservationRow extends QueryResultRow {
+  observation_sequence: string | number;
+  adapter_id: string;
+  adapter_version: string;
+  outcome: string;
+  reason_code: string;
+  presentation: unknown | null;
+  observed_at: Date | string;
 }
 
 interface ClaimedOutboxRow extends QueryResultRow {

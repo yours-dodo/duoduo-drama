@@ -6,7 +6,7 @@ import {
 } from './migrations.js';
 
 describe('Agent Runtime PostgreSQL migrations', () => {
-  it('discovers the additive Run recovery migration', async () => {
+  it('discovers the additive external-effect reconciliation migration', async () => {
     const status = await getAgentRuntimeMigrationStatus({
       pool: {
         query: async () => ({ rows: [{ relation: null }] }),
@@ -14,8 +14,8 @@ describe('Agent Runtime PostgreSQL migrations', () => {
     });
 
     expect(status.migrations.at(-1)).toMatchObject({
-      version: '0007',
-      name: '0007_run_recovery.sql',
+      version: '0008',
+      name: '0008_external_effect_reconciliation.sql',
       state: 'pending',
     });
   });
