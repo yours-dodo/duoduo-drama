@@ -4,6 +4,7 @@ import type {
   AgentEvent,
   AgentApprovalPresentation,
   AgentInput,
+  AgentReconciliationPresentation,
   AgentRunResult,
   AgentToolExecutionDeclaration,
   CreateAgentOptions,
@@ -12,6 +13,7 @@ import type {
   AgentApprovalSnapshot,
   AgentReconciliationCaseSnapshot,
   AgentReconciliationObservationSnapshot,
+  AgentReconciliationResolution,
   AgentRuntimeStore,
   AgentToolExecutionSnapshot,
 } from './runtime-store.js';
@@ -180,6 +182,16 @@ export interface InspectAgentReconciliationCommand extends ScopedTaskQuery {
   readonly reconciliationCaseId: string;
 }
 
+export interface DecideAgentReconciliationCommand extends ScopedTaskQuery {
+  readonly runId: string;
+  readonly reconciliationCaseId: string;
+  readonly resolutionId: string;
+  readonly resolution: AgentReconciliationResolution;
+  readonly resolvedBy: string;
+  readonly reasonCode?: string;
+  readonly presentation?: AgentReconciliationPresentation;
+}
+
 export interface ReadAgentReconciliationCasesQuery extends ScopedTaskQuery {
   readonly runId: string;
 }
@@ -308,6 +320,9 @@ export interface AgentHarness {
   inspectReconciliation(
     command: InspectAgentReconciliationCommand,
   ): Promise<AgentReconciliationObservationSnapshot>;
+  decideReconciliation(
+    command: DecideAgentReconciliationCommand,
+  ): Promise<import('./runtime-store.js').AgentReconciliationCaseSnapshot>;
   readReconciliationObservations(
     query: ReadAgentReconciliationObservationsQuery,
   ): Promise<AgentReconciliationObservationPage>;

@@ -3695,6 +3695,12 @@ function forwardRuntimeStore(
     appendReconciliationObservation:
       overrides.appendReconciliationObservation ??
       ((command) => base.appendReconciliationObservation(command)),
+    decideReconciliation:
+      overrides.decideReconciliation ??
+      ((command) => base.decideReconciliation(command)),
+    cancelReconciliation:
+      overrides.cancelReconciliation ??
+      ((command) => base.cancelReconciliation(command)),
     decideApproval:
       overrides.decideApproval ?? ((command) => base.decideApproval(command)),
     resolveApproval:

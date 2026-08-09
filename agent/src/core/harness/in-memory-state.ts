@@ -23,6 +23,7 @@ import type {
   AgentReconciliationCaseSnapshot,
   AgentReconciliationCaseStatus,
   AgentReconciliationMutation,
+  AgentReconciliationResolution,
   AgentRuntimeCommitReceipt,
   AgentRuntimeEventPage,
   AgentRuntimeStore,
@@ -41,8 +42,10 @@ import type {
   ClaimRecoverableAgentRunsCommand,
   ClaimAgentOutboxCommand,
   AppendAgentReconciliationObservationCommand,
+  CancelAgentRuntimeReconciliationCommand,
   CommitAgentRuntimeTaskCommand,
   CreateAgentRuntimeTaskCommand,
+  DecideAgentRuntimeReconciliationCommand,
   DecideAgentRuntimeApprovalCommand,
   ReadAgentRuntimeEventsQuery,
   ReadAgentRunRecoveryCommand,
@@ -597,6 +600,138 @@ class InMemoryAgentRuntimeStore implements AgentRuntimeStore {
     reconciliationCase.observations.push(observation);
     this.reconciliationCases.set(key, nextCases);
     return snapshotReconciliationObservation(command, observation);
+  }
+
+  async decideReconciliation(
+    command: DecideAgentRuntimeReconciliationCommand,
+  ): Promise<AgentReconciliationCaseSnapshot> {
+    this.assertNotDisposed();
+    assertReconciliationResolution(command);
+    const key = runKey(command, command.taskId, command.runId);
+    const currentCases = this.reconciliationCases.get(key) ?? [];
+    const currentCase = currentCases.find(
+      (candidate) =>
+        candidate.reconciliationCaseId === command.reconciliationCaseId,
+    );
+    if (!currentCase)
+      throw new AgentError(
+        'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+        'Agent reconciliation Case not found',
+      );
+    const matchesExistingResolution =
+      currentCase.resolutionId === command.resolutionId &&
+      currentCase.resolution === command.resolution &&
+      currentCase.resolvedBy === command.resolvedBy &&
+      currentCase.resolutionReasonCode === command.reasonCode &&
+      JSON.stringify(currentCase.resolutionPresentation) ===
+        JSON.stringify(command.presentation);
+    if (currentCase.status === 'cancelled') {
+      if (matchesExistingResolution)
+        return snapshotReconciliationCase(command, currentCase);
+      throw new AgentError(
+        'AGENT_RECONCILIATION_CANCELLED',
+        'Agent reconciliation Case is cancelled',
+      );
+    }
+    if (currentCase.resolutionId !== undefined) {
+      if (matchesExistingResolution)
+        return snapshotReconciliationCase(command, currentCase);
+      if (currentCase.resolutionId === command.resolutionId)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_RESOLUTION_MISMATCH',
+          'Agent reconciliation Resolution ID was reused with different content',
+        );
+      throw new AgentError(
+        'AGENT_RECONCILIATION_ALREADY_RESOLVED',
+        'Agent reconciliation Case is already resolved',
+      );
+    }
+    if (currentCase.status !== 'waiting')
+      throw new TypeError('Agent reconciliation Case cannot be resolved');
+    const nextCases = currentCases.map(cloneReconciliationCase);
+    const nextCase = nextCases.find(
+      (candidate) =>
+        candidate.reconciliationCaseId === command.reconciliationCaseId,
+    )!;
+    nextCase.status = 'resolved';
+    nextCase.resolutionId = command.resolutionId;
+    nextCase.resolution = command.resolution;
+    nextCase.resolvedBy = command.resolvedBy;
+    nextCase.resolutionReasonCode = command.reasonCode;
+    nextCase.resolutionPresentation = command.presentation
+      ? freezeReconciliationPresentation(command.presentation)
+      : undefined;
+    nextCase.resolvedAt = command.now;
+    nextCase.rowVersion += 1;
+    this.reconciliationCases.set(key, nextCases);
+    return snapshotReconciliationCase(command, nextCase);
+  }
+
+  async cancelReconciliation(
+    command: CancelAgentRuntimeReconciliationCommand,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]> {
+    this.assertNotDisposed();
+    if (!hasBoundedUtf8(command.cancellationId, 256))
+      throw new TypeError('Agent reconciliation cancellation ID is invalid');
+    const taskKeyValue = taskKey(command, command.taskId);
+    const key = runKey(command, command.taskId, command.runId);
+    const task = this.tasks.get(taskKeyValue);
+    const currentCases = this.reconciliationCases.get(key) ?? [];
+    const run = task?.runs.find(
+      (candidate) => candidate.runId === command.runId,
+    );
+    if (!task || !run || currentCases.length === 0)
+      throw new AgentError(
+        'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+        'Agent reconciliation Case not found',
+      );
+    if (task.status === 'cancelled' && run.status === 'cancelled')
+      return Object.freeze(
+        currentCases.map((reconciliationCase) =>
+          snapshotReconciliationCase(command, reconciliationCase),
+        ),
+      );
+    if (
+      task.status !== 'waiting_for_reconciliation' ||
+      run.status !== 'waiting_for_reconciliation'
+    )
+      throw new TypeError(
+        'Agent reconciliation cancellation requires a waiting run',
+      );
+    const nextTask = cloneRuntimeTask(task);
+    const nextRun = nextTask.runs.find(
+      (candidate) => candidate.runId === command.runId,
+    )!;
+    nextTask.status = 'cancelled';
+    nextTask.activeRunId = undefined;
+    nextTask.version += 1;
+    nextTask.updatedAt = command.now;
+    nextRun.status = 'cancelled';
+    nextRun.updatedAt = command.now;
+    for (const turn of nextRun.turns) {
+      if (turn.status === 'running') {
+        turn.status = 'cancelled';
+        turn.updatedAt = command.now;
+      }
+    }
+    const nextCases = currentCases.map(cloneReconciliationCase);
+    for (const reconciliationCase of nextCases) {
+      if (
+        reconciliationCase.status === 'waiting' ||
+        reconciliationCase.status === 'resolved'
+      ) {
+        reconciliationCase.status = 'cancelled';
+        reconciliationCase.cancelledAt = command.now;
+        reconciliationCase.rowVersion += 1;
+      }
+    }
+    this.tasks.set(taskKeyValue, nextTask);
+    this.reconciliationCases.set(key, nextCases);
+    return Object.freeze(
+      nextCases.map((reconciliationCase) =>
+        snapshotReconciliationCase(command, reconciliationCase),
+      ),
+    );
   }
 
   async decideApproval(
@@ -1175,6 +1310,17 @@ function isReconciliationObservationOutcome(
   return ['applied', 'not_applied', 'inconclusive', 'failed'].includes(outcome);
 }
 
+function isReconciliationResolution(
+  value: string,
+): value is AgentReconciliationResolution {
+  return [
+    'confirmed_applied',
+    'confirmed_not_applied',
+    'confirmed_compensated',
+    'abandoned',
+  ].includes(value);
+}
+
 function isReconciliationPresentation(
   presentation: AgentReconciliationPresentation,
 ): boolean {
@@ -1413,6 +1559,13 @@ interface MutableReconciliationCase {
   reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
   createdAt: string;
   rowVersion: number;
+  resolutionId?: string;
+  resolution?: AgentReconciliationResolution;
+  resolvedBy?: string;
+  resolutionReasonCode?: string;
+  resolutionPresentation?: AgentReconciliationPresentation;
+  resolvedAt?: string;
+  cancelledAt?: string;
   observations: MutableReconciliationObservation[];
 }
 
@@ -1949,6 +2102,22 @@ function assertReconciliationObservation(
     throw new TypeError('Agent reconciliation Observation is invalid');
 }
 
+function assertReconciliationResolution(
+  command: DecideAgentRuntimeReconciliationCommand,
+): void {
+  if (
+    !hasBoundedUtf8(command.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(command.resolutionId, 256) ||
+    !hasBoundedUtf8(command.resolvedBy, 256) ||
+    !isReconciliationResolution(command.resolution) ||
+    (command.reasonCode !== undefined && !hasReasonCode(command.reasonCode)) ||
+    !Number.isFinite(Date.parse(command.now)) ||
+    (command.presentation !== undefined &&
+      !isReconciliationPresentation(command.presentation))
+  )
+    throw new TypeError('Agent reconciliation Resolution is invalid');
+}
+
 function assertToolExecutionStatus(
   execution: MutableToolExecution,
   expected: AgentToolExecutionStatus,
@@ -2027,6 +2196,11 @@ function cloneReconciliationCase(
 ): MutableReconciliationCase {
   return {
     ...reconciliationCase,
+    resolutionPresentation: reconciliationCase.resolutionPresentation
+      ? freezeReconciliationPresentation(
+          reconciliationCase.resolutionPresentation,
+        )
+      : undefined,
     observations: reconciliationCase.observations.map(
       cloneReconciliationObservation,
     ),
@@ -2047,6 +2221,17 @@ function snapshotReconciliationCase(
     reasonCode: reconciliationCase.reasonCode,
     createdAt: reconciliationCase.createdAt,
     rowVersion: reconciliationCase.rowVersion,
+    resolutionId: reconciliationCase.resolutionId,
+    resolution: reconciliationCase.resolution,
+    resolvedBy: reconciliationCase.resolvedBy,
+    resolutionReasonCode: reconciliationCase.resolutionReasonCode,
+    resolutionPresentation: reconciliationCase.resolutionPresentation
+      ? freezeReconciliationPresentation(
+          reconciliationCase.resolutionPresentation,
+        )
+      : undefined,
+    resolvedAt: reconciliationCase.resolvedAt,
+    cancelledAt: reconciliationCase.cancelledAt,
   });
 }
 

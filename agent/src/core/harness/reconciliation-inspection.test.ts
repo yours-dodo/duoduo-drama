@@ -139,6 +139,102 @@ describe('Agent reconciliation inspection', () => {
       await store.dispose();
     }
   });
+
+  it('accepts one replayable Resolution and preserves it when cancellation closes the wait', async () => {
+    const store = createInMemoryAgentRuntimeStore();
+    const fixture = await waitingReconciliationFixture(store);
+    const provider = createFauxProvider({
+      initialResponses: [fauxTextResponse('unused')],
+    });
+    let id = 0;
+    const harness = await createAgentHarness({
+      providers: [provider.provider],
+      model: { ref: provider.modelRef, scope: {} },
+      runtimeStore: store,
+      clock: { now: () => '2026-08-02T00:00:10.000Z' },
+      ids: { next: (kind) => `${kind}-${++id}` },
+    });
+    const decision = {
+      ...fixture.query,
+      reconciliationCaseId: fixture.reconciliationCaseId,
+      resolutionId: 'resolution-1',
+      resolution: 'confirmed_applied' as const,
+      resolvedBy: 'operator-1',
+      reasonCode: 'HUMAN_CONFIRMED',
+      presentation: { title: 'Payment confirmed' },
+    };
+
+    try {
+      const first = await harness.decideReconciliation(decision);
+      const replay = await harness.decideReconciliation(decision);
+      expect(first).toMatchObject({
+        status: 'resolved',
+        resolutionId: 'resolution-1',
+        resolution: 'confirmed_applied',
+        resolvedBy: 'operator-1',
+        resolutionReasonCode: 'HUMAN_CONFIRMED',
+        resolutionPresentation: { title: 'Payment confirmed' },
+        resolvedAt: '2026-08-02T00:00:10.000Z',
+      });
+      expect(replay).toEqual(first);
+      await expect(
+        harness.decideReconciliation({
+          ...decision,
+          resolutionId: 'resolution-2',
+          resolution: 'abandoned',
+        }),
+      ).rejects.toMatchObject({
+        code: 'AGENT_RECONCILIATION_ALREADY_RESOLVED',
+      });
+
+      await harness.cancelTask({
+        tenantId: fixture.query.tenantId,
+        projectId: fixture.query.projectId,
+        taskId: fixture.query.taskId,
+      });
+
+      await expect(store.getTask(fixture.query)).resolves.toMatchObject({
+        status: 'cancelled',
+        activeRunId: undefined,
+        runs: [
+          {
+            runId: fixture.query.runId,
+            status: 'cancelled',
+            turns: [{ status: 'cancelled' }],
+          },
+        ],
+      });
+      await expect(
+        harness.readReconciliationCases(fixture.query),
+      ).resolves.toMatchObject([
+        {
+          reconciliationCaseId: fixture.reconciliationCaseId,
+          status: 'cancelled',
+          resolutionId: 'resolution-1',
+          resolution: 'confirmed_applied',
+          resolvedBy: 'operator-1',
+          cancelledAt: '2026-08-02T00:00:10.000Z',
+        },
+      ]);
+      await expect(
+        harness.decideReconciliation(decision),
+      ).resolves.toMatchObject({
+        status: 'cancelled',
+        resolutionId: first.resolutionId,
+        resolution: first.resolution,
+        resolvedBy: first.resolvedBy,
+      });
+      await expect(
+        harness.decideReconciliation({
+          ...decision,
+          resolutionId: 'resolution-3',
+        }),
+      ).rejects.toMatchObject({ code: 'AGENT_RECONCILIATION_CANCELLED' });
+    } finally {
+      await harness.dispose();
+      await store.dispose();
+    }
+  });
 });
 
 async function waitingReconciliationFixture(

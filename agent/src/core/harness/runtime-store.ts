@@ -195,7 +195,20 @@ export interface AgentReconciliationCaseSnapshot extends ScopedRunQuery {
   readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
   readonly createdAt: string;
   readonly rowVersion: number;
+  readonly resolutionId?: string;
+  readonly resolution?: AgentReconciliationResolution;
+  readonly resolvedBy?: string;
+  readonly resolutionReasonCode?: string;
+  readonly resolutionPresentation?: AgentReconciliationPresentation;
+  readonly resolvedAt?: string;
+  readonly cancelledAt?: string;
 }
+
+export type AgentReconciliationResolution =
+  | 'confirmed_applied'
+  | 'confirmed_not_applied'
+  | 'confirmed_compensated'
+  | 'abandoned';
 
 export interface ScopedAgentReconciliationCaseQuery extends ScopedRunQuery {
   readonly reconciliationCaseId: string;
@@ -218,6 +231,20 @@ export interface AppendAgentReconciliationObservationCommand extends ScopedAgent
   readonly reasonCode: string;
   readonly presentation?: AgentReconciliationPresentation;
   readonly observedAt: string;
+}
+
+export interface DecideAgentRuntimeReconciliationCommand extends ScopedAgentReconciliationCaseQuery {
+  readonly resolutionId: string;
+  readonly resolution: AgentReconciliationResolution;
+  readonly resolvedBy: string;
+  readonly reasonCode?: string;
+  readonly presentation?: AgentReconciliationPresentation;
+  readonly now: string;
+}
+
+export interface CancelAgentRuntimeReconciliationCommand extends ScopedRunQuery {
+  readonly cancellationId: string;
+  readonly now: string;
 }
 
 export type AgentReconciliationMutation = {
@@ -585,6 +612,12 @@ export interface AgentRuntimeStore {
   appendReconciliationObservation(
     command: AppendAgentReconciliationObservationCommand,
   ): Promise<AgentReconciliationObservationSnapshot>;
+  decideReconciliation(
+    command: DecideAgentRuntimeReconciliationCommand,
+  ): Promise<AgentReconciliationCaseSnapshot>;
+  cancelReconciliation(
+    command: CancelAgentRuntimeReconciliationCommand,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]>;
   decideApproval(
     command: DecideAgentRuntimeApprovalCommand,
   ): Promise<AgentApprovalDecisionReceipt>;

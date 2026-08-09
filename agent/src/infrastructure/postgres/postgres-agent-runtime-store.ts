@@ -39,6 +39,8 @@ import type {
   ClaimRecoverableAgentRunsCommand,
   CommitAgentRuntimeTaskCommand,
   CreateAgentRuntimeTaskCommand,
+  CancelAgentRuntimeReconciliationCommand,
+  DecideAgentRuntimeReconciliationCommand,
   DecideAgentRuntimeApprovalCommand,
   ReadAgentRuntimeEventsQuery,
   ReadAgentRunRecoveryCommand,
@@ -482,6 +484,28 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
 
   async appendReconciliationObservation(): Promise<AgentReconciliationObservationSnapshot> {
     this.assertNotDisposed();
+    throw new AgentError(
+      'AGENT_RECONCILIATION_UNAVAILABLE',
+      'Agent reconciliation requires migration 0008',
+    );
+  }
+
+  async decideReconciliation(
+    command: DecideAgentRuntimeReconciliationCommand,
+  ): Promise<AgentReconciliationCaseSnapshot> {
+    this.assertNotDisposed();
+    void command;
+    throw new AgentError(
+      'AGENT_RECONCILIATION_UNAVAILABLE',
+      'Agent reconciliation requires migration 0008',
+    );
+  }
+
+  async cancelReconciliation(
+    command: CancelAgentRuntimeReconciliationCommand,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]> {
+    this.assertNotDisposed();
+    void command;
     throw new AgentError(
       'AGENT_RECONCILIATION_UNAVAILABLE',
       'Agent reconciliation requires migration 0008',

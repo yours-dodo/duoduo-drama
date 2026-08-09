@@ -39,8 +39,10 @@ import type {
   AgentRuntimeMutation,
   AgentRuntimeStore,
   AgentToolExecutionMutation,
+  CancelAgentRuntimeReconciliationCommand,
   CommitAgentRuntimeTaskCommand,
   CreateAgentRuntimeTaskCommand,
+  DecideAgentRuntimeReconciliationCommand,
   DecideAgentRuntimeApprovalCommand,
 } from './runtime-store.js';
 import type {
@@ -59,6 +61,7 @@ import type {
   CancelAgentTaskCommand,
   CreateAgentHarnessOptions,
   DecideAgentApprovalCommand,
+  DecideAgentReconciliationCommand,
   InspectAgentReconciliationCommand,
   ReadAgentApprovalsQuery,
   ReadAgentEventsQuery,
@@ -1412,6 +1415,22 @@ export async function createAgentHarness<TScopeHandle>(
         runtimeStore.appendReconciliationObservation(observation),
       );
     },
+    decideReconciliation: async (command: DecideAgentReconciliationCommand) => {
+      assertNotDisposed(disposed);
+      assertReconciliationSupported(runtimeStore);
+      const task = await readRuntimeDurably(() =>
+        runtimeStore.getTask(command),
+      );
+      if (!task?.runs.some((run) => run.runId === command.runId))
+        throw new AgentError('AGENT_RUN_NOT_FOUND', 'Agent run not found');
+      const decision = {
+        ...command,
+        now: clock.now(),
+      } satisfies DecideAgentRuntimeReconciliationCommand;
+      return readRuntimeDurably(() =>
+        runtimeStore.decideReconciliation(decision),
+      );
+    },
     readReconciliationObservations: async (
       query: ReadAgentReconciliationObservationsQuery,
     ): Promise<AgentReconciliationObservationPage> => {
@@ -1482,8 +1501,28 @@ export async function createAgentHarness<TScopeHandle>(
     cancelTask: async (command: CancelAgentTaskCommand) => {
       const active = activeTasks.get(taskKey(command));
       if (!active) {
-        if (!(await readRuntimeDurably(() => runtimeStore.getTask(command))))
+        const task = await readRuntimeDurably(() =>
+          runtimeStore.getTask(command),
+        );
+        if (!task)
           throw new AgentError('AGENT_TASK_NOT_FOUND', 'Agent task not found');
+        if (
+          task.status === 'waiting_for_reconciliation' &&
+          task.activeRunId !== undefined
+        ) {
+          assertReconciliationSupported(runtimeStore);
+          const cancellation = {
+            tenantId: command.tenantId,
+            projectId: command.projectId,
+            taskId: command.taskId,
+            runId: task.activeRunId,
+            cancellationId: nextId(ids, 'commit'),
+            now: clock.now(),
+          } satisfies CancelAgentRuntimeReconciliationCommand;
+          await readRuntimeDurably(() =>
+            runtimeStore.cancelReconciliation(cancellation),
+          );
+        }
         return;
       }
       active.controller.abort(command.reason);
