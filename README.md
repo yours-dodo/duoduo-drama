@@ -234,16 +234,17 @@ HarmonyOS 客户端 ─┘
 - 团队空间、项目可见范围和基础权限规则已经确认。
 - TypeScript + pnpm monorepo 已初始化，包含可运行的 Web、Server 和 Agent 服务。
 - `packages/ai` 已提供 Provider 中立的模型运行时与内置 Provider 适配层。
-- Agent Core A1–A4b 已实现 Task/Run/Turn 隔离、耐久事件与检查点、
+- Agent Core A1–A4c 已实现 Task/Run/Turn 隔离、耐久事件与检查点、
   ToolExecutionLedger、持久人工审批、Run 租约/fencing、checkpoint v3、
   确定性 RecoveryPlan、模型/工具/审批/孤儿 Attempt 恢复，以及有限批次、
   heartbeat、退避和结构阻塞的 Recovery Worker。PostgreSQL 0007 使用数据库
-  时间、`SKIP LOCKED` 和单调 fence；真实双进程测试会 `SIGKILL` 原执行器，
-  并证明新 Worker 接续事件且不重放已完成模型 Turn。0001–0007 迁移、
-  PostgreSQL 契约测试和真实进程恢复测试均已通过。
-- A4c 外部副作用对账、基础预算，以及上下文装配、分层记忆、
+  时间、`SKIP LOCKED` 和单调 fence；PostgreSQL 0008 持久化外部副作用
+  对账案例、观察和处置结果。真实双进程测试会 `SIGKILL` 原执行器，
+  并证明新 Worker 接续执行且不重放已完成模型 Turn 或外部副作用。
+  0001–0008 迁移、PostgreSQL 契约测试和真实进程恢复测试均已通过。
+- A4c 已补齐外部副作用对账、人工处置和跨进程恢复验收。基础预算、上下文装配、分层记忆、
   知识检索、Artifact Runtime 与沙箱仍待后续阶段实现。
-- 核心领域模型仍在继续设计；MVP 业务 API 尚未确定。
+- 首个业务后端已确定为“多租户故事创作”模块化单体；已完成框架设计，尚未进入实现。
 
 ## 项目文档
 
@@ -255,6 +256,7 @@ HarmonyOS 客户端 ─┘
 - [`Agent Core A3 ToolExecutionLedger 设计`](docs/architecture/agent-core-phase-a3-tool-execution-ledger-design.md)：定义副作用一致性、Attempt 与保守未知结果。
 - [`Agent Core A4a 持久审批设计`](docs/architecture/agent-core-phase-a4a-persistent-approval-design.md)：定义审批策略、状态机、跨实例唤醒和原子消费边界。
 - [`Agent Core A4b 重启恢复设计`](docs/architecture/agent-core-phase-a4b-restart-recovery-design.md)：定义租约、fencing、恢复计划、Worker、PostgreSQL 竞争与真实进程退出验证。
+- [`多租户故事创作后端框架设计`](docs/superpowers/specs/2026-08-09-multi-tenant-story-backend-framework-design.md)：定义 NestJS 模块化单体、团队租户、无密码登录、故事创作 API、模拟 Agent 和分阶段验收基线。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
 - [`CLAUDE.md`](CLAUDE.md)：面向 AI 编码工具的仓库上下文说明。

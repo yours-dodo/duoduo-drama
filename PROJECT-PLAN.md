@@ -5,8 +5,8 @@
 ## 1. 当前状态
 
 - 记录开始日期：2026-07-16
-- 项目阶段：Agent Core A4b 重启恢复已完成，下一阶段进入 A4c 外部副作用对账和业务服务设计
-- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4b 已通过内存、PostgreSQL 和真实进程恢复验收。
+- 项目阶段：Agent Core A4c 外部副作用对账已完成，已进入多租户故事创作业务后端设计与实现准备
+- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4c 已通过内存、PostgreSQL 和真实进程恢复验收。
 
 ## 2. 规划目标
 
@@ -751,6 +751,16 @@ Agent Core 采用“分层轻内核 + 可插拔能力端口”，由 Harness 层
 - 确认优先完成单 Agent 的一致性、恢复、安全和多租户隔离，再建设多 Agent 与高级知识能力。
 - 详细设计与一手资料记录在 Agent Core 架构文档中。
 
+### 2026-08-09：确认多租户故事创作后端框架
+
+- 首个业务后端闭环聚焦故事项目、创作对话、草稿成果和确认版本；短剧制作链路后续再接入。
+- 采用 NestJS 模块化单体与共享 PostgreSQL 业务库，不提前拆分微服务。
+- 团队空间就是租户；用户可加入多个团队，所有业务数据通过租户上下文、应用授权和数据库复合约束隔离。
+- 首期采用邮箱验证码或魔法链接的无密码登录，支持创建团队和通过邀请加入团队。
+- 真实 Agent 调用首期暂缓；Server 定义 `AgentGateway` 与授权协议，由模拟适配器生成可预测草稿。
+- 真实 Agent、队列、Redis、对象存储、文件处理和短剧制作模块按实际业务开发继续补齐。
+- 详细模块边界、数据模型、API 约定、安全基线、测试策略和分阶段验收记录在[多租户故事创作后端框架设计](docs/superpowers/specs/2026-08-09-multi-tenant-story-backend-framework-design.md)中。
+
 ## 5. 当前待讨论事项
 
 ### 业务架构
@@ -815,13 +825,13 @@ Agent Core 采用“分层轻内核 + 可插拔能力端口”，由 Harness 层
   - [x] A1：无状态 Executor、内存 Harness、Task/Run/Turn 作用域与并发隔离
   - [x] A2：耐久状态、事件/outbox、cursor/replay 与 checkpoint 可恢复边界
   - [x] A3：ToolExecutionLedger、Attempt、幂等键、副作用分类、deadline 与 `unknown` 语义
-  - [ ] A4：持久化审批、恢复扫描、外部对账与安全自动恢复
+  - [x] A4：持久化审批、恢复扫描、外部对账与安全自动恢复
     - [x] A4a：持久化审批、跨实例决定与 exactly-once 消费
     - [x] A4b：Run 租约/fencing、恢复 Worker、PostgreSQL 竞争与进程重启恢复
-    - [ ] A4c：外部副作用对账与人工处置闭环
+    - [x] A4c：外部副作用对账与人工处置闭环
 - [ ] 研究全流程扩展（暂缓）
 - [ ] 确定核心领域对象与层级
 - [ ] 明确业务角色、领域对象和主要流程
-- [ ] 划分业务模块和 Agent 职责
-- [ ] 选择技术方案
-- [ ] 制定实现计划和验收标准
+- [x] 划分首个业务后端的模块和 Agent 职责
+- [x] 选择首个业务后端的技术方案
+- [x] 制定首个业务后端的实施阶段和验收标准
