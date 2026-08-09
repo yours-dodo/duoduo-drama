@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline: validated startup configuration, URI-versioned APIs, DTO validation, Cookie parsing, trusted-origin CORS, request IDs, structured request logs, safe error envelopes, and `/health` plus `/ready` probes. Authentication, business modules, persistence, and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline plus the Prisma/PostgreSQL runtime boundary: validated startup configuration, URI-versioned APIs, DTO validation, Cookie parsing, trusted-origin CORS, request IDs, structured request logs, safe error envelopes, database-backed readiness, explicit migrations, and a narrow transaction runner. Authentication, business modules, and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -19,6 +19,7 @@ Create directories only when real code needs them. Use these boundaries as the S
 - `src/integrations/agent/` for the Agent client and request/response mapping.
 - `src/config/` for Server-owned environment parsing and validation.
 - `src/platform/http/` for transport-wide middleware, filters, versioning, and health probes.
+- `src/platform/database/` for the private Prisma lifecycle, database readiness, and transaction boundary. Business modules must consume exported database ports rather than a global Prisma Client.
 - `src/platform/observability/` for request-level logs and future telemetry adapters.
 - `src/test/` for reusable Server test harnesses; production builds must exclude this directory.
 
@@ -35,6 +36,10 @@ Run from the repository root:
 - `pnpm --filter @duoduo/server test` — run Server tests.
 - `pnpm --filter @duoduo/server build` — compile production JavaScript.
 - `pnpm --filter @duoduo/server start` — run the compiled `dist/main.js` output.
+- `pnpm --filter @duoduo/server db:generate` — regenerate the ignored Prisma Client output.
+- `pnpm --filter @duoduo/server db:migrate:dev` — create and apply a reviewed local migration.
+- `pnpm --filter @duoduo/server db:migrate:deploy` — apply checked-in migrations during deployment.
+- `pnpm --filter @duoduo/server test:postgres` — require `SERVER_TEST_POSTGRES_URL` and run the real PostgreSQL boundary suite.
 
 Also run root `pnpm lint` and `pnpm format:check` before submitting changes.
 
@@ -45,3 +50,5 @@ Co-locate tests as `*.test.ts`. Add focused unit tests for domain invariants and
 Validate environment variables during startup. Do not expose stack traces, credentials, model keys, or internal dependency errors in API responses. External Agent calls must eventually define timeouts, idempotency, and retry behavior explicitly rather than relying on client defaults.
 
 Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret of at least 32 characters and an explicit comma-separated trusted-origin list. Never log request bodies, authorization headers, Cookies, or URL query values.
+
+The Server database must use `SERVER_DATABASE_URL`; the Agent database uses its own `AGENT_*` variables, database, and credentials. Never share Prisma models, migration history, database users, or connection strings across those services. Application startup does not apply migrations automatically: deploy migrations explicitly before starting code that depends on them.

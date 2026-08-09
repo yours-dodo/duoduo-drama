@@ -10,6 +10,7 @@ coverage/
 .idea/
 /.duoduo-drama/
 /docs/superpowers/
+apps/server/src/generated/prisma/
 
 vendor/*
 !vendor/AGENTS.md

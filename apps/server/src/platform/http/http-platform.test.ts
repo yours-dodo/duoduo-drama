@@ -93,6 +93,30 @@ describe('HTTP platform', () => {
     },
   );
 
+  it('keeps liveness healthy while reporting a database readiness failure', async () => {
+    await app.close();
+    app = await createTestApp({
+      controllers: [PlatformProbeController],
+      requestLogSink,
+      databaseReady: false,
+    });
+
+    await request(app.getHttpServer()).get('/health').expect(200);
+    const response = await request(app.getHttpServer())
+      .get('/ready')
+      .set('x-request-id', 'readiness-request')
+      .expect(503);
+
+    expect(response.body).toEqual({
+      error: {
+        code: 'DATABASE_NOT_READY',
+        message: 'The service is not ready',
+        requestId: 'readiness-request',
+        details: [],
+      },
+    });
+  });
+
   it('serves business routes under the v1 URI prefix and strips unknown DTO fields', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/platform-probes')

@@ -1,4 +1,13 @@
-import { Controller, Get, VERSION_NEUTRAL, Version } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  VERSION_NEUTRAL,
+  Version,
+} from '@nestjs/common';
+
+import { DatabaseReadinessService } from '../database/database-readiness.service.js';
+import { ApplicationError } from './application-error.js';
 
 interface HealthResponse {
   service: 'server';
@@ -7,6 +16,11 @@ interface HealthResponse {
 
 @Controller()
 export class HealthController {
+  constructor(
+    @Inject(DatabaseReadinessService)
+    private readonly databaseReadiness: DatabaseReadinessService,
+  ) {}
+
   @Version(VERSION_NEUTRAL)
   @Get('health')
   health(): HealthResponse {
@@ -15,7 +29,15 @@ export class HealthController {
 
   @Version(VERSION_NEUTRAL)
   @Get('ready')
-  ready(): HealthResponse {
+  async ready(): Promise<HealthResponse> {
+    if (!(await this.databaseReadiness.isReady())) {
+      throw new ApplicationError({
+        code: 'DATABASE_NOT_READY',
+        message: 'The service is not ready',
+        statusCode: 503,
+      });
+    }
+
     return healthyResponse();
   }
 }

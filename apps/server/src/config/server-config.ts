@@ -7,6 +7,7 @@ export interface ServerConfig {
   port: number;
   cookieSecret: string;
   trustedOrigins: string[];
+  databaseUrl: string;
 }
 
 const DEFAULT_PORT = 3001;
@@ -37,7 +38,42 @@ export function parseServerConfig(
       environment.TRUSTED_ORIGINS,
       runtimeEnvironment,
     ),
+    databaseUrl: parseDatabaseUrl(environment.SERVER_DATABASE_URL),
   };
+}
+
+function parseDatabaseUrl(value: string | undefined): string {
+  if (value === undefined || value.trim() === '') {
+    throw new ServerConfigError('SERVER_DATABASE_URL is required');
+  }
+
+  const databaseUrl = value.trim();
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(databaseUrl);
+  } catch {
+    throw invalidDatabaseUrl();
+  }
+
+  if (
+    (parsedUrl.protocol !== 'postgresql:' &&
+      parsedUrl.protocol !== 'postgres:') ||
+    parsedUrl.hostname === '' ||
+    parsedUrl.username === '' ||
+    parsedUrl.pathname.length <= 1 ||
+    parsedUrl.hash !== ''
+  ) {
+    throw invalidDatabaseUrl();
+  }
+
+  return databaseUrl;
+}
+
+function invalidDatabaseUrl(): ServerConfigError {
+  return new ServerConfigError(
+    'SERVER_DATABASE_URL must be a valid PostgreSQL database URL',
+  );
 }
 
 function parseEnvironment(value: string | undefined): ServerEnvironment {
