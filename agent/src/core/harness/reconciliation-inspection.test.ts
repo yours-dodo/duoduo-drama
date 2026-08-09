@@ -2,8 +2,13 @@ import { createFauxProvider, fauxTextResponse } from '@duoduo/ai/testing';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentTool } from '../types.js';
+import { planAgentRunRecovery } from './recovery-plan.js';
+import { createAgentRecoveryWorker } from './create-agent-recovery-worker.js';
 import { createAgentHarness } from './create-agent-harness.js';
 import { createInMemoryAgentRuntimeStore } from './in-memory-state.js';
+import { resumeAgentReconciliationRun } from './resume-reconciliation-run.js';
+import { hashRuntimeCommit } from './commit-hash.js';
+import type { AgentRuntimeStore } from './runtime-store.js';
 
 describe('Agent reconciliation inspection', () => {
   it('records explicit safe observations without changing the waiting Run', async () => {
@@ -235,10 +240,352 @@ describe('Agent reconciliation inspection', () => {
       await store.dispose();
     }
   });
+
+  it('claims only a resolved Case and consumes it once without rewriting the unknown ledger', async () => {
+    const store = createInMemoryAgentRuntimeStore();
+    const fixture = await waitingReconciliationFixture(store);
+    const provider = createFauxProvider({
+      initialResponses: [fauxTextResponse('unused')],
+    });
+    let id = 0;
+    const harness = await createAgentHarness({
+      providers: [provider.provider],
+      model: { ref: provider.modelRef, scope: {} },
+      runtimeStore: store,
+      clock: { now: () => '2026-08-02T00:00:10.000Z' },
+      ids: { next: (kind) => `${kind}-${++id}` },
+    });
+    const claim = {
+      ownerId: 'reconciliation-recovery-worker',
+      configFingerprint: 'reconciliation-inspection-config',
+      limit: 1,
+      now: '2026-08-02T00:02:00.000Z',
+      leaseExpiresAt: '2026-08-02T00:03:00.000Z',
+    };
+
+    try {
+      await expect(
+        store.claimRecoverableRuns({ ...claim, claimId: 'unresolved-claim' }),
+      ).resolves.toMatchObject({ leases: [] });
+      await harness.decideReconciliation({
+        ...fixture.query,
+        reconciliationCaseId: fixture.reconciliationCaseId,
+        resolutionId: 'resolution-consume-1',
+        resolution: 'confirmed_applied',
+        resolvedBy: 'operator-consume-1',
+      });
+      const claimed = await store.claimRecoverableRuns({
+        ...claim,
+        claimId: 'resolved-claim',
+      });
+      const lease = claimed.leases[0];
+      if (!lease) throw new TypeError('Expected resolved reconciliation claim');
+      const snapshot = await store.readRecoverySnapshot({
+        ...fixture.query,
+        ownerId: lease.ownerId,
+        leaseToken: lease.leaseToken,
+        fencingToken: lease.fencingToken,
+        now: claim.now,
+      });
+      const plan = planAgentRunRecovery(snapshot, {
+        harnessProtocolVersion: 2,
+        checkpointSchemaVersion: 3,
+        configFingerprint: claim.configFingerprint,
+      });
+      if (plan.kind !== 'consume_reconciliation')
+        throw new TypeError('Expected reconciliation consumption plan');
+
+      const result = await resumeAgentReconciliationRun({
+        runtimeStore: store,
+        snapshot,
+        lease,
+        plan,
+        recoveryId: 'reconciliation-consume-recovery',
+        ids: { next: (kind) => `consume-${kind}-${++id}` },
+        clock: { now: () => '2026-08-02T00:02:01.000Z' },
+      });
+      expect(result.plan).toEqual({ kind: 'continue_model', nextTurnIndex: 2 });
+      await expect(store.getTask(fixture.query)).resolves.toMatchObject({
+        status: 'running',
+        runs: [{ status: 'running', turns: [{ status: 'completed' }] }],
+      });
+      await expect(
+        harness.readReconciliationCases(fixture.query),
+      ).resolves.toMatchObject([
+        {
+          reconciliationCaseId: fixture.reconciliationCaseId,
+          status: 'consumed',
+          resolutionId: 'resolution-consume-1',
+          consumeId: expect.any(String),
+          consumedAt: '2026-08-02T00:02:01.000Z',
+        },
+      ]);
+      await expect(
+        store.readToolExecutions(fixture.query),
+      ).resolves.toMatchObject([
+        {
+          toolExecutionId: 'tool-execution-reconciliation',
+          status: 'unknown',
+          effectOutcome: 'unknown',
+          attempts: [
+            {
+              attemptId: 'tool-attempt-reconciliation',
+              status: 'unknown',
+              effectOutcome: 'unknown',
+            },
+          ],
+        },
+      ]);
+      const checkpoint = await store.getCheckpoint(fixture.query);
+      expect(checkpoint).toMatchObject({
+        kind: 'tool_result_appended',
+        resumeState: { kind: 'model', nextTurnIndex: 2 },
+        transcript: [
+          expect.objectContaining({ role: 'assistant' }),
+          {
+            role: 'tool_result',
+            isError: false,
+            content: [
+              { type: 'text', text: 'External action confirmed applied' },
+            ],
+          },
+        ],
+      });
+      const eventsBeforeReplay = await store.readEvents({
+        ...fixture.query,
+        afterSequence: 0,
+        limit: 100,
+      });
+      await expect(
+        resumeAgentReconciliationRun({
+          runtimeStore: store,
+          snapshot,
+          lease,
+          plan,
+          recoveryId: 'reconciliation-consume-replay',
+          ids: { next: (kind) => `replay-${kind}-${++id}` },
+          clock: { now: () => '2026-08-02T00:02:02.000Z' },
+        }),
+      ).resolves.toEqual({
+        plan: { kind: 'continue_model', nextTurnIndex: 2 },
+      });
+      await expect(
+        store.readEvents({ ...fixture.query, afterSequence: 0, limit: 100 }),
+      ).resolves.toEqual(eventsBeforeReplay);
+    } finally {
+      await harness.dispose();
+      await store.dispose();
+    }
+  });
+
+  it.each([
+    ['confirmed_not_applied', true, 'External action confirmed not applied'],
+    ['confirmed_compensated', true, 'External action was compensated'],
+    [
+      'abandoned',
+      true,
+      'External action could not be confirmed and was abandoned',
+    ],
+  ] as const)(
+    'maps %s to a generic reconciliation ToolResult',
+    async (resolution, isError, text) => {
+      const store = createInMemoryAgentRuntimeStore();
+      const fixture = await waitingReconciliationFixture(store);
+      const provider = createFauxProvider({
+        initialResponses: [fauxTextResponse('unused')],
+      });
+      let id = 0;
+      const harness = await createAgentHarness({
+        providers: [provider.provider],
+        model: { ref: provider.modelRef, scope: {} },
+        runtimeStore: store,
+        clock: { now: () => '2026-08-02T00:00:10.000Z' },
+        ids: { next: (kind) => `${kind}-${++id}` },
+      });
+
+      try {
+        await harness.decideReconciliation({
+          ...fixture.query,
+          reconciliationCaseId: fixture.reconciliationCaseId,
+          resolutionId: `resolution-${resolution}`,
+          resolution,
+          resolvedBy: 'operator-result-map',
+        });
+        const claimed = await store.claimRecoverableRuns({
+          claimId: `claim-${resolution}`,
+          ownerId: 'result-map-worker',
+          configFingerprint: 'reconciliation-inspection-config',
+          limit: 1,
+          now: '2026-08-02T00:02:00.000Z',
+          leaseExpiresAt: '2026-08-02T00:03:00.000Z',
+        });
+        const lease = claimed.leases[0];
+        if (!lease)
+          throw new TypeError('Expected resolved reconciliation claim');
+        const snapshot = await store.readRecoverySnapshot({
+          ...fixture.query,
+          ownerId: lease.ownerId,
+          leaseToken: lease.leaseToken,
+          fencingToken: lease.fencingToken,
+          now: '2026-08-02T00:02:00.000Z',
+        });
+        const plan = planAgentRunRecovery(snapshot, {
+          harnessProtocolVersion: 2,
+          checkpointSchemaVersion: 3,
+          configFingerprint: 'reconciliation-inspection-config',
+        });
+        if (plan.kind !== 'consume_reconciliation')
+          throw new TypeError('Expected reconciliation consumption plan');
+        await resumeAgentReconciliationRun({
+          runtimeStore: store,
+          snapshot,
+          lease,
+          plan,
+          recoveryId: `consume-${resolution}`,
+          ids: { next: (kind) => `map-${kind}-${++id}` },
+          clock: { now: () => '2026-08-02T00:02:01.000Z' },
+        });
+        const checkpoint = await store.getCheckpoint(fixture.query);
+        expect(checkpoint?.transcript.at(-1)).toEqual({
+          role: 'tool_result',
+          toolCallId: 'tool-call-reconciliation',
+          toolName: 'payment-submit',
+          isError,
+          content: [{ type: 'text', text }],
+        });
+      } finally {
+        await harness.dispose();
+        await store.dispose();
+      }
+    },
+  );
+
+  it('has a compatible Worker consume a resolved Case and resume the model exactly once', async () => {
+    const baseStore = createInMemoryAgentRuntimeStore();
+    const store = asDurableStore(baseStore);
+    const provider = createFauxProvider({
+      initialResponses: [
+        fauxTextResponse('seed complete'),
+        fauxTextResponse('continued after reconciliation'),
+      ],
+    });
+    const harness = await createAgentHarness({
+      providers: [provider.provider],
+      model: { ref: provider.modelRef, scope: {} },
+      runtimeStore: store,
+      clock: { now: () => '2026-08-02T00:00:00.000Z' },
+    });
+    const seed = await harness.startTask({
+      scope: {
+        tenantId: 'tenant-reconciliation-seed',
+        projectId: 'project-reconciliation-seed',
+      },
+      input: 'seed compatible configuration',
+    });
+
+    try {
+      await seed.result();
+      const seedCheckpoint = await store.getCheckpoint({
+        tenantId: 'tenant-reconciliation-seed',
+        projectId: 'project-reconciliation-seed',
+        taskId: seed.taskId,
+        runId: seed.runId,
+      });
+      if (!seedCheckpoint)
+        throw new TypeError('Expected compatible recovery checkpoint');
+      const fixture = await waitingReconciliationFixture(
+        baseStore,
+        seedCheckpoint.configFingerprint,
+      );
+      await harness.decideReconciliation({
+        ...fixture.query,
+        reconciliationCaseId: fixture.reconciliationCaseId,
+        resolutionId: 'worker-resolution-1',
+        resolution: 'confirmed_not_applied',
+        resolvedBy: 'operator-worker-1',
+      });
+      const worker = await createAgentRecoveryWorker({
+        providers: [provider.provider],
+        model: { ref: provider.modelRef, scope: {} },
+        runtimeStore: store,
+        workerId: 'reconciliation-worker',
+        clock: { now: () => '2026-08-02T00:02:00.000Z' },
+      });
+
+      try {
+        await expect(worker.recoverOnce()).resolves.toEqual({
+          claimed: 1,
+          resumed: 1,
+          blocked: 0,
+          waitingForReconciliation: 0,
+        });
+        await expect(store.getTask(fixture.query)).resolves.toMatchObject({
+          status: 'completed',
+          runs: [{ status: 'completed' }],
+        });
+        await expect(
+          harness.readReconciliationCases(fixture.query),
+        ).resolves.toMatchObject([
+          {
+            reconciliationCaseId: fixture.reconciliationCaseId,
+            status: 'consumed',
+            resolution: 'confirmed_not_applied',
+          },
+        ]);
+        await expect(
+          store.readToolExecutions(fixture.query),
+        ).resolves.toMatchObject([
+          {
+            status: 'unknown',
+            effectOutcome: 'unknown',
+            attempts: [{ status: 'unknown', effectOutcome: 'unknown' }],
+          },
+        ]);
+        const events = await store.readEvents({
+          ...fixture.query,
+          afterSequence: 0,
+          limit: 100,
+        });
+        expect(
+          events.events.find(
+            (event) =>
+              event.payload.type === 'tool_execution_end' &&
+              event.payload.toolExecutionId === 'tool-execution-reconciliation',
+          ),
+        ).toMatchObject({
+          payload: {
+            type: 'tool_execution_end',
+            status: 'unknown',
+            effectOutcome: 'unknown',
+            result: {
+              role: 'tool_result',
+              isError: true,
+              content: [
+                {
+                  type: 'text',
+                  text: 'External action confirmed not applied',
+                },
+              ],
+            },
+          },
+        });
+        expect(provider.controller.callCount()).toBe(2);
+        await expect(worker.recoverOnce()).resolves.toMatchObject({
+          claimed: 0,
+        });
+      } finally {
+        await worker.dispose();
+      }
+    } finally {
+      await harness.dispose();
+      await baseStore.dispose();
+    }
+  });
 });
 
 async function waitingReconciliationFixture(
   store: ReturnType<typeof createInMemoryAgentRuntimeStore>,
+  configFingerprint = 'reconciliation-inspection-config',
 ): Promise<{
   readonly query: {
     readonly tenantId: string;
@@ -272,7 +619,7 @@ async function waitingReconciliationFixture(
       resumeState: { kind: 'model', nextTurnIndex: 1 },
       harnessProtocolVersion: 2,
       checkpointSchemaVersion: 3,
-      configFingerprint: 'reconciliation-inspection-config',
+      configFingerprint,
     },
     initialLease: {
       ownershipId: 'reconciliation-owner',
@@ -300,7 +647,7 @@ async function waitingReconciliationFixture(
         turnIndex: 1,
         proposalSequence: 1,
         toolName: 'payment-submit',
-        argumentsDigest: 'private-arguments-digest',
+        argumentsDigest: hashRuntimeCommit('{}'),
       },
       {
         type: 'tool_execution_prepared',
@@ -355,7 +702,19 @@ async function waitingReconciliationFixture(
     ],
     checkpoint: {
       kind: 'reconciliation_waiting',
-      transcript: [],
+      transcript: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_call',
+              id: 'tool-call-reconciliation',
+              name: 'payment-submit',
+              rawArguments: '{}',
+            },
+          ],
+        },
+      ],
       turnIndex: 1,
       executionPosition: 'reconciliation',
       nextTurnIndex: 1,
@@ -366,7 +725,7 @@ async function waitingReconciliationFixture(
       },
       harnessProtocolVersion: 2,
       checkpointSchemaVersion: 3,
-      configFingerprint: 'reconciliation-inspection-config',
+      configFingerprint,
     },
     lease: {
       leaseToken: lease.leaseToken,
@@ -375,4 +734,14 @@ async function waitingReconciliationFixture(
     now: '2026-08-02T00:00:01.000Z',
   });
   return { query, reconciliationCaseId };
+}
+
+function asDurableStore(base: AgentRuntimeStore): AgentRuntimeStore {
+  return new Proxy(base, {
+    get(target, property, receiver) {
+      if (property === 'durability') return 'durable';
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }

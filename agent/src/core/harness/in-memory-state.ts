@@ -301,21 +301,30 @@ class InMemoryAgentRuntimeStore implements AgentRuntimeStore {
     const now = Date.parse(command.now);
     for (const task of this.tasks.values()) {
       if (leases.length >= command.limit) break;
-      if (
-        isTerminalStatus(task.status) ||
-        task.status === 'waiting_for_reconciliation' ||
-        task.status === 'recovery_blocked'
-      )
+      const taskIsWaitingForReconciliation =
+        task.status === 'waiting_for_reconciliation';
+      if (isTerminalStatus(task.status) || task.status === 'recovery_blocked')
         continue;
       for (const run of task.runs) {
         if (leases.length >= command.limit) break;
-        if (
-          isTerminalStatus(run.status) ||
-          run.status === 'waiting_for_reconciliation' ||
-          run.status === 'recovery_blocked'
-        )
+        const runIsWaitingForReconciliation =
+          run.status === 'waiting_for_reconciliation';
+        if (isTerminalStatus(run.status) || run.status === 'recovery_blocked')
           continue;
         const key = runKey(task.scope, task.taskId, run.runId);
+        if (taskIsWaitingForReconciliation || runIsWaitingForReconciliation) {
+          if (
+            !taskIsWaitingForReconciliation ||
+            !runIsWaitingForReconciliation ||
+            !(this.reconciliationCases.get(key) ?? []).some(
+              (reconciliationCase) =>
+                reconciliationCase.status === 'resolved' &&
+                reconciliationCase.resolutionId !== undefined &&
+                reconciliationCase.resolution !== undefined,
+            )
+          )
+            continue;
+        }
         const checkpoint = this.checkpoints.get(key)?.at(-1);
         if (checkpoint?.configFingerprint !== command.configFingerprint)
           continue;
@@ -1565,6 +1574,8 @@ interface MutableReconciliationCase {
   resolutionReasonCode?: string;
   resolutionPresentation?: AgentReconciliationPresentation;
   resolvedAt?: string;
+  consumeId?: string;
+  consumedAt?: string;
   cancelledAt?: string;
   observations: MutableReconciliationObservation[];
 }
@@ -1995,70 +2006,164 @@ function applyReconciliationMutations(input: {
   );
   if (!run) throw new TypeError('Agent run not found for reconciliation');
 
-  for (const mutation of input.mutations) {
-    if (
-      input.task.status !== 'waiting_for_reconciliation' ||
-      run.status !== 'waiting_for_reconciliation'
+  for (const mutation of input.mutations)
+    if (mutation.type === 'reconciliation_case_created')
+      createReconciliationCase(input, mutation, run);
+    else consumeReconciliationCase(input, mutation, run);
+}
+
+function createReconciliationCase(
+  input: Parameters<typeof applyReconciliationMutations>[0],
+  mutation: Extract<
+    AgentReconciliationMutation,
+    { readonly type: 'reconciliation_case_created' }
+  >,
+  run: MutableAgentTask['runs'][number],
+): void {
+  if (
+    input.task.status !== 'waiting_for_reconciliation' ||
+    run.status !== 'waiting_for_reconciliation'
+  )
+    throw new TypeError('Agent reconciliation Case requires a waiting run');
+  if (!hasBoundedUtf8(mutation.reconciliationCaseId, 256))
+    throw new TypeError('Agent reconciliation Case ID is invalid');
+  if (
+    input.cases.some(
+      (reconciliationCase) =>
+        reconciliationCase.reconciliationCaseId ===
+          mutation.reconciliationCaseId ||
+        reconciliationCase.toolExecutionId === mutation.toolExecutionId,
     )
-      throw new TypeError('Agent reconciliation Case requires a waiting run');
-    if (!hasBoundedUtf8(mutation.reconciliationCaseId, 256))
-      throw new TypeError('Agent reconciliation Case ID is invalid');
-    if (
-      input.cases.some(
-        (reconciliationCase) =>
-          reconciliationCase.reconciliationCaseId ===
-            mutation.reconciliationCaseId ||
-          reconciliationCase.toolExecutionId === mutation.toolExecutionId,
-      )
-    )
-      throw new TypeError('Agent reconciliation Case identity collision');
-    const execution = input.executions.find(
-      (candidate) => candidate.toolExecutionId === mutation.toolExecutionId,
+  )
+    throw new TypeError('Agent reconciliation Case identity collision');
+  const execution = input.executions.find(
+    (candidate) => candidate.toolExecutionId === mutation.toolExecutionId,
+  );
+  const attempt = execution?.attempts.find(
+    (candidate) => candidate.attemptId === mutation.attemptId,
+  );
+  if (
+    !execution ||
+    !attempt ||
+    !isUnknownReconciliationAttempt(execution, attempt)
+  )
+    throw new TypeError(
+      'Agent reconciliation Case does not match an unknown ToolExecution Attempt',
     );
-    const attempt = execution?.attempts.find(
-      (candidate) => candidate.attemptId === mutation.attemptId,
+  input.cases.push({
+    reconciliationCaseId: mutation.reconciliationCaseId,
+    toolExecutionId: execution.toolExecutionId,
+    attemptId: attempt.attemptId,
+    toolName: execution.toolName,
+    status: 'waiting',
+    reasonCode: mutation.reasonCode,
+    createdAt: input.now,
+    rowVersion: 1,
+    observations: [],
+  });
+}
+
+function consumeReconciliationCase(
+  input: Parameters<typeof applyReconciliationMutations>[0],
+  mutation: Extract<
+    AgentReconciliationMutation,
+    { readonly type: 'reconciliation_case_consumed' }
+  >,
+  run: MutableAgentTask['runs'][number],
+): void {
+  if (input.task.status !== 'running' || run.status !== 'running')
+    throw new TypeError(
+      'Agent reconciliation consumption requires a running run',
     );
-    if (
-      !execution ||
-      !attempt ||
-      (execution.sideEffect !== 'reversible' &&
-        execution.sideEffect !== 'external') ||
-      execution.status !== 'unknown' ||
-      execution.effectOutcome !== 'unknown' ||
-      execution.retryable !== false ||
-      attempt.status !== 'unknown' ||
-      attempt.effectOutcome !== 'unknown'
-    )
-      throw new TypeError(
-        'Agent reconciliation Case does not match an unknown ToolExecution Attempt',
-      );
-    input.cases.push({
-      reconciliationCaseId: mutation.reconciliationCaseId,
-      toolExecutionId: execution.toolExecutionId,
-      attemptId: attempt.attemptId,
-      toolName: execution.toolName,
-      status: 'waiting',
-      reasonCode: mutation.reasonCode,
-      createdAt: input.now,
-      rowVersion: 1,
-      observations: [],
-    });
-  }
+  if (
+    !hasBoundedUtf8(mutation.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(mutation.resolutionId, 256) ||
+    !hasBoundedUtf8(mutation.consumeId, 256)
+  )
+    throw new TypeError('Agent reconciliation consumption is invalid');
+  const reconciliationCase = input.cases.find(
+    (candidate) =>
+      candidate.reconciliationCaseId === mutation.reconciliationCaseId,
+  );
+  const execution = input.executions.find(
+    (candidate) => candidate.toolExecutionId === mutation.toolExecutionId,
+  );
+  const attempt = execution?.attempts.find(
+    (candidate) => candidate.attemptId === mutation.attemptId,
+  );
+  if (
+    !reconciliationCase ||
+    reconciliationCase.toolExecutionId !== mutation.toolExecutionId ||
+    reconciliationCase.attemptId !== mutation.attemptId ||
+    reconciliationCase.status !== 'resolved' ||
+    reconciliationCase.resolutionId !== mutation.resolutionId ||
+    reconciliationCase.resolution === undefined ||
+    !isUnknownReconciliationAttempt(execution, attempt)
+  )
+    throw new TypeError('Agent reconciliation Case cannot be consumed');
+  reconciliationCase.status = 'consumed';
+  reconciliationCase.consumeId = mutation.consumeId;
+  reconciliationCase.consumedAt = input.now;
+  reconciliationCase.rowVersion += 1;
+}
+
+function isUnknownReconciliationAttempt(
+  execution: MutableToolExecution | undefined,
+  attempt: MutableToolExecutionAttempt | undefined,
+): execution is MutableToolExecution {
+  return (
+    execution !== undefined &&
+    attempt !== undefined &&
+    (execution.sideEffect === 'reversible' ||
+      execution.sideEffect === 'external') &&
+    execution.status === 'unknown' &&
+    execution.effectOutcome === 'unknown' &&
+    execution.retryable === false &&
+    attempt.status === 'unknown' &&
+    attempt.effectOutcome === 'unknown'
+  );
 }
 
 function assertReconciliationCommit(
   command: CommitAgentRuntimeTaskCommand,
 ): void {
   const reconciliations = command.reconciliations ?? [];
+  const createdCases = reconciliations.filter(
+    (
+      mutation,
+    ): mutation is Extract<
+      AgentReconciliationMutation,
+      { readonly type: 'reconciliation_case_created' }
+    > => mutation.type === 'reconciliation_case_created',
+  );
+  const consumedCases = reconciliations.filter(
+    (
+      mutation,
+    ): mutation is Extract<
+      AgentReconciliationMutation,
+      { readonly type: 'reconciliation_case_consumed' }
+    > => mutation.type === 'reconciliation_case_consumed',
+  );
   const startsReconciliation = command.mutations.some(
     (runtimeMutation) => runtimeMutation.type === 'reconciliation_wait_started',
   );
-  if (startsReconciliation && reconciliations.length !== 1)
+  const resumesReconciliation = command.mutations.some(
+    (runtimeMutation) => runtimeMutation.type === 'reconciliation_wait_resumed',
+  );
+  if (startsReconciliation && createdCases.length !== 1)
     throw new TypeError(
       'Agent reconciliation wait must create exactly one Case',
     );
+  if (startsReconciliation && consumedCases.length !== 0)
+    throw new TypeError('Agent reconciliation wait cannot consume a Case');
+  if (resumesReconciliation && consumedCases.length !== 1)
+    throw new TypeError(
+      'Agent reconciliation resume must consume exactly one resolved Case',
+    );
+  if (resumesReconciliation && createdCases.length !== 0)
+    throw new TypeError('Agent reconciliation resume cannot create a Case');
 
-  for (const mutation of reconciliations) {
+  for (const mutation of createdCases) {
     if (
       !startsReconciliation ||
       command.checkpoint?.kind !== 'reconciliation_waiting' ||
@@ -2082,6 +2187,27 @@ function assertReconciliationCommit(
     )
       throw new TypeError(
         'Agent reconciliation Case must be created with its quarantine boundary',
+      );
+  }
+
+  for (const mutation of consumedCases) {
+    if (
+      !resumesReconciliation ||
+      command.checkpoint?.kind !== 'tool_result_appended' ||
+      command.checkpoint.executionPosition !== 'model' ||
+      command.checkpoint.resumeState?.kind !== 'model' ||
+      command.toolExecutions?.length ||
+      !command.events?.some(
+        (event) =>
+          event.payload.type === 'tool_execution_end' &&
+          event.payload.toolExecutionId === mutation.toolExecutionId &&
+          event.payload.attemptId === mutation.attemptId &&
+          event.payload.status === 'unknown' &&
+          event.payload.effectOutcome === 'unknown',
+      )
+    )
+      throw new TypeError(
+        'Agent reconciliation Case must be consumed with a sanitized ToolResult boundary',
       );
   }
 }
@@ -2231,6 +2357,8 @@ function snapshotReconciliationCase(
         )
       : undefined,
     resolvedAt: reconciliationCase.resolvedAt,
+    consumeId: reconciliationCase.consumeId,
+    consumedAt: reconciliationCase.consumedAt,
     cancelledAt: reconciliationCase.cancelledAt,
   });
 }

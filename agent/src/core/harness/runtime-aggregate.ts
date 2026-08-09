@@ -148,6 +148,12 @@ function applyMutation(
       task.status = 'waiting_for_reconciliation';
       run.status = 'waiting_for_reconciliation';
       return;
+    case 'reconciliation_wait_resumed':
+      assertStatus(task.status, 'waiting_for_reconciliation', 'Agent task');
+      assertStatus(run.status, 'waiting_for_reconciliation', 'Agent run');
+      task.status = 'running';
+      run.status = 'running';
+      return;
     case 'recovery_blocked_started':
       if (
         task.status === 'completed' ||

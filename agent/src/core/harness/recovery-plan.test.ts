@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   planAgentRunRecovery,
   type AgentApprovalSnapshot,
+  type AgentReconciliationCaseSnapshot,
   type AgentRunRecoverySnapshot,
   type AgentToolExecutionSnapshot,
 } from '../index.js';
@@ -510,7 +511,86 @@ describe('planAgentRunRecovery', () => {
       attemptId: 'attempt-external-1',
     });
   });
+
+  it('consumes only the resolved Case at the exact external Attempt cursor', () => {
+    const snapshot = reconciliationRecoverySnapshot();
+    const reconciliationCase: AgentReconciliationCaseSnapshot = Object.freeze({
+      tenantId: snapshot.tenantId,
+      projectId: snapshot.projectId,
+      taskId: snapshot.taskId,
+      runId: snapshot.runId,
+      reconciliationCaseId: 'reconciliation-case-1',
+      toolExecutionId: 'tool-execution-1',
+      attemptId: 'attempt-external-1',
+      toolName: 'test-tool',
+      status: 'resolved',
+      reasonCode: 'EXTERNAL_EFFECT_UNKNOWN',
+      createdAt: '2026-08-01T00:00:03.000Z',
+      rowVersion: 2,
+      resolutionId: 'resolution-1',
+      resolution: 'confirmed_applied',
+      resolvedBy: 'operator-1',
+      resolvedAt: '2026-08-01T00:00:04.000Z',
+    });
+
+    expect(
+      planAgentRunRecovery(
+        { ...snapshot, reconciliationCases: [reconciliationCase] },
+        recoveryCompatibility(),
+      ),
+    ).toEqual({
+      kind: 'consume_reconciliation',
+      reconciliationCaseId: 'reconciliation-case-1',
+    });
+  });
 });
+
+function reconciliationRecoverySnapshot(): AgentRunRecoverySnapshot {
+  const snapshot = toolRecoverySnapshot();
+  const execution: AgentToolExecutionSnapshot = Object.freeze({
+    ...toolExecutionSnapshot({ status: 'unknown' }),
+    sideEffect: 'external',
+    idempotency: 'keyed',
+    idempotencyKey: 'stable-key',
+    effectOutcome: 'unknown',
+    retryable: false,
+    attemptCount: 1,
+    attempts: Object.freeze([
+      Object.freeze({
+        attemptId: 'attempt-external-1',
+        attempt: 1,
+        status: 'unknown',
+        effectOutcome: 'unknown',
+        deadline: '2026-08-01T00:00:32.000Z',
+        startedAt: '2026-08-01T00:00:02.000Z',
+        finishedAt: '2026-08-01T00:00:32.000Z',
+      }),
+    ]),
+    startedAt: '2026-08-01T00:00:02.000Z',
+    finishedAt: '2026-08-01T00:00:32.000Z',
+  });
+  return {
+    ...snapshot,
+    task: {
+      ...snapshot.task,
+      status: 'waiting_for_reconciliation',
+      runs: [
+        { ...snapshot.task.runs[0]!, status: 'waiting_for_reconciliation' },
+      ],
+    },
+    checkpoint: {
+      ...snapshot.checkpoint,
+      kind: 'reconciliation_waiting',
+      executionPosition: 'reconciliation',
+      resumeState: {
+        kind: 'reconciliation',
+        toolExecutionId: 'tool-execution-1',
+        attemptId: 'attempt-external-1',
+      },
+    },
+    toolExecutions: [execution],
+  };
+}
 
 function approvalRecoverySnapshot(
   status: AgentApprovalSnapshot['status'],
@@ -680,6 +760,7 @@ function modelRecoverySnapshot(): AgentRunRecoverySnapshot {
     }),
     toolExecutions: Object.freeze([]),
     approvals: Object.freeze([]),
+    reconciliationCases: Object.freeze([]),
     modelAttempts: Object.freeze([]),
     lastEventSequence: 7,
     lease: Object.freeze({

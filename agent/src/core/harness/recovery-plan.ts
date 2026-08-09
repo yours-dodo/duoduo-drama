@@ -19,7 +19,8 @@ export type AgentRecoveryBlockedReasonCode =
   | 'RECOVERY_STATE_CONTRADICTION'
   | 'RECOVERY_TURN_ORDER_INVALID'
   | 'RECOVERY_LEDGER_INVALID'
-  | 'RECOVERY_APPROVAL_INVALID';
+  | 'RECOVERY_APPROVAL_INVALID'
+  | 'RECOVERY_RECONCILIATION_INVALID';
 
 export type AgentRecoveryPlan =
   | { readonly kind: 'continue_model'; readonly nextTurnIndex: number }
@@ -36,6 +37,10 @@ export type AgentRecoveryPlan =
       readonly kind: 'wait_for_reconciliation';
       readonly toolExecutionId: string;
       readonly attemptId: string;
+    }
+  | {
+      readonly kind: 'consume_reconciliation';
+      readonly reconciliationCaseId: string;
     }
   | { readonly kind: 'finalize'; readonly result: AgentRunResult }
   | {
@@ -57,7 +62,10 @@ export function planAgentRunRecovery(
     snapshot.toolExecutions.some(
       (execution) => !matchesScope(execution, snapshot),
     ) ||
-    snapshot.approvals.some((approval) => !matchesScope(approval, snapshot))
+    snapshot.approvals.some((approval) => !matchesScope(approval, snapshot)) ||
+    snapshot.reconciliationCases.some(
+      (reconciliationCase) => !matchesScope(reconciliationCase, snapshot),
+    )
   )
     return blocked('RECOVERY_SCOPE_INVALID');
   const run = snapshot.task.runs.find(
@@ -248,13 +256,48 @@ export function planAgentRunRecovery(
       run.status !== 'waiting_for_reconciliation'
     )
       return blocked('RECOVERY_LEDGER_INVALID');
+    return reconciliationRecoveryPlan(snapshot, execution, attempt);
+  }
+  return blocked('RECOVERY_STATE_CONTRADICTION');
+}
+
+function reconciliationRecoveryPlan(
+  snapshot: AgentRunRecoverySnapshot,
+  execution: AgentRunRecoverySnapshot['toolExecutions'][number],
+  attempt: AgentRunRecoverySnapshot['toolExecutions'][number]['attempts'][number],
+): AgentRecoveryPlan {
+  const matchingCases = snapshot.reconciliationCases.filter(
+    (reconciliationCase) =>
+      reconciliationCase.toolExecutionId === execution.toolExecutionId &&
+      reconciliationCase.attemptId === attempt.attemptId,
+  );
+  if (matchingCases.length === 0)
     return Object.freeze({
       kind: 'wait_for_reconciliation',
       toolExecutionId: execution.toolExecutionId,
       attemptId: attempt.attemptId,
     });
-  }
-  return blocked('RECOVERY_STATE_CONTRADICTION');
+  if (matchingCases.length !== 1)
+    return blocked('RECOVERY_RECONCILIATION_INVALID');
+  const reconciliationCase = matchingCases[0]!;
+  if (reconciliationCase.status === 'waiting')
+    return Object.freeze({
+      kind: 'wait_for_reconciliation',
+      toolExecutionId: execution.toolExecutionId,
+      attemptId: attempt.attemptId,
+    });
+  if (
+    reconciliationCase.status !== 'resolved' ||
+    reconciliationCase.resolutionId === undefined ||
+    reconciliationCase.resolution === undefined ||
+    reconciliationCase.resolvedBy === undefined ||
+    reconciliationCase.resolvedAt === undefined
+  )
+    return blocked('RECOVERY_RECONCILIATION_INVALID');
+  return Object.freeze({
+    kind: 'consume_reconciliation',
+    reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+  });
 }
 
 function hasValidModelAttempts(

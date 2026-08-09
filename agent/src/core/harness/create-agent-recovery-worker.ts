@@ -16,6 +16,7 @@ import { planAgentRunRecovery } from './recovery-plan.js';
 import { resumeAgentApprovalRun } from './resume-approval-run.js';
 import { resumeAgentModelRun } from './resume-model-run.js';
 import { resumeAgentOrphanToolRun } from './resume-orphan-tool-run.js';
+import { resumeAgentReconciliationRun } from './resume-reconciliation-run.js';
 import { resumeAgentToolRun } from './resume-tool-run.js';
 import { createRecoveryToolExecutionCoordinator } from './recovery-tool-execution-coordinator.js';
 import type {
@@ -425,6 +426,16 @@ async function driveRecovery<TScopeHandle>(input: {
         clock: input.clock,
         timer: input.timer,
         signal: input.signal,
+      });
+    } else if (plan.kind === 'consume_reconciliation') {
+      await resumeAgentReconciliationRun({
+        runtimeStore: input.runtimeStore,
+        snapshot,
+        lease,
+        plan,
+        recoveryId: input.recoveryId,
+        ids: input.ids,
+        clock: input.clock,
       });
     } else if (
       plan.kind === 'retry_safe_tool' ||

@@ -201,6 +201,8 @@ export interface AgentReconciliationCaseSnapshot extends ScopedRunQuery {
   readonly resolutionReasonCode?: string;
   readonly resolutionPresentation?: AgentReconciliationPresentation;
   readonly resolvedAt?: string;
+  readonly consumeId?: string;
+  readonly consumedAt?: string;
   readonly cancelledAt?: string;
 }
 
@@ -247,13 +249,22 @@ export interface CancelAgentRuntimeReconciliationCommand extends ScopedRunQuery 
   readonly now: string;
 }
 
-export type AgentReconciliationMutation = {
-  readonly type: 'reconciliation_case_created';
-  readonly reconciliationCaseId: string;
-  readonly toolExecutionId: string;
-  readonly attemptId: string;
-  readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
-};
+export type AgentReconciliationMutation =
+  | {
+      readonly type: 'reconciliation_case_created';
+      readonly reconciliationCaseId: string;
+      readonly toolExecutionId: string;
+      readonly attemptId: string;
+      readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
+    }
+  | {
+      readonly type: 'reconciliation_case_consumed';
+      readonly reconciliationCaseId: string;
+      readonly toolExecutionId: string;
+      readonly attemptId: string;
+      readonly resolutionId: string;
+      readonly consumeId: string;
+    };
 
 export type AgentApprovalMutation =
   | {
@@ -472,6 +483,7 @@ export type AgentRuntimeMutation =
   | { readonly type: 'approval_wait_started' }
   | { readonly type: 'approval_wait_resumed' }
   | { readonly type: 'reconciliation_wait_started' }
+  | { readonly type: 'reconciliation_wait_resumed' }
   | { readonly type: 'recovery_blocked_started' }
   | {
       readonly type: 'turn_started';
