@@ -35,6 +35,7 @@ export interface AgentRunExecutionLease
 
 export type AgentRunLeaseSupport = 'none' | 'v1';
 export type AgentCheckpointResumeSupport = 'none' | 'v3';
+export type AgentReconciliationSupport = 'none' | 'v1';
 
 export interface InitialAgentRunLeaseCommand {
   readonly ownershipId: string;
@@ -179,6 +180,28 @@ export interface AgentApprovalSnapshot extends ScopedRunQuery {
   readonly consumeId?: string;
   readonly consumedAt?: string;
 }
+
+export type AgentReconciliationCaseStatus =
+  'waiting' | 'resolved' | 'consumed' | 'cancelled';
+
+export interface AgentReconciliationCaseSnapshot extends ScopedRunQuery {
+  readonly reconciliationCaseId: string;
+  readonly toolExecutionId: string;
+  readonly attemptId: string;
+  readonly toolName: string;
+  readonly status: AgentReconciliationCaseStatus;
+  readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
+  readonly createdAt: string;
+  readonly rowVersion: number;
+}
+
+export type AgentReconciliationMutation = {
+  readonly type: 'reconciliation_case_created';
+  readonly reconciliationCaseId: string;
+  readonly toolExecutionId: string;
+  readonly attemptId: string;
+  readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
+};
 
 export type AgentApprovalMutation =
   | {
@@ -370,6 +393,7 @@ export interface AgentRunRecoverySnapshot extends ScopedRunQuery {
   readonly checkpoint: AgentRunCheckpointSnapshot;
   readonly toolExecutions: readonly AgentToolExecutionSnapshot[];
   readonly approvals: readonly AgentApprovalSnapshot[];
+  readonly reconciliationCases: readonly AgentReconciliationCaseSnapshot[];
   readonly modelAttempts: readonly AgentModelAttemptSnapshot[];
   readonly lastEventSequence: number;
   readonly lease: AgentRunRecoveryLeaseSnapshot;
@@ -423,6 +447,7 @@ export interface CommitAgentRuntimeTaskCommand extends ScopedTaskQuery {
   readonly mutations: readonly AgentRuntimeMutation[];
   readonly toolExecutions?: readonly AgentToolExecutionMutation[];
   readonly approvals?: readonly AgentApprovalMutation[];
+  readonly reconciliations?: readonly AgentReconciliationMutation[];
   readonly events?: readonly AgentHarnessEvent[];
   readonly checkpoint?: AgentRuntimeCheckpointWrite;
   readonly lease?: AgentRunLeaseGuard;
@@ -490,6 +515,7 @@ export interface AgentRuntimeStore {
   readonly durability: 'ephemeral' | 'durable';
   readonly runLeaseSupport: AgentRunLeaseSupport;
   readonly checkpointResumeSupport: AgentCheckpointResumeSupport;
+  readonly reconciliationSupport: AgentReconciliationSupport;
   createTask(
     command: CreateAgentRuntimeTaskCommand,
   ): Promise<AgentRuntimeCommitReceipt>;
@@ -525,6 +551,9 @@ export interface AgentRuntimeStore {
   readApprovals(
     query: ScopedRunQuery,
   ): Promise<readonly AgentApprovalSnapshot[]>;
+  readReconciliationCases(
+    query: ScopedRunQuery,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]>;
   decideApproval(
     command: DecideAgentRuntimeApprovalCommand,
   ): Promise<AgentApprovalDecisionReceipt>;

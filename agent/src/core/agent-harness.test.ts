@@ -3658,6 +3658,8 @@ function forwardRuntimeStore(
     runLeaseSupport: overrides.runLeaseSupport ?? base.runLeaseSupport,
     checkpointResumeSupport:
       overrides.checkpointResumeSupport ?? base.checkpointResumeSupport,
+    reconciliationSupport:
+      overrides.reconciliationSupport ?? base.reconciliationSupport,
     createTask: overrides.createTask ?? ((command) => base.createTask(command)),
     commitTask: overrides.commitTask ?? ((command) => base.commitTask(command)),
     claimRecoverableRuns:
@@ -3684,6 +3686,9 @@ function forwardRuntimeStore(
       ((query) => base.readToolExecutions(query)),
     readApprovals:
       overrides.readApprovals ?? ((query) => base.readApprovals(query)),
+    readReconciliationCases:
+      overrides.readReconciliationCases ??
+      ((query) => base.readReconciliationCases(query)),
     decideApproval:
       overrides.decideApproval ?? ((command) => base.decideApproval(command)),
     resolveApproval:

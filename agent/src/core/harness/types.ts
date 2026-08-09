@@ -22,6 +22,7 @@ export type AgentIdKind =
   | 'commit'
   | 'approval'
   | 'approval_consume'
+  | 'reconciliation_case'
   | 'tool_execution'
   | 'tool_attempt'
   | 'model_attempt';

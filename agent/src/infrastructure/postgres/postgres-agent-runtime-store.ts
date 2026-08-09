@@ -19,6 +19,7 @@ import type {
   AgentApprovalMutation,
   AgentApprovalSnapshot,
   AgentApprovalTransitionSnapshot,
+  AgentReconciliationCaseSnapshot,
   AgentOutboxBatch,
   AgentOutboxUpdateResult,
   AgentRuntimeCommitReceipt,
@@ -69,6 +70,7 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
   readonly durability = 'durable' as const;
   readonly runLeaseSupport = 'v1' as const;
   readonly checkpointResumeSupport = 'v3' as const;
+  readonly reconciliationSupport = 'none' as const;
   private disposed = false;
 
   constructor(
@@ -173,6 +175,11 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
     command: CommitAgentRuntimeTaskCommand,
   ): Promise<AgentRuntimeCommitReceipt> {
     this.assertNotDisposed();
+    if ((command.reconciliations?.length ?? 0) > 0)
+      throw new AgentError(
+        'AGENT_RECONCILIATION_UNAVAILABLE',
+        'Agent reconciliation requires migration 0008',
+      );
     const commandHash = hashRuntimeCommit(command);
     if (
       command.mutations.length === 0 &&
@@ -449,6 +456,16 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
           transitionsByApproval.get(row.approval_id) ?? [],
         ),
       ),
+    );
+  }
+
+  async readReconciliationCases(): Promise<
+    readonly AgentReconciliationCaseSnapshot[]
+  > {
+    this.assertNotDisposed();
+    throw new AgentError(
+      'AGENT_RECONCILIATION_UNAVAILABLE',
+      'Agent reconciliation requires migration 0008',
     );
   }
 
@@ -1058,6 +1075,7 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
         checkpoint,
         toolExecutions,
         approvals,
+        reconciliationCases: Object.freeze([]),
         modelAttempts: snapshotModelAttempts(
           events.rows.map((row) => row.event),
         ),

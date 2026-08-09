@@ -213,6 +213,62 @@ describe('resumeAgentOrphanToolRun', () => {
           ],
         },
       ]);
+      const reconciliationCases = await store.readReconciliationCases(
+        fixture.snapshot,
+      );
+      expect(reconciliationCases).toMatchObject([
+        {
+          reconciliationCaseId: expect.any(String),
+          toolExecutionId: 'tool-execution-orphan',
+          attemptId: 'tool-attempt-orphan-1',
+          toolName: 'orphan-tool',
+          status: 'waiting',
+          reasonCode: 'EXTERNAL_EFFECT_UNKNOWN',
+          rowVersion: 1,
+          createdAt: '2026-08-01T00:00:10.000Z',
+        },
+      ]);
+      await expect(
+        store.readReconciliationCases({
+          ...fixture.snapshot,
+          projectId: 'project-orphan-foreign',
+        }),
+      ).resolves.toEqual([]);
+      const taskBeforeDuplicate = await store.getTask(fixture.snapshot);
+      const reconciliationCase = reconciliationCases[0];
+      if (!taskBeforeDuplicate || !reconciliationCase)
+        throw new TypeError('Expected reconciliation Case state');
+      await expect(
+        store.commitTask({
+          tenantId: fixture.snapshot.tenantId,
+          projectId: fixture.snapshot.projectId,
+          taskId: fixture.snapshot.taskId,
+          runId: fixture.snapshot.runId,
+          commitId: 'duplicate-reconciliation-case',
+          expectedVersion: taskBeforeDuplicate.version,
+          mutations: [],
+          reconciliations: [
+            {
+              type: 'reconciliation_case_created',
+              reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+              toolExecutionId: reconciliationCase.toolExecutionId,
+              attemptId: reconciliationCase.attemptId,
+              reasonCode: reconciliationCase.reasonCode,
+            },
+          ],
+          lease: {
+            leaseToken: fixture.lease.leaseToken,
+            fencingToken: fixture.lease.fencingToken,
+          },
+          now: '2026-08-01T00:00:11.000Z',
+        }),
+      ).rejects.toThrow('Agent reconciliation Case identity collision');
+      await expect(store.getTask(fixture.snapshot)).resolves.toMatchObject({
+        version: taskBeforeDuplicate.version,
+      });
+      await expect(
+        store.readReconciliationCases(fixture.snapshot),
+      ).resolves.toEqual(reconciliationCases);
       await expect(
         store.getCheckpoint(fixture.snapshot),
       ).resolves.toMatchObject({

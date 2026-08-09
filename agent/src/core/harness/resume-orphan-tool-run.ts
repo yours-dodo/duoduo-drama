@@ -129,6 +129,18 @@ async function quarantineExternalOrphan(
   attempt: AgentRunRecoverySnapshot['toolExecutions'][number]['attempts'][number],
 ): Promise<AgentOrphanToolRecoveryResult> {
   const now = input.clock.now();
+  const reconciliations =
+    input.runtimeStore.reconciliationSupport === 'v1'
+      ? [
+          {
+            type: 'reconciliation_case_created' as const,
+            reconciliationCaseId: nextId(input.ids, 'reconciliation_case'),
+            toolExecutionId: execution.toolExecutionId,
+            attemptId: attempt.attemptId,
+            reasonCode: 'EXTERNAL_EFFECT_UNKNOWN' as const,
+          },
+        ]
+      : undefined;
   const event = toHarnessEvent({
     event: {
       type: 'run_reconciliation_required',
@@ -157,6 +169,7 @@ async function quarantineExternalOrphan(
         reasonCode: 'OWNER_LEASE_EXPIRED',
       },
     ],
+    reconciliations,
     events: [event],
     checkpoint: reconciliationCheckpoint(snapshot, execution, attempt),
     lease: leaseGuard(input.lease),
