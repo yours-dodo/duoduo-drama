@@ -3,6 +3,12 @@ import { HttpStatus } from '@nestjs/common';
 import { ApplicationError } from '../../../platform/http/application-error.js';
 import { IdempotencyConflictError } from '../../tenancy/application/create-team.js';
 import {
+  ConversationArchivedError,
+  ConversationNotFoundError,
+  ConversationRevisionConflictError,
+  ConversationTitleInvalidError,
+  MessageAuthorInvalidError,
+  MessageBodyInvalidError,
   ProjectCollaboratorAlreadyExistsError,
   ProjectCollaboratorManagementRequiredError,
   ProjectCollaboratorNotFoundError,
@@ -17,6 +23,48 @@ import {
 } from '../application/story-errors.js';
 
 export function throwStoryHttpError(error: unknown): never {
+  if (error instanceof ConversationNotFoundError) {
+    throw storyError(
+      'CONVERSATION_NOT_FOUND',
+      'Conversation not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+  if (error instanceof ConversationRevisionConflictError) {
+    throw storyError(
+      'CONVERSATION_REVISION_CONFLICT',
+      'Conversation was changed by another operation',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof ConversationArchivedError) {
+    throw storyError(
+      'CONVERSATION_ARCHIVED',
+      'Archived conversations cannot be changed',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof ConversationTitleInvalidError) {
+    throw storyError(
+      'CONVERSATION_TITLE_INVALID',
+      'Conversation title is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof MessageBodyInvalidError) {
+    throw storyError(
+      'MESSAGE_BODY_INVALID',
+      'Message body is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof MessageAuthorInvalidError) {
+    throw storyError(
+      'MESSAGE_AUTHOR_INVALID',
+      'Message author is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
   if (error instanceof StoryProjectNotFoundError) {
     throw storyError(
       'STORY_PROJECT_NOT_FOUND',

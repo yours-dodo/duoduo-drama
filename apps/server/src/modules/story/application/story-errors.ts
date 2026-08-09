@@ -11,6 +11,24 @@ export {
   StoryProjectTitleInvalidError,
 } from '../../../domain/story/story-project.js';
 
+export {
+  ConversationArchivedError,
+  ConversationRevisionConflictError,
+  ConversationTitleInvalidError,
+} from '../../../domain/story/conversation.js';
+
+export {
+  MessageAuthorInvalidError,
+  MessageBodyInvalidError,
+} from '../../../domain/story/message.js';
+
+export class ConversationNotFoundError extends Error {
+  constructor() {
+    super('Conversation was not found');
+    this.name = 'ConversationNotFoundError';
+  }
+}
+
 export class StoryProjectAccessDeniedError extends Error {
   constructor() {
     super('The story project cannot be accessed');

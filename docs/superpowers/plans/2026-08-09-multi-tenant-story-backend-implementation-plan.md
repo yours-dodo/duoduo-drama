@@ -2,7 +2,7 @@
 
 > 日期：2026-08-09
 >
-> 状态：执行中（S01–S07 已完成）
+> 状态：执行中（S01–S08 已完成）
 >
 > 依据：[多租户故事创作后端框架设计](../specs/2026-08-09-multi-tenant-story-backend-framework-design.md)
 
@@ -415,6 +415,10 @@ pnpm --filter @duoduo/server test:postgres
 ### 提交
 
 `feat(server): persist story conversations`
+
+### 状态
+
+已完成。对话、不可变消息、待处理生成请求、幂等重试、归档边界、稳定游标、租户复合约束和 HTTP/PostgreSQL 回归均已落地。
 
 ## 12. 切片 S09：模拟 Agent 与生成恢复
 

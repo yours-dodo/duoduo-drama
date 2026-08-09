@@ -26,18 +26,37 @@ import {
   type TeamMembershipRepository,
 } from '../tenancy/ports/team-membership-repository.js';
 import { AddProjectCollaborator } from './application/add-project-collaborator.js';
+import { AppendStoryMessage } from './application/append-story-message.js';
 import { ArchiveStoryProject } from './application/archive-story-project.js';
+import { ArchiveStoryConversation } from './application/archive-story-conversation.js';
+import { CreateStoryConversation } from './application/create-story-conversation.js';
 import { CreateStoryProject } from './application/create-story-project.js';
 import { GetStoryProject } from './application/get-story-project.js';
 import { ListProjectAuditRecords } from './application/list-project-audit-records.js';
 import { ListProjectCollaborators } from './application/list-project-collaborators.js';
+import { ListConversationMessages } from './application/list-conversation-messages.js';
+import { ListStoryConversations } from './application/list-story-conversations.js';
 import { ListStoryProjects } from './application/list-story-projects.js';
 import { RemoveProjectCollaborator } from './application/remove-project-collaborator.js';
 import { UpdateStoryProject } from './application/update-story-project.js';
+import { UpdateStoryConversation } from './application/update-story-conversation.js';
+import { ConversationsController } from './http/conversations.controller.js';
+import { MessagesController } from './http/messages.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
+import { PrismaConversationRepository } from './infrastructure/prisma-conversation.repository.js';
+import { PrismaMessageRepository } from './infrastructure/prisma-message.repository.js';
 import { PrismaStoryProjectRepository } from './infrastructure/prisma-story-project.repository.js';
+import { PrismaStoryGenerationRequestRepository } from './infrastructure/prisma-story-generation-request.repository.js';
+import {
+  CONVERSATION_REPOSITORY,
+  type ConversationRepository,
+} from './ports/conversation-repository.js';
+import {
+  MESSAGE_REPOSITORY,
+  type MessageRepository,
+} from './ports/message-repository.js';
 import {
   PROJECT_COLLABORATOR_REPOSITORY,
   type ProjectCollaboratorRepository,
@@ -46,10 +65,19 @@ import {
   STORY_PROJECT_REPOSITORY,
   type StoryProjectRepository,
 } from './ports/story-project-repository.js';
+import {
+  STORY_GENERATION_REQUEST_REPOSITORY,
+  type StoryGenerationRequestRepository,
+} from './ports/story-generation-request-repository.js';
 
 @Module({
   imports: [DatabaseModule, AuditModule, IdentityModule],
-  controllers: [StoryProjectsController, ProjectCollaboratorsController],
+  controllers: [
+    StoryProjectsController,
+    ProjectCollaboratorsController,
+    ConversationsController,
+    MessagesController,
+  ],
   providers: [
     PrismaTeamMembershipRepository,
     {
@@ -72,6 +100,21 @@ import {
     {
       provide: PROJECT_COLLABORATOR_REPOSITORY,
       useExisting: PrismaProjectCollaboratorRepository,
+    },
+    PrismaConversationRepository,
+    {
+      provide: CONVERSATION_REPOSITORY,
+      useExisting: PrismaConversationRepository,
+    },
+    PrismaMessageRepository,
+    {
+      provide: MESSAGE_REPOSITORY,
+      useExisting: PrismaMessageRepository,
+    },
+    PrismaStoryGenerationRequestRepository,
+    {
+      provide: STORY_GENERATION_REQUEST_REPOSITORY,
+      useExisting: PrismaStoryGenerationRequestRepository,
     },
     {
       provide: CreateStoryProject,
@@ -288,6 +331,179 @@ import {
         memberships: TeamMembershipRepository,
         audit: AuditQueryRepository,
       ) => new ListProjectAuditRecords(projects, memberships, audit),
+    },
+    {
+      provide: CreateStoryConversation,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        idempotency: IdempotencyRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+      ) =>
+        new CreateStoryConversation(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          idempotency,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+        ),
+    },
+    {
+      provide: ListStoryConversations,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+      ) =>
+        new ListStoryConversations(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+        ),
+    },
+    {
+      provide: UpdateStoryConversation,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new UpdateStoryConversation(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          transactions,
+          databaseClock,
+        ),
+    },
+    {
+      provide: ArchiveStoryConversation,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new ArchiveStoryConversation(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          transactions,
+          databaseClock,
+        ),
+    },
+    {
+      provide: ListConversationMessages,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        MESSAGE_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        messages: MessageRepository,
+      ) =>
+        new ListConversationMessages(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          messages,
+        ),
+    },
+    {
+      provide: AppendStoryMessage,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        MESSAGE_REPOSITORY,
+        STORY_GENERATION_REQUEST_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        messages: MessageRepository,
+        generationRequests: StoryGenerationRequestRepository,
+        idempotency: IdempotencyRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+      ) =>
+        new AppendStoryMessage(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          messages,
+          generationRequests,
+          idempotency,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+        ),
     },
   ],
 })
