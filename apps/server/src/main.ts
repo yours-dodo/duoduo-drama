@@ -3,12 +3,16 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module.js';
+import { SERVER_CONFIG, type ServerConfig } from './config/server-config.js';
+import { configureHttpApp } from './platform/http/configure-http-app.js';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  const port = Number(process.env.PORT ?? 3001);
+  const config = app.get<ServerConfig>(SERVER_CONFIG);
 
-  await app.listen(port);
+  configureHttpApp(app, config);
+
+  await app.listen(config.port);
 }
 
 void bootstrap();

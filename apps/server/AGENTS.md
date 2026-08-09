@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The current implementation is a minimal NestJS service with one `/health` controller test. Authentication, business modules, persistence, and Agent integration have not been introduced, and no database or queue technology has been selected.
+The Server has an HTTP platform baseline: validated startup configuration, URI-versioned APIs, DTO validation, Cookie parsing, trusted-origin CORS, request IDs, structured request logs, safe error envelopes, and `/health` plus `/ready` probes. Authentication, business modules, persistence, and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -18,6 +18,9 @@ Create directories only when real code needs them. Use these boundaries as the S
 - `src/modules/` for NestJS modules and application use cases grouped by business capability.
 - `src/integrations/agent/` for the Agent client and request/response mapping.
 - `src/config/` for Server-owned environment parsing and validation.
+- `src/platform/http/` for transport-wide middleware, filters, versioning, and health probes.
+- `src/platform/observability/` for request-level logs and future telemetry adapters.
+- `src/test/` for reusable Server test harnesses; production builds must exclude this directory.
 
 Dependencies should point inward: controllers and infrastructure may call application and domain code; domain code must not import NestJS, transport DTOs, database ORM types, or Agent implementations. Keep controllers thin: validate transport input, call one application use case, and map the result to an HTTP response.
 
@@ -27,7 +30,7 @@ Keep Server and Agent protocol types near their respective adapters until a real
 
 Run from the repository root:
 
-- `pnpm --filter @duoduo/server dev` — start NestJS on port 3001 by default; `PORT` may override it.
+- `pnpm --filter @duoduo/server dev` — compile in watch mode and restart NestJS on port 3001 by default; `PORT` may override it.
 - `pnpm --filter @duoduo/server typecheck` — type-check the Server.
 - `pnpm --filter @duoduo/server test` — run Server tests.
 - `pnpm --filter @duoduo/server build` — compile production JavaScript.
@@ -40,3 +43,5 @@ Also run root `pnpm lint` and `pnpm format:check` before submitting changes.
 Co-locate tests as `*.test.ts`. Add focused unit tests for domain invariants and application use cases, plus integration tests for important HTTP and persistence boundaries once those are introduced. Cover successful behavior, validation failures, authorization failures, and external-service errors.
 
 Validate environment variables during startup. Do not expose stack traces, credentials, model keys, or internal dependency errors in API responses. External Agent calls must eventually define timeouts, idempotency, and retry behavior explicitly rather than relying on client defaults.
+
+Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret of at least 32 characters and an explicit comma-separated trusted-origin list. Never log request bodies, authorization headers, Cookies, or URL query values.

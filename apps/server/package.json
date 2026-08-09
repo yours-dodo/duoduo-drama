@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsc-watch --onSuccess \"node dist/main.js\"",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -11,14 +11,23 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-express": "^11.1.28",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@nestjs/testing": "^11.1.28",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
-    "tsx": "^4.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
+    "tsc-watch": "^7.2.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
