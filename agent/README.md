@@ -1,7 +1,8 @@
 # @duoduo/agent
 
 `@duoduo/agent` is the Hono Agent service and the provider-neutral Agent Core.
-The implemented runtime includes A1–A4a and A4b S01–S10:
+The implemented runtime includes A1–A4a, A4b S01–S10, and A4c external-effect
+reconciliation:
 
 - a stateless model/tool executor and the stateful `createAgent()` compatibility
   facade;
@@ -15,7 +16,7 @@ The implemented runtime includes A1–A4a and A4b S01–S10:
 - explicit, versioned Agent-logic approval policy with durable wait, decision,
   expiry, cancellation, cross-instance polling, and exactly-once consumption;
 - scope-bound event, ToolExecution, and Approval paging with opaque cursors and
-  sanitized public payloads.
+  sanitized public payloads;
 - an in-memory Run lease/fencing contract plus initial ownership, configurable
   heartbeat, and ownership-loss handling for lease-capable durable Stores.
 - checkpoint v3 model/tool/approval/finalize/reconciliation cursors, fenced
@@ -36,14 +37,19 @@ The implemented runtime includes A1–A4a and A4b S01–S10:
   as `unknown + not_applied` before Attempt N+1, while reversible or external
   work becomes `unknown + unknown` and atomically enters reconciliation wait
   with a sanitized event, Outbox row, and recovery audit record.
+- scope-bound external-effect reconciliation: a durable Case, append-only
+  safe Observations, first-writer-wins Resolution, cancellation, and exactly
+  once fenced consumption into a generic ToolResult without rewriting the
+  original unknown ToolExecution or Attempt.
 - `createAgentRecoveryWorker()` with bounded configuration-filtered scans,
   deterministic `recoverOnce()`, limited concurrency, heartbeat, transient
   backoff, structural blocking, and ownership-preserving disposal; explicit
   Harness `handoff()` releases durable Runs without changing `dispose()`
   cancellation semantics.
-- PostgreSQL migration 0007 with database-time leases, monotonic fencing,
-  `SKIP LOCKED` competition, append-only recovery audit, checkpoint v3 resume
-  state, idempotent lease operations, and atomic orphan-Attempt recovery.
+- PostgreSQL migrations 0007 and 0008 with database-time leases, monotonic
+  fencing, `SKIP LOCKED` competition, append-only recovery and reconciliation
+  audits, checkpoint v3 resume state, idempotent lease operations, and atomic
+  orphan-Attempt recovery.
 
 The Agent Core consumes Provider-neutral APIs from `@duoduo/ai`. Provider wire
 protocols and credentials remain owned by `packages/ai`; authentication,
@@ -83,6 +89,11 @@ write. The in-memory and PostgreSQL adapters both advertise these capabilities.
 PostgreSQL computes actual claim, renewal, expiry, and retry-availability
 timestamps from database time; Worker timestamps express durations rather than
 acting as the ownership authority.
+
+Stores that persist reconciliation Cases advertise `reconciliationSupport:
+'v1'`. Both bundled Stores support it. A resolved Case is the sole exception
+to the normal exclusion of `waiting_for_reconciliation` Runs: a compatible
+Worker may claim it under a new fence and consume its Resolution once.
 
 ## Persistent approval
 
@@ -143,6 +154,55 @@ competing decisions return stable Approval errors. The executor that owns the
 Run emits the decision event and consumes the Approval exactly once before the
 existing ToolExecution Attempt lifecycle begins.
 
+## External-effect reconciliation
+
+When a reversible or external ToolExecution loses ownership during a real
+Attempt, the Harness preserves the ledger as `unknown + unknown` and creates a
+scoped ReconciliationCase. Restarting a Worker never repeats that original
+tool call. An authenticated business service first reads the Case, may run a
+tool-provided read-only inspection, and then records an authorized Resolution:
+
+```ts
+const cases = await harness.readReconciliationCases({
+  tenantId,
+  projectId,
+  taskId,
+  runId,
+});
+const reconciliationCase = cases[0]!;
+
+await harness.inspectReconciliation({
+  tenantId,
+  projectId,
+  taskId,
+  runId,
+  reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+});
+
+await harness.decideReconciliation({
+  tenantId,
+  projectId,
+  taskId,
+  runId,
+  reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+  resolutionId,
+  resolution: 'confirmed_not_applied',
+  resolvedBy: authenticatedActorId,
+  reasonCode: 'EXTERNAL_EFFECT_NOT_FOUND',
+});
+```
+
+The business service authenticates `resolvedBy`, authorizes the project scope,
+and supplies a stable `resolutionId`. Inspection is opt-in and read-only; an
+Observation never changes a Case by itself. The first valid Resolution wins,
+and replaying its ID with identical content is safe. A compatible Worker then
+claims the resolved Run and atomically records Case consumption, a sanitized
+ToolResult, the event/Outbox boundary, and a checkpoint before the model can
+continue. A cancellation preserves the Case and Observations for audit but
+prevents consumption. Public snapshots, events, Observations, and errors never
+include raw arguments, idempotency keys, correlation references, credentials,
+or raw provider responses.
+
 ## PostgreSQL operations
 
 The checked-in Compose service is an isolated local test database. Copy the
@@ -177,7 +237,7 @@ Recovery scanning is an explicit deployment role. API-only processes may
 create Harnesses without running a scanner, but every active runtime
 configuration fingerprint needs at least one compatible Recovery Worker.
 
-For rolling deployment, apply migration 0007 first, start Workers with the
+For rolling deployment, apply migrations through 0008 first, start Workers with the
 same resolved model identity, system prompt, tool definitions, and Approval
 Policy as the Runs they may recover, call `handoff()` on draining Harnesses,
 wait for ownership release, and only then stop the old processes. A crash needs
@@ -188,9 +248,9 @@ recovery-operation receipts by hand.
 Operators should alert on expired or unowned Runs, repeated lease loss,
 backoff saturation, `recovery_blocked`, and
 `waiting_for_reconciliation`. A blocked Run requires a compatible deployment
-or a reviewed state repair. Reconciliation wait requires the separate A4c
-business workflow; restarting Workers must not retry the uncertain external
-effect.
+or a reviewed state repair. Reconciliation wait requires an authorized A4c
+business decision; restarting Workers must not retry the uncertain external
+effect before that decision is durable.
 
 Migrations are hand-written, transactional, checksummed, and forward-only.
 Never edit or delete an applied migration; add the next numbered SQL migration.
@@ -224,7 +284,9 @@ Workers, stale fencing, lease-operation replay, recovery snapshots, and atomic
 orphan-Attempt policy. It also starts two real Node.js processes, kills the
 original owner with `SIGKILL`, waits for database-time expiry, and proves that
 the second process continues the same Run without replaying its completed model
-Turn.
+Turn. The external-effect scenario additionally proves quarantine, cross-process
+Resolution consumption, and model continuation without replaying the external
+tool.
 
 ## Runtime protocols and remaining scope
 
@@ -245,12 +307,12 @@ once. Orphan Attempts retry only when the declaration proves no side effect;
 reversible and external uncertainty is quarantined for reconciliation. The
 Recovery Worker continuously claims exact-fingerprint Runs with bounded
 concurrency, heartbeat and backoff; explicit handoff preserves non-terminal
-work while normal disposal still cancels. PostgreSQL migration 0007 persists
-the same contract and proves database-time multi-Worker competition,
-transaction rollback, and real process-exit recovery. Provider invocation
-counts and durable model-attempt events prove completed Turns are not sampled
-again after restart.
-It records uncertain external effects but does not reconcile them with external
-systems; that belongs to A4c. Context assembly, layered memory, knowledge
-retrieval, Artifact Runtime, sandboxing, and Server integration are also later
-phases. Do not describe the production Agent platform as complete.
+work while normal disposal still cancels. A4c turns uncertain reversible or
+external effects into scoped, auditable Cases: authorized services can record
+safe Observations and an immutable Resolution, while Workers consume only
+resolved Cases under the current fence. PostgreSQL migration 0008 persists the
+same contract and proves cross-instance decisions, transaction rollback, and
+real process-exit recovery without replaying the original external tool.
+Context assembly, layered memory, knowledge retrieval, Artifact Runtime,
+sandboxing, and Server integration are later phases. Do not describe the
+production Agent platform as complete.

@@ -17,9 +17,11 @@ const connectionString = requiredEnvironment(
   'AGENT_RECOVERY_PROCESS_DATABASE_URL',
 );
 const suffix = requiredEnvironment('AGENT_RECOVERY_PROCESS_SUFFIX');
+const effect = recoveryEffect();
 const providerId = 'postgres-process-recovery-provider';
-const systemPrompt = `postgres-process-recovery:${suffix}`;
-const toolName = 'process-safe-tool';
+const systemPrompt = `postgres-process-recovery:${effect}:${suffix}`;
+const toolName =
+  effect === 'external' ? 'process-external-tool' : 'process-safe-tool';
 
 void main().catch(async (cause: unknown) => {
   await sendMessage({
@@ -63,8 +65,8 @@ async function runOwner(): Promise<void> {
       inputSchema: { type: 'object', additionalProperties: false },
     },
     execution: {
-      sideEffect: 'none',
-      idempotency: 'none',
+      sideEffect: effect,
+      idempotency: effect === 'external' ? 'keyed' : 'none',
       timeoutMs: 30_000,
     },
     execute: async () => {
@@ -114,8 +116,8 @@ async function runWorker(): Promise<void> {
       inputSchema: { type: 'object', additionalProperties: false },
     },
     execution: {
-      sideEffect: 'none',
-      idempotency: 'none',
+      sideEffect: effect,
+      idempotency: effect === 'external' ? 'keyed' : 'none',
       timeoutMs: 30_000,
     },
     execute: async () => {
@@ -185,6 +187,12 @@ function requiredEnvironment(name: string): string {
   const value = process.env[name];
   if (!value) throw new TypeError(`Missing ${name}`);
   return value;
+}
+
+function recoveryEffect(): 'none' | 'external' {
+  const value = process.env.AGENT_RECOVERY_PROCESS_EFFECT ?? 'none';
+  if (value === 'none' || value === 'external') return value;
+  throw new TypeError('Unknown Agent recovery process effect');
 }
 
 function delay(ms: number): Promise<void> {

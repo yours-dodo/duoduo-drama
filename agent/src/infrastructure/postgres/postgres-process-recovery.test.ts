@@ -150,12 +150,160 @@ describe.skipIf(!databaseUrl)('PostgreSQL process restart recovery', () => {
       await store.dispose();
     }
   }, 20_000);
+
+  it('quarantines then consumes a resolved external effect after process restart', async () => {
+    const connectionString = requireDatabaseUrl(databaseUrl);
+    await migrateAgentRuntime({ connectionString });
+    const suffix = randomUUID();
+    const children = new Set<ChildProcess>();
+    const store = createPostgresAgentRuntimeStore({ connectionString });
+
+    try {
+      const owner = startFixtureProcess(
+        'owner',
+        connectionString,
+        suffix,
+        'external',
+      );
+      children.add(owner);
+      const ownerReady = await waitForMessage<OwnerReadyMessage>(
+        owner,
+        (message) => message.type === 'owner_ready',
+      );
+      expect(ownerReady.providerInvocations).toBe(1);
+
+      expect(owner.kill('SIGKILL')).toBe(true);
+      await once(owner, 'exit');
+      children.delete(owner);
+
+      const quarantineWorker = startFixtureProcess(
+        'worker',
+        connectionString,
+        suffix,
+        'external',
+      );
+      children.add(quarantineWorker);
+      const quarantined = await waitForMessage<WorkerDoneMessage>(
+        quarantineWorker,
+        (message) => message.type === 'worker_done',
+        15_000,
+      );
+      await once(quarantineWorker, 'exit');
+      children.delete(quarantineWorker);
+      expect(quarantined.batch).toEqual({
+        claimed: 1,
+        resumed: 0,
+        blocked: 0,
+        waitingForReconciliation: 1,
+      });
+      expect(quarantined.providerInvocations).toBe(0);
+      expect(quarantined.toolInvocations).toBe(0);
+
+      const query = {
+        tenantId: ownerReady.tenantId,
+        projectId: ownerReady.projectId,
+        taskId: ownerReady.taskId,
+        runId: ownerReady.runId,
+      };
+      const [waitingCases, waitingExecutions] = await Promise.all([
+        store.readReconciliationCases(query),
+        store.readToolExecutions(query),
+      ]);
+      const reconciliationCase = waitingCases[0];
+      if (!reconciliationCase)
+        throw new TypeError('Expected an external-effect reconciliation Case');
+      expect(reconciliationCase).toMatchObject({ status: 'waiting' });
+      expect(waitingExecutions).toMatchObject([
+        {
+          status: 'unknown',
+          effectOutcome: 'unknown',
+          attempts: [{ status: 'unknown', effectOutcome: 'unknown' }],
+        },
+      ]);
+      await store.decideReconciliation({
+        ...query,
+        reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+        resolutionId: `resolution-${suffix}`,
+        resolution: 'confirmed_not_applied',
+        resolvedBy: 'operator-process-recovery',
+        reasonCode: 'EXTERNAL_EFFECT_NOT_FOUND',
+        now: new Date().toISOString(),
+      });
+
+      const consumingWorker = startFixtureProcess(
+        'worker',
+        connectionString,
+        suffix,
+        'external',
+      );
+      children.add(consumingWorker);
+      const recovered = await waitForMessage<WorkerDoneMessage>(
+        consumingWorker,
+        (message) => message.type === 'worker_done',
+        15_000,
+      );
+      await once(consumingWorker, 'exit');
+      children.delete(consumingWorker);
+      expect(recovered.batch).toEqual({
+        claimed: 1,
+        resumed: 1,
+        blocked: 0,
+        waitingForReconciliation: 0,
+      });
+      expect(recovered.providerInvocations).toBe(1);
+      expect(recovered.toolInvocations).toBe(0);
+
+      const [task, events, executions, reconciliationCases, checkpoints] =
+        await Promise.all([
+          store.getTask(query),
+          store.readEvents({ ...query, limit: 100 }),
+          store.readToolExecutions(query),
+          store.readReconciliationCases(query),
+          store.readCheckpoints(query),
+        ]);
+      expect(task).toMatchObject({ status: 'completed' });
+      expect(reconciliationCases).toMatchObject([
+        {
+          reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+          status: 'consumed',
+          resolution: 'confirmed_not_applied',
+        },
+      ]);
+      expect(executions).toMatchObject([
+        {
+          status: 'unknown',
+          effectOutcome: 'unknown',
+          attempts: [{ status: 'unknown', effectOutcome: 'unknown' }],
+        },
+      ]);
+      expect(
+        events.events.filter(
+          (event) => event.payload.type === 'run_reconciliation_required',
+        ),
+      ).toHaveLength(1);
+      expect(
+        events.events.filter(
+          (event) => event.payload.type === 'tool_execution_end',
+        ),
+      ).toMatchObject([
+        { payload: { status: 'unknown', effectOutcome: 'unknown' } },
+      ]);
+      expect(checkpoints.at(-1)).toMatchObject({
+        kind: 'run_terminal',
+        executionPosition: 'terminal',
+      });
+    } finally {
+      for (const child of children) child.kill('SIGKILL');
+      await store.dispose();
+    }
+  }, 30_000);
 });
 
 function startFixtureProcess(
   mode: 'owner' | 'worker',
   connectionString: string,
   suffix: string,
+  effect: 'none' | 'external' = 'none',
 ): ChildProcess {
   return fork(fixturePath, [], {
     execArgv: ['--import', 'tsx'],
@@ -164,6 +312,7 @@ function startFixtureProcess(
       AGENT_RECOVERY_PROCESS_MODE: mode,
       AGENT_RECOVERY_PROCESS_DATABASE_URL: connectionString,
       AGENT_RECOVERY_PROCESS_SUFFIX: suffix,
+      AGENT_RECOVERY_PROCESS_EFFECT: effect,
     },
     silent: true,
   });

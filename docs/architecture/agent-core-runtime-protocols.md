@@ -15,14 +15,16 @@ PostgreSQL、搜索、沙箱等具体产品位于 Harness 的 infrastructure ada
 
 ## 2. 标识与隔离
 
-运行时使用独立的 Task、Run、Turn、ToolExecution、Approval、Attempt、Event 和 Commit ID。持久记录始终包含
-Tenant、Project、Task 和 Run 的复合作用域，不能只凭全局 ID 读取。
+运行时使用独立的 Task、Run、Turn、ToolExecution、Approval、ReconciliationCase、Attempt、
+Event 和 Commit ID。持久记录始终包含 Tenant、Project、Task 和 Run 的复合作用域，不能只凭
+全局 ID 读取。
 
 - Task：一次可追踪的 Agent 工作；
 - Run：Task 的一次执行尝试；
 - Turn：一次模型响应及其后续工具执行；
 - ToolExecution：一个模型 Tool Call 的稳定执行身份；
 - Approval：Agent 逻辑要求人工确认时，对一个 ToolExecution 创建的稳定审批身份；
+- ReconciliationCase：不确定的 reversible 或 external Attempt 的独立、可审计处置身份；
 - Attempt：ToolExecution 的一次真实调用；A3 不自动创建重试 Attempt；
 - Event：Run 内严格递增的公开观察记录；
 - Commit：一次原子状态变更的幂等键。
@@ -42,7 +44,8 @@ Session 不与 Task 混合持久化。它只作为 Task 的来源引用，为后
 6. 保存 Commit 回执；
 7. 更新 ToolExecution、Attempt 与追加式 transition；
 8. 更新 Approval 投影与追加式 transition；
-9. 仅将 Task 版本增加一次。
+9. 创建或消费 ReconciliationCase，并追加其生命周期 transition；
+10. 仅将 Task 版本增加一次。
 
 同一作用域内重复提交相同 `commitId` 和相同命令哈希时，Store 返回第一次
 的回执，不重复写入。相同 `commitId` 携带不同内容时返回
@@ -140,9 +143,24 @@ consume ID，并追加 `approval_decided` 事件与 Outbox。只有该提交成�
 
 Approval 的展示内容上限为 32 KiB，只允许 Agent 逻辑生成的安全投影。公开快照和
 事件不包含原始参数、凭据、幂等键或原始异常。存活 Harness 和恢复 Worker 均可在
-当前 fence 下继续审批流程；外部副作用对账仍属于 A4c。
+当前 fence 下继续审批流程。
 
-## 7. Run 租约、fencing 与恢复
+## 7. 外部副作用对账
+
+当 reversible 或 external Attempt 在失去所有权时结果不确定，Harness 保留原始
+ToolExecution 和 Attempt 的 `unknown + unknown` 账本，并在同一个 fenced Commit
+中写入 `waiting` ReconciliationCase、`reconciliation_waiting` checkpoint、受控事件
+和 Outbox。Case 的 Observation 只能由业务服务显式触发的只读适配器追加，且只保存
+标准分类、受控 reason code 与最多 32 KiB 的安全展示投影。
+
+已授权的业务服务以稳定 `resolutionId` 写入首次有效的 Resolution。相同内容重放
+幂等，竞争或不匹配内容被拒绝；Observation 本身不会改变 Case。`waiting` Case 继续
+排除在 Worker 认领之外，只有 `resolved` Case 所在 Run 能由兼容 Worker 在当前 fence
+下认领。消费与恢复 Task/Run、受控 ToolResult、事件、Outbox 和 checkpoint 属于同一
+Commit，且不会重写原有 unknown 账本。取消会保留 Case 和 Observation 审计，但永久
+阻止消费。
+
+## 8. Run 租约、fencing 与恢复
 
 租约能力由 Store 显式声明。新建耐久 Task 时，初始 Run、checkpoint、fencing=1
 的所有权和 `initial_claim` 审计在同一事务创建。所有执行者写入都必须携带
@@ -150,19 +168,21 @@ Approval 的展示内容上限为 32 KiB，只允许 Agent 逻辑生成的安全
 整个事务返回 `AGENT_RUN_LEASE_LOST`，不得留下 projection、Ledger、checkpoint、
 event、Outbox、audit 或 Commit receipt 的部分写入。
 
-PostgreSQL 0007 以数据库时间判定过期与可领取时间。`claimRecoverableRuns()` 使用
-有界批次和 `FOR UPDATE SKIP LOCKED`，严格匹配配置指纹，排除终态、
-`waiting_for_reconciliation` 与 `recovery_blocked`，并在同一事务递增 fence、安装
-新令牌和追加 `recovery_claim`。claim、renew、release 的操作 ID 与命令哈希持久化，
-相同内容可安全重放，不同内容返回 `AGENT_COMMIT_MISMATCH`。
+PostgreSQL 0007/0008 以数据库时间判定过期与可领取时间。`claimRecoverableRuns()`
+使用有界批次和 `FOR UPDATE SKIP LOCKED`，严格匹配配置指纹，排除终态、
+`recovery_blocked` 与仍为 `waiting` 的 reconciliation Run；仅存在 `resolved` Case
+的 reconciliation Run 可以被认领。认领在同一事务递增 fence、安装新令牌和追加
+`recovery_claim`。claim、renew、release 的操作 ID 与命令哈希持久化，相同内容可
+安全重放，不同内容返回 `AGENT_COMMIT_MISMATCH`。
 
 Worker 在 repeatable-read 事务读取 Task、最新 checkpoint、有序 ToolExecution /
-Attempt / Approval 投影、模型 Attempt 和最后事件 sequence。无副作用的孤儿 Attempt
-先原子关闭为 `unknown + not_applied`，再回到 `prepared`；reversible 或 external
-孤儿 Attempt 变为 `unknown + unknown` 并进入对账等待，禁止自动重试。恢复审计
+Attempt / Approval / ReconciliationCase 投影、模型 Attempt 和最后事件 sequence。
+无副作用的孤儿 Attempt 先原子关闭为 `unknown + not_applied`，再回到 `prepared`；
+reversible 或 external 孤儿 Attempt 变为 `unknown + unknown` 并进入对账等待，禁止
+自动重试。已裁决 Case 只能消费一次，随后模型依靠通用 ToolResult 继续。恢复审计
 只保存受控标识、动作、reason code 和 fence，不保存原始参数、结果或租约令牌。
 
-## 8. 事件、微批与重放
+## 9. 事件、微批与重放
 
 Run 事件按 sequence 追加。普通生命周期事件和检查点边界立即刷新；
 `text_delta`、`reasoning_delta`、`tool_call_delta` 默认最多 32 条一批，并在
@@ -180,7 +200,7 @@ Task、Run 有效，`after` 为排他位置。
 不会取消 Task；客户端随后用 cursor 补读。默认进程内 Store 没有跨进程可靠
 来源，因此保留 A1 的“溢出即取消 Task”兼容语义。
 
-## 9. Outbox 租约
+## 10. Outbox 租约
 
 Outbox 与事件在同一事务创建，供未来 Worker 做至少一次投递：
 
@@ -193,7 +213,7 @@ Outbox 与事件在同一事务创建，供未来 Worker 做至少一次投递�
 
 Agent Core 不内置 Kafka、Redis、Dispatcher 或产品 Worker。
 
-## 10. 失败语义
+## 11. 失败语义
 
 - `AGENT_STATE_CONFLICT`：聚合版本已变化；
 - `AGENT_COMMIT_MISMATCH`：Commit ID 被不同内容复用；
