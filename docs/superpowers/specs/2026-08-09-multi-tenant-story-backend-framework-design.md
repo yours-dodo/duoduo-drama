@@ -204,6 +204,7 @@ Team ──< StoryProject ──< Conversation ──< Message
 | `/v1/teams`                                                                             | 创建和列出团队                     |
 | `/v1/teams/{teamId}/members`                                                            | 成员列表和管理员成员管理           |
 | `/v1/teams/{teamId}/invitations`                                                        | 创建、查看和撤销邀请               |
+| `/v1/team-invitation-acceptances`                                                       | 当前登录邮箱接受一次性团队邀请     |
 | `/v1/teams/{teamId}/story-projects`                                                     | 项目创建、列表、详情、修改和归档   |
 | `/v1/teams/{teamId}/story-projects/{projectId}/conversations`                           | 对话创建、列表、重命名和归档       |
 | `/v1/teams/{teamId}/story-projects/{projectId}/conversations/{conversationId}/messages` | 消息追加和读取                     |

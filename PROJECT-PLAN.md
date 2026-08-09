@@ -5,8 +5,8 @@
 ## 1. 当前状态
 
 - 记录开始日期：2026-07-16
-- 项目阶段：Agent Core A4c 已完成，多租户故事创作业务后端正在实施；团队租户与请求上下文已完成，下一步进入团队邀请、成员管理与审计查询。
-- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4c 已通过验收，Server 已具备 HTTP、PostgreSQL、无密码 Web 身份、多团队成员关系、幂等团队创建和租户上下文基座。
+- 项目阶段：Agent Core A4c 已完成，多租户故事创作业务后端正在实施；团队邀请、成员管理与审计查询已完成，下一步进入故事项目与项目授权。
+- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4c 已通过验收，Server 已具备 HTTP、PostgreSQL、无密码 Web 身份、完整团队生命周期、租户上下文和租户审计基座。
 
 ## 2. 规划目标
 

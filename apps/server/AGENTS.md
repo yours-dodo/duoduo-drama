@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, and the first team-tenancy boundary. Users can create multiple teams through an idempotent API, list their active memberships through `/v1/teams` and `/v1/me`, and establish an immutable path-derived `TenantContext` only when they are active members. Team invitations, member-management HTTP APIs, story modules, and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, and the complete first team lifecycle. Users can create multiple teams, invite matching email identities, accept one-use invitations, manage roles and removals, query tenant audit records, and establish an immutable path-derived `TenantContext` only while they are active members. Story modules and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -55,6 +55,8 @@ Validate environment variables during startup. Do not expose stack traces, crede
 Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret and login-token pepper of at least 32 characters, an HTTPS public Web URL, and an explicit comma-separated trusted-origin list. Configure `TRUST_PROXY_HOPS` to the deployment's exact trusted reverse-proxy count; keep the default `0` when the Server is directly exposed. Never log request bodies, authorization headers, Cookies, or URL query values.
 
 Raw login and session tokens may exist only at their delivery or HTTP Cookie boundaries. Persist purpose-separated HMAC digests only; never add raw token, verification code, magic-link URL, Cookie value, or source address columns or logs. Challenge consumption, user/session creation, revocation, and identity security events must keep their current transaction boundaries and use the database clock. Web session Cookies remain `HttpOnly`, `SameSite=Lax`, and `Secure` in production; every Cookie-authenticated write must pass the global exact-Origin check. The local email adapter is non-production only, and production startup must remain blocked until a real delivery adapter is configured.
+
+Team invitation tokens follow the same boundary: raw values may exist only during delivery and in the acceptance request body, while persistence contains a purpose-separated HMAC digest. Acceptance requires the authenticated normalized email to match, consumes the invitation under a row lock, and creates or reactivates membership in the same transaction as its audit record. Administrator role changes and removals must retain the team-level serialization lock that protects the last-administrator invariant.
 
 Treat `Team` and tenant as the same boundary. Never infer a current team from a session or global mutable state: tenant-scoped routes must take `teamId` from the path and establish `TenantContext` through an active membership lookup. Return the same not-found response for malformed, missing, and inaccessible tenant resources. Tenant mutations, idempotency results, and their audit records must commit atomically; tenant repository queries must accept `tenantId` explicitly and use tenant-aware database constraints.
 

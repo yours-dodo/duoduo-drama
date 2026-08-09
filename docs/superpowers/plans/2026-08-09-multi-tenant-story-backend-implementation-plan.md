@@ -2,7 +2,7 @@
 
 > 日期：2026-08-09
 >
-> 状态：执行中（S01–S05 已完成）
+> 状态：执行中（S01–S06 已完成）
 >
 > 依据：[多租户故事创作后端框架设计](../specs/2026-08-09-multi-tenant-story-backend-framework-design.md)
 
@@ -310,6 +310,19 @@ pnpm --filter @duoduo/server test:postgres
 4. 实现成员列表、邀请列表、角色更新、成员移除和授权范围内审计查询。
 5. 所有成员和邀请变更与审计在同一事务提交。
 6. 用两个 Server 实例的 PostgreSQL 竞争测试验证邀请只能接受一次。
+
+### API 契约
+
+- `POST /v1/teams/{teamId}/invitations`：管理员创建邀请，要求 `Idempotency-Key`，成功返回 `201`。
+- `GET /v1/teams/{teamId}/invitations`：管理员按不透明游标分页查看邀请；`limit` 为 1–100。
+- `DELETE /v1/teams/{teamId}/invitations/{invitationId}`：管理员撤销邀请，成功返回 `204`。
+- `POST /v1/team-invitation-acceptances`：当前登录邮箱使用请求体中的一次性令牌接受邀请，成功返回 `201`。
+- `GET /v1/teams/{teamId}/members`：管理员按不透明游标分页查看有效成员；`limit` 为 1–100。
+- `PATCH /v1/teams/{teamId}/members/{membershipId}`：管理员修改 `admin` 或 `member` 角色。
+- `DELETE /v1/teams/{teamId}/members/{membershipId}`：管理员安全移除成员，成功返回 `204`。
+- `GET /v1/teams/{teamId}/audit-records`：管理员按不透明游标分页查看租户审计记录；`limit` 为 1–100。
+
+所有接口沿用 `/v1` URI 版本、Cookie 会话、统一错误信封和精确 Origin 写保护。团队路径先建立 `TenantContext`，再由应用用例重新校验管理员权限。OpenAPI 在 S11 统一生成。
 
 ### 验收
 

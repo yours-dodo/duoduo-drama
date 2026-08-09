@@ -9,15 +9,17 @@ datasource db {
 }
 
 model User {
-  id              String                  @id @default(uuid()) @db.Uuid
-  email           String                  @unique(map: "users_email_key") @db.VarChar(254)
-  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
-  sessions        Session[]
-  securityEvents  IdentitySecurityEvent[]
-  createdTeams    Team[]                  @relation("TeamCreator")
-  teamMemberships TeamMembership[]
-  auditRecords    AuditRecord[]           @relation("AuditActor")
+  id                  String                  @id @default(uuid()) @db.Uuid
+  email               String                  @unique(map: "users_email_key") @db.VarChar(254)
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions            Session[]
+  securityEvents      IdentitySecurityEvent[]
+  createdTeams        Team[]                  @relation("TeamCreator")
+  teamMemberships     TeamMembership[]
+  auditRecords        AuditRecord[]           @relation("AuditActor")
+  sentInvitations     TeamInvitation[]        @relation("TeamInvitationSender")
+  acceptedInvitations TeamInvitation[]        @relation("TeamInvitationAcceptor")
 
   @@map("users")
 }
@@ -32,20 +34,47 @@ model Team {
   memberships        TeamMembership[]
   idempotencyRecords IdempotencyRecord[]
   auditRecords       AuditRecord[]
+  invitations        TeamInvitation[]
 
   @@index([createdByUserId, createdAt(sort: Desc)], map: "teams_created_by_user_id_created_at_idx")
   @@map("teams")
 }
 
+model TeamInvitation {
+  id                   String          @id @default(uuid()) @db.Uuid
+  tenantId             String          @map("tenant_id") @db.Uuid
+  email                String          @db.VarChar(254)
+  invitedByUserId      String          @map("invited_by_user_id") @db.Uuid
+  tokenHash            String          @unique(map: "team_invitations_token_hash_key") @map("token_hash") @db.Char(64)
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt            DateTime        @map("expires_at") @db.Timestamptz(3)
+  acceptedAt           DateTime?       @map("accepted_at") @db.Timestamptz(3)
+  acceptedByUserId     String?         @map("accepted_by_user_id") @db.Uuid
+  revokedAt            DateTime?       @map("revoked_at") @db.Timestamptz(3)
+  team                 Team            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invitedBy            User            @relation("TeamInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedBy           User?           @relation("TeamInvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+  invitedByMembership  TeamMembership  @relation("TeamInvitationSenderMembership", fields: [tenantId, invitedByUserId], references: [tenantId, userId], onDelete: Restrict)
+  acceptedByMembership TeamMembership? @relation("TeamInvitationAcceptorMembership", fields: [tenantId, acceptedByUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "team_invitations_tenant_id_created_at_id_idx")
+  @@index([tenantId, email, acceptedAt, revokedAt], map: "team_invitations_tenant_id_email_state_idx")
+  @@index([expiresAt], map: "team_invitations_expires_at_idx")
+  @@map("team_invitations")
+}
+
 model TeamMembership {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  role      String    @db.VarChar(16)
-  joinedAt  DateTime  @default(now()) @map("joined_at") @db.Timestamptz(3)
-  removedAt DateTime? @map("removed_at") @db.Timestamptz(3)
-  team      Team      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                  String           @id @default(uuid()) @db.Uuid
+  tenantId            String           @map("tenant_id") @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
+  role                String           @db.VarChar(16)
+  joinedAt            DateTime         @default(now()) @map("joined_at") @db.Timestamptz(3)
+  removedAt           DateTime?        @map("removed_at") @db.Timestamptz(3)
+  team                Team             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sentInvitations     TeamInvitation[] @relation("TeamInvitationSenderMembership")
+  acceptedInvitations TeamInvitation[] @relation("TeamInvitationAcceptorMembership")
+  auditRecords        AuditRecord[]    @relation("AuditActorMembership")
 
   @@unique([tenantId, userId], map: "team_memberships_tenant_id_user_id_key")
   @@unique([tenantId, id], map: "team_memberships_tenant_id_id_key")
@@ -71,18 +100,19 @@ model IdempotencyRecord {
 }
 
 model AuditRecord {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  actorUserId   String   @map("actor_user_id") @db.Uuid
-  action        String   @db.VarChar(64)
-  targetType    String   @map("target_type") @db.VarChar(64)
-  targetId      String   @map("target_id") @db.Uuid
-  beforeSummary Json?    @map("before_summary") @db.JsonB
-  afterSummary  Json?    @map("after_summary") @db.JsonB
-  requestId     String   @map("request_id") @db.VarChar(128)
-  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  team          Team     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  actor         User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  actorUserId     String         @map("actor_user_id") @db.Uuid
+  action          String         @db.VarChar(64)
+  targetType      String         @map("target_type") @db.VarChar(64)
+  targetId        String         @map("target_id") @db.Uuid
+  beforeSummary   Json?          @map("before_summary") @db.JsonB
+  afterSummary    Json?          @map("after_summary") @db.JsonB
+  requestId       String         @map("request_id") @db.VarChar(128)
+  occurredAt      DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  team            Team           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor           User           @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actorMembership TeamMembership @relation("AuditActorMembership", fields: [tenantId, actorUserId], references: [tenantId, userId], onDelete: Restrict)
 
   @@index([tenantId, occurredAt(sort: Desc), id], map: "audit_records_tenant_id_occurred_at_id_idx")
   @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_records_actor_user_id_occurred_at_idx")

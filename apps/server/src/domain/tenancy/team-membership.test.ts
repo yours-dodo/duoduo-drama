@@ -59,4 +59,44 @@ describe('TeamMembership', () => {
     );
     expect(administrator.isActive()).toBe(false);
   });
+
+  it('creates an ordinary member from an accepted invitation', () => {
+    const joinedAt = new Date('2026-08-10T00:00:00.000Z');
+
+    expect(
+      TeamMembership.createMember({
+        id: 'membership-id',
+        tenantId: 'team-id',
+        userId: 'member-id',
+        joinedAt,
+      }).toSnapshot(),
+    ).toEqual({
+      id: 'membership-id',
+      tenantId: 'team-id',
+      userId: 'member-id',
+      role: 'member',
+      joinedAt,
+      removedAt: null,
+    });
+  });
+
+  it('reactivates a removed membership as a member', () => {
+    const removedAt = new Date('2026-08-11T00:00:00.000Z');
+    const rejoinedAt = new Date('2026-08-12T00:00:00.000Z');
+    const membership = TeamMembership.restore({
+      id: 'membership-id',
+      tenantId: 'team-id',
+      userId: 'member-id',
+      role: 'admin',
+      joinedAt: new Date('2026-08-10T00:00:00.000Z'),
+      removedAt,
+    });
+
+    expect(membership.reactivate(rejoinedAt)).toBe(true);
+    expect(membership.toSnapshot()).toMatchObject({
+      role: 'member',
+      joinedAt: rejoinedAt,
+      removedAt: null,
+    });
+  });
 });

@@ -13,6 +13,7 @@ import {
 import type { Request } from 'express';
 
 import { ApplicationError } from '../../../platform/http/application-error.js';
+import { readIdempotencyKey } from '../../../platform/http/idempotency-key.js';
 import { readRequestId } from '../../../platform/http/request-id.middleware.js';
 import {
   readAuthenticatedSession,
@@ -25,8 +26,6 @@ import {
 } from '../application/create-team.js';
 import { ListMyTeams } from '../application/list-my-teams.js';
 import { CreateTeamDto } from './create-team.dto.js';
-
-const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
 @Controller({ path: 'teams', version: '1' })
 @UseGuards(SessionAuthGuard)
@@ -76,22 +75,4 @@ export class TeamsController {
     const authenticated = readAuthenticatedSession(request);
     return this.listMyTeams.execute({ userId: authenticated.userId });
   }
-}
-
-function readIdempotencyKey(value: string | undefined): string {
-  if (value === undefined || value.length === 0) {
-    throw new ApplicationError({
-      code: 'IDEMPOTENCY_KEY_REQUIRED',
-      message: 'Idempotency-Key is required',
-      statusCode: HttpStatus.BAD_REQUEST,
-    });
-  }
-  if (!IDEMPOTENCY_KEY_PATTERN.test(value)) {
-    throw new ApplicationError({
-      code: 'INVALID_IDEMPOTENCY_KEY',
-      message: 'Idempotency-Key is invalid',
-      statusCode: HttpStatus.BAD_REQUEST,
-    });
-  }
-  return value;
 }

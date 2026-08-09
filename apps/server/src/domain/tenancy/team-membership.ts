@@ -7,6 +7,8 @@ export interface CreateAdministratorInput {
   joinedAt: Date;
 }
 
+export type CreateMemberInput = CreateAdministratorInput;
+
 export interface TeamMembershipSnapshot {
   id: string;
   tenantId: string;
@@ -37,8 +39,39 @@ export class TeamMembership {
     });
   }
 
+  static createMember(input: CreateMemberInput): TeamMembership {
+    return new TeamMembership({
+      id: input.id,
+      tenantId: input.tenantId,
+      userId: input.userId,
+      role: 'member',
+      joinedAt: new Date(input.joinedAt),
+      removedAt: null,
+    });
+  }
+
+  static restore(snapshot: TeamMembershipSnapshot): TeamMembership {
+    return new TeamMembership({
+      ...snapshot,
+      joinedAt: new Date(snapshot.joinedAt),
+      removedAt:
+        snapshot.removedAt === null ? null : new Date(snapshot.removedAt),
+    });
+  }
+
   isActive(): boolean {
     return this.snapshot.removedAt === null;
+  }
+
+  reactivate(at: Date): boolean {
+    if (this.isActive()) {
+      return false;
+    }
+
+    this.snapshot.role = 'member';
+    this.snapshot.joinedAt = new Date(at);
+    this.snapshot.removedAt = null;
+    return true;
   }
 
   changeRole(nextRole: TeamRole, activeAdministratorCount: number): boolean {
