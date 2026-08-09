@@ -146,6 +146,7 @@ describe('resumeAgentOrphanToolRun', () => {
   it('quarantines an external orphan for reconciliation with zero tool invocation', async () => {
     const store = createInMemoryAgentRuntimeStore();
     let invocations = 0;
+    let inspections = 0;
 
     try {
       const fixture = await orphanToolRecoveryState(store, 'external');
@@ -160,7 +161,22 @@ describe('resumeAgentOrphanToolRun', () => {
         lease: fixture.lease,
         plan,
         recoveryId: 'recover-external-orphan',
-        tools: [orphanTool('external', () => (invocations += 1))],
+        tools: [
+          {
+            ...orphanTool('external', () => (invocations += 1)),
+            reconciliation: {
+              adapterId: 'orphan-inspection',
+              version: '1',
+              async inspect() {
+                inspections += 1;
+                return {
+                  outcome: 'inconclusive' as const,
+                  reasonCode: 'NOT_INVOKED',
+                };
+              },
+            },
+          },
+        ],
         ids: { next: (kind) => `${kind}-external-orphan-${++id}` },
         clock: { now: () => '2026-08-01T00:00:10.000Z' },
         timer: { schedule: () => () => undefined },
@@ -172,6 +188,7 @@ describe('resumeAgentOrphanToolRun', () => {
         attemptId: 'tool-attempt-orphan-1',
       });
       expect(invocations).toBe(0);
+      expect(inspections).toBe(0);
       await expect(store.getTask(fixture.snapshot)).resolves.toMatchObject({
         status: 'waiting_for_reconciliation',
         runs: [

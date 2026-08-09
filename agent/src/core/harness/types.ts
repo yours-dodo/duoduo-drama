@@ -10,6 +10,8 @@ import type {
 } from '../types.js';
 import type {
   AgentApprovalSnapshot,
+  AgentReconciliationCaseSnapshot,
+  AgentReconciliationObservationSnapshot,
   AgentRuntimeStore,
   AgentToolExecutionSnapshot,
 } from './runtime-store.js';
@@ -173,6 +175,20 @@ export interface ReadAgentApprovalsQuery extends ScopedTaskQuery {
   readonly limit?: number;
 }
 
+export interface InspectAgentReconciliationCommand extends ScopedTaskQuery {
+  readonly runId: string;
+  readonly reconciliationCaseId: string;
+}
+
+export interface ReadAgentReconciliationCasesQuery extends ScopedTaskQuery {
+  readonly runId: string;
+}
+
+export interface ReadAgentReconciliationObservationsQuery extends InspectAgentReconciliationCommand {
+  readonly after?: string;
+  readonly limit?: number;
+}
+
 export interface AgentToolExecutionPage {
   readonly executions: readonly AgentToolExecutionSnapshot[];
   readonly nextCursor?: string;
@@ -181,6 +197,12 @@ export interface AgentToolExecutionPage {
 
 export interface AgentApprovalPage {
   readonly approvals: readonly AgentApprovalSnapshot[];
+  readonly nextCursor?: string;
+  readonly hasMore: boolean;
+}
+
+export interface AgentReconciliationObservationPage {
+  readonly observations: readonly AgentReconciliationObservationSnapshot[];
   readonly nextCursor?: string;
   readonly hasMore: boolean;
 }
@@ -280,6 +302,15 @@ export interface AgentHarness {
     query: ReadAgentToolExecutionsQuery,
   ): Promise<AgentToolExecutionPage>;
   readApprovals(query: ReadAgentApprovalsQuery): Promise<AgentApprovalPage>;
+  readReconciliationCases(
+    query: ReadAgentReconciliationCasesQuery,
+  ): Promise<readonly AgentReconciliationCaseSnapshot[]>;
+  inspectReconciliation(
+    command: InspectAgentReconciliationCommand,
+  ): Promise<AgentReconciliationObservationSnapshot>;
+  readReconciliationObservations(
+    query: ReadAgentReconciliationObservationsQuery,
+  ): Promise<AgentReconciliationObservationPage>;
   decideApproval(
     command: DecideAgentApprovalCommand,
   ): Promise<import('./runtime-store.js').AgentApprovalSnapshot>;

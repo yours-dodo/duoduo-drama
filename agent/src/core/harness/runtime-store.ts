@@ -3,6 +3,8 @@ import type { Message } from '@duoduo/ai';
 import type {
   AgentInput,
   AgentApprovalPresentation,
+  AgentReconciliationObservationOutcome,
+  AgentReconciliationPresentation,
   AgentRunResult,
   AgentToolEffectOutcome,
   AgentToolExecutionStatus,
@@ -193,6 +195,29 @@ export interface AgentReconciliationCaseSnapshot extends ScopedRunQuery {
   readonly reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
   readonly createdAt: string;
   readonly rowVersion: number;
+}
+
+export interface ScopedAgentReconciliationCaseQuery extends ScopedRunQuery {
+  readonly reconciliationCaseId: string;
+}
+
+export interface AgentReconciliationObservationSnapshot extends ScopedAgentReconciliationCaseQuery {
+  readonly sequence: number;
+  readonly adapterId: string;
+  readonly adapterVersion: string;
+  readonly outcome: AgentReconciliationObservationOutcome;
+  readonly reasonCode: string;
+  readonly presentation?: AgentReconciliationPresentation;
+  readonly observedAt: string;
+}
+
+export interface AppendAgentReconciliationObservationCommand extends ScopedAgentReconciliationCaseQuery {
+  readonly adapterId: string;
+  readonly adapterVersion: string;
+  readonly outcome: AgentReconciliationObservationOutcome;
+  readonly reasonCode: string;
+  readonly presentation?: AgentReconciliationPresentation;
+  readonly observedAt: string;
 }
 
 export type AgentReconciliationMutation = {
@@ -554,6 +579,12 @@ export interface AgentRuntimeStore {
   readReconciliationCases(
     query: ScopedRunQuery,
   ): Promise<readonly AgentReconciliationCaseSnapshot[]>;
+  readReconciliationObservations(
+    query: ScopedAgentReconciliationCaseQuery,
+  ): Promise<readonly AgentReconciliationObservationSnapshot[]>;
+  appendReconciliationObservation(
+    command: AppendAgentReconciliationObservationCommand,
+  ): Promise<AgentReconciliationObservationSnapshot>;
   decideApproval(
     command: DecideAgentRuntimeApprovalCommand,
   ): Promise<AgentApprovalDecisionReceipt>;

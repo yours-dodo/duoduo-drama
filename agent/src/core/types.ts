@@ -76,6 +76,48 @@ export interface AgentApprovalPresentation {
   }[];
 }
 
+export interface AgentReconciliationPresentation {
+  readonly title: string;
+  readonly description?: string;
+  readonly fields?: readonly {
+    readonly label: string;
+    readonly value: string;
+  }[];
+}
+
+export type AgentReconciliationObservationOutcome =
+  'applied' | 'not_applied' | 'inconclusive' | 'failed';
+
+export interface AgentReconciliationInspectionContext {
+  readonly scope: {
+    readonly tenantId: string;
+    readonly projectId: string;
+    readonly sessionId?: string;
+  };
+  readonly taskId: string;
+  readonly runId: string;
+  readonly reconciliationCaseId: string;
+  readonly toolExecutionId: string;
+  readonly attemptId: string;
+  readonly toolName: string;
+  readonly correlationReference?: string;
+}
+
+export interface AgentReconciliationInspectionResult {
+  readonly outcome: AgentReconciliationObservationOutcome;
+  readonly reasonCode: string;
+  readonly presentation?: AgentReconciliationPresentation;
+}
+
+export interface AgentReconciliationAdapter {
+  readonly adapterId: string;
+  readonly version: string;
+  /** Implementations must perform only read-only external inspection. */
+  inspect(
+    context: AgentReconciliationInspectionContext,
+  ): Promise<AgentReconciliationInspectionResult>;
+}
+
 export type AgentToolExecutionStatus =
   | 'proposed'
   | 'awaiting_approval'
@@ -92,6 +134,7 @@ export type AgentToolEffectOutcome = 'not_applied' | 'applied' | 'unknown';
 export interface AgentTool {
   readonly definition: ToolDefinition;
   readonly execution: AgentToolExecutionDeclaration;
+  readonly reconciliation?: AgentReconciliationAdapter;
   execute(
     arguments_: JsonValue,
     context: AgentToolExecutionContext,

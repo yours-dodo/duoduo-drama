@@ -7,7 +7,12 @@ import {
   assertAgentToolExecutionDeclaration,
   type AgentToolAuthorizationResult,
 } from '../tool-execution.js';
-import type { AgentEvent, AgentRunResult } from '../types.js';
+import type {
+  AgentEvent,
+  AgentReconciliationInspectionResult,
+  AgentReconciliationPresentation,
+  AgentRunResult,
+} from '../types.js';
 import {
   decodeApprovalCursor,
   encodeApprovalCursor,
@@ -16,6 +21,10 @@ import { hashRuntimeCommit } from './commit-hash.js';
 import { AsyncEventQueue } from './event-queue.js';
 import { decodeEventCursor, encodeEventCursor } from './event-cursor.js';
 import { createInMemoryAgentRuntimeStore } from './in-memory-state.js';
+import {
+  decodeReconciliationObservationCursor,
+  encodeReconciliationObservationCursor,
+} from './reconciliation-observation-cursor.js';
 import { toHarnessPayload, turnStatusForResult } from './runtime-event.js';
 import {
   decodeToolExecutionCursor,
@@ -25,6 +34,7 @@ import type {
   AgentApprovalDecisionReceipt,
   AgentRuntimeCheckpointWrite,
   AgentRuntimeResumeState,
+  AppendAgentReconciliationObservationCommand,
   AgentApprovalMutation,
   AgentRuntimeMutation,
   AgentRuntimeStore,
@@ -35,6 +45,7 @@ import type {
 } from './runtime-store.js';
 import type {
   AgentApprovalPage,
+  AgentReconciliationObservationPage,
   AgentClock,
   AgentHarness,
   AgentHarnessEvent,
@@ -48,8 +59,11 @@ import type {
   CancelAgentTaskCommand,
   CreateAgentHarnessOptions,
   DecideAgentApprovalCommand,
+  InspectAgentReconciliationCommand,
   ReadAgentApprovalsQuery,
   ReadAgentEventsQuery,
+  ReadAgentReconciliationCasesQuery,
+  ReadAgentReconciliationObservationsQuery,
   ReadAgentToolExecutionsQuery,
   ScopedTaskQuery,
   StartAgentTaskCommand,
@@ -1298,6 +1312,149 @@ export async function createAgentHarness<TScopeHandle>(
         hasMore: matching.length > limit,
       });
     },
+    readReconciliationCases: async (
+      query: ReadAgentReconciliationCasesQuery,
+    ) => {
+      assertReconciliationSupported(runtimeStore);
+      const task = await readRuntimeDurably(() => runtimeStore.getTask(query));
+      if (!task?.runs.some((run) => run.runId === query.runId))
+        throw new AgentError('AGENT_RUN_NOT_FOUND', 'Agent run not found');
+      return readRuntimeDurably(() =>
+        runtimeStore.readReconciliationCases(query),
+      );
+    },
+    inspectReconciliation: async (
+      command: InspectAgentReconciliationCommand,
+    ) => {
+      assertNotDisposed(disposed);
+      assertReconciliationSupported(runtimeStore);
+      const task = await readRuntimeDurably(() =>
+        runtimeStore.getTask(command),
+      );
+      if (!task?.runs.some((run) => run.runId === command.runId))
+        throw new AgentError('AGENT_RUN_NOT_FOUND', 'Agent run not found');
+      const reconciliationCase = (
+        await readRuntimeDurably(() =>
+          runtimeStore.readReconciliationCases(command),
+        )
+      ).find(
+        (candidate) =>
+          candidate.reconciliationCaseId === command.reconciliationCaseId,
+      );
+      if (!reconciliationCase)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+          'Agent reconciliation Case not found',
+        );
+      const execution = (
+        await readRuntimeDurably(() => runtimeStore.readToolExecutions(command))
+      ).find(
+        (candidate) =>
+          candidate.toolExecutionId === reconciliationCase.toolExecutionId,
+      );
+      const attempt = execution?.attempts.find(
+        (candidate) => candidate.attemptId === reconciliationCase.attemptId,
+      );
+      if (
+        !execution ||
+        !attempt ||
+        execution.toolName !== reconciliationCase.toolName ||
+        execution.toolExecutionId !== reconciliationCase.toolExecutionId
+      )
+        throw new AgentError(
+          'AGENT_DURABILITY_FAILED',
+          'Agent reconciliation Case state is unavailable',
+        );
+      if (reconciliationCase.status !== 'waiting')
+        throw new TypeError(
+          'Agent reconciliation inspection requires a waiting Case',
+        );
+      const adapter = tools.find(
+        (tool) => tool.definition.name === reconciliationCase.toolName,
+      )?.reconciliation;
+      if (!adapter)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_ADAPTER_NOT_FOUND',
+          'Agent reconciliation adapter not found',
+        );
+      const observedAt = clock.now();
+      let result: AgentReconciliationInspectionResult;
+      try {
+        result = normalizeReconciliationInspectionResult(
+          await adapter.inspect({
+            scope: Object.freeze({
+              tenantId: command.tenantId,
+              projectId: command.projectId,
+              sessionId: task.sessionId,
+            }),
+            taskId: command.taskId,
+            runId: command.runId,
+            reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+            toolExecutionId: reconciliationCase.toolExecutionId,
+            attemptId: reconciliationCase.attemptId,
+            toolName: reconciliationCase.toolName,
+            correlationReference: execution.idempotencyKey,
+          }),
+        );
+      } catch {
+        result = failedReconciliationInspectionResult();
+      }
+      const observation = {
+        ...command,
+        adapterId: adapter.adapterId,
+        adapterVersion: adapter.version,
+        outcome: result.outcome,
+        reasonCode: result.reasonCode,
+        presentation: result.presentation,
+        observedAt,
+      } satisfies AppendAgentReconciliationObservationCommand;
+      return readRuntimeDurably(() =>
+        runtimeStore.appendReconciliationObservation(observation),
+      );
+    },
+    readReconciliationObservations: async (
+      query: ReadAgentReconciliationObservationsQuery,
+    ): Promise<AgentReconciliationObservationPage> => {
+      const limit = query.limit ?? 100;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500)
+        throw new TypeError(
+          'Agent reconciliation Observation page limit must be between 1 and 500',
+        );
+      assertReconciliationSupported(runtimeStore);
+      const task = await readRuntimeDurably(() => runtimeStore.getTask(query));
+      if (!task?.runs.some((run) => run.runId === query.runId))
+        throw new AgentError('AGENT_RUN_NOT_FOUND', 'Agent run not found');
+      const reconciliationCase = (
+        await readRuntimeDurably(() =>
+          runtimeStore.readReconciliationCases(query),
+        )
+      ).find(
+        (candidate) =>
+          candidate.reconciliationCaseId === query.reconciliationCaseId,
+      );
+      if (!reconciliationCase)
+        throw new AgentError(
+          'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+          'Agent reconciliation Case not found',
+        );
+      const afterSequence = query.after
+        ? decodeReconciliationObservationCursor(query, query.after)
+        : 0;
+      const matching = (
+        await readRuntimeDurably(() =>
+          runtimeStore.readReconciliationObservations(query),
+        )
+      ).filter((observation) => observation.sequence > afterSequence);
+      const observations = matching.slice(0, limit);
+      const lastObservation = observations.at(-1);
+      return Object.freeze({
+        observations: Object.freeze(observations),
+        nextCursor: lastObservation
+          ? encodeReconciliationObservationCursor(query, lastObservation)
+          : undefined,
+        hasMore: matching.length > limit,
+      });
+    },
     decideApproval: async (command: DecideAgentApprovalCommand) => {
       assertNotDisposed(disposed);
       const storeCommand = {
@@ -2007,6 +2164,90 @@ function durabilityFailure(cause: unknown): AgentError {
         'Agent durable state is unavailable',
         { cause },
       );
+}
+
+function assertReconciliationSupported(store: AgentRuntimeStore): void {
+  if (store.reconciliationSupport === 'v1') return;
+  throw new AgentError(
+    'AGENT_RECONCILIATION_UNAVAILABLE',
+    'Agent reconciliation is unavailable in this Runtime Store',
+  );
+}
+
+function normalizeReconciliationInspectionResult(
+  result: AgentReconciliationInspectionResult,
+): AgentReconciliationInspectionResult {
+  if (
+    !isReconciliationObservationOutcome(result.outcome) ||
+    !isReasonCode(result.reasonCode) ||
+    (result.presentation !== undefined &&
+      !isReconciliationPresentation(result.presentation))
+  )
+    throw new TypeError('Agent reconciliation inspection result is invalid');
+  return Object.freeze({
+    outcome: result.outcome,
+    reasonCode: result.reasonCode,
+    presentation: result.presentation
+      ? freezeReconciliationPresentation(result.presentation)
+      : undefined,
+  });
+}
+
+function failedReconciliationInspectionResult(): AgentReconciliationInspectionResult {
+  return Object.freeze({
+    outcome: 'failed',
+    reasonCode: 'INSPECTION_FAILED',
+    presentation: Object.freeze({
+      title: 'Inspection failed',
+      description: 'External inspection did not produce usable evidence.',
+    }),
+  });
+}
+
+function isReconciliationObservationOutcome(
+  outcome: string,
+): outcome is AgentReconciliationInspectionResult['outcome'] {
+  return ['applied', 'not_applied', 'inconclusive', 'failed'].includes(outcome);
+}
+
+function isReasonCode(value: string): boolean {
+  return value.length <= 128 && /^[A-Z][A-Z0-9_]*$/.test(value);
+}
+
+function isReconciliationPresentation(
+  presentation: AgentReconciliationPresentation,
+): boolean {
+  return (
+    hasBoundedUtf8(presentation.title, 512) &&
+    (presentation.description === undefined ||
+      typeof presentation.description === 'string') &&
+    (presentation.fields === undefined ||
+      presentation.fields.every(
+        (field) =>
+          hasBoundedUtf8(field.label, 512) && typeof field.value === 'string',
+      )) &&
+    Buffer.byteLength(JSON.stringify(presentation), 'utf8') <= 32 * 1024
+  );
+}
+
+function freezeReconciliationPresentation(
+  presentation: AgentReconciliationPresentation,
+): AgentReconciliationPresentation {
+  return Object.freeze({
+    title: presentation.title,
+    description: presentation.description,
+    fields: presentation.fields
+      ? Object.freeze(
+          presentation.fields.map((field) => Object.freeze({ ...field })),
+        )
+      : undefined,
+  });
+}
+
+function hasBoundedUtf8(value: string, maximumBytes: number): boolean {
+  return (
+    value.trim() !== '' && Buffer.byteLength(value, 'utf8') <= maximumBytes
+  );
 }
 
 async function readRuntimeDurably<TResult>(

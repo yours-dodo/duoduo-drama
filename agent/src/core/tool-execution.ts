@@ -210,4 +210,14 @@ export function assertAgentToolExecutionDeclaration(tool: AgentTool): void {
     throw new TypeError(
       `Tool ${tool.definition.name} has an invalid execution declaration`,
     );
+  const adapter = tool.reconciliation;
+  if (
+    adapter &&
+    (adapter.adapterId.trim() === '' ||
+      adapter.version.trim() === '' ||
+      typeof adapter.inspect !== 'function')
+  )
+    throw new TypeError(
+      `Tool ${tool.definition.name} has an invalid reconciliation adapter`,
+    );
 }

@@ -20,6 +20,7 @@ import type {
   AgentApprovalSnapshot,
   AgentApprovalTransitionSnapshot,
   AgentReconciliationCaseSnapshot,
+  AgentReconciliationObservationSnapshot,
   AgentOutboxBatch,
   AgentOutboxUpdateResult,
   AgentRuntimeCommitReceipt,
@@ -462,6 +463,24 @@ class PostgresAgentRuntimeStore implements AgentRuntimeStore {
   async readReconciliationCases(): Promise<
     readonly AgentReconciliationCaseSnapshot[]
   > {
+    this.assertNotDisposed();
+    throw new AgentError(
+      'AGENT_RECONCILIATION_UNAVAILABLE',
+      'Agent reconciliation requires migration 0008',
+    );
+  }
+
+  async readReconciliationObservations(): Promise<
+    readonly AgentReconciliationObservationSnapshot[]
+  > {
+    this.assertNotDisposed();
+    throw new AgentError(
+      'AGENT_RECONCILIATION_UNAVAILABLE',
+      'Agent reconciliation requires migration 0008',
+    );
+  }
+
+  async appendReconciliationObservation(): Promise<AgentReconciliationObservationSnapshot> {
     this.assertNotDisposed();
     throw new AgentError(
       'AGENT_RECONCILIATION_UNAVAILABLE',

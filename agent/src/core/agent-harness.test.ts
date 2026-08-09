@@ -3689,6 +3689,12 @@ function forwardRuntimeStore(
     readReconciliationCases:
       overrides.readReconciliationCases ??
       ((query) => base.readReconciliationCases(query)),
+    readReconciliationObservations:
+      overrides.readReconciliationObservations ??
+      ((query) => base.readReconciliationObservations(query)),
+    appendReconciliationObservation:
+      overrides.appendReconciliationObservation ??
+      ((command) => base.appendReconciliationObservation(command)),
     decideApproval:
       overrides.decideApproval ?? ((command) => base.decideApproval(command)),
     resolveApproval:

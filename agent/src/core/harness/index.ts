@@ -9,6 +9,7 @@ export type {
 } from './recovery-plan.js';
 export type {
   AcknowledgeAgentOutboxCommand,
+  AppendAgentReconciliationObservationCommand,
   AgentApprovalDecisionReceipt,
   AgentApprovalMutation,
   AgentApprovalSnapshot,
@@ -17,6 +18,7 @@ export type {
   AgentReconciliationCaseSnapshot,
   AgentReconciliationCaseStatus,
   AgentReconciliationMutation,
+  AgentReconciliationObservationSnapshot,
   AgentReconciliationSupport,
   AgentCheckpointResumeSupport,
   AgentModelAttemptSnapshot,
@@ -56,10 +58,12 @@ export type {
   ReleaseAgentOutboxCommand,
   RenewAgentRunLeaseCommand,
   ResolveAgentRuntimeApprovalCommand,
+  ScopedAgentReconciliationCaseQuery,
   ScopedRunQuery,
 } from './runtime-store.js';
 export type {
   AgentApprovalPage,
+  AgentReconciliationObservationPage,
   AgentApprovalPolicy,
   AgentApprovalPolicyContext,
   AgentApprovalPolicyResult,
@@ -87,8 +91,11 @@ export type {
   CreateAgentHarnessOptions,
   CreateAgentRecoveryWorkerOptions,
   DecideAgentApprovalCommand,
+  InspectAgentReconciliationCommand,
   ReadAgentApprovalsQuery,
   ReadAgentEventsQuery,
+  ReadAgentReconciliationCasesQuery,
+  ReadAgentReconciliationObservationsQuery,
   ReadAgentToolExecutionsQuery,
   ScopedTaskQuery,
   StartAgentTaskCommand,

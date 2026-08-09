@@ -11,6 +11,7 @@ import {
 } from './runtime-aggregate.js';
 import type {
   AcknowledgeAgentOutboxCommand,
+  AgentReconciliationObservationSnapshot,
   AgentOutboxBatch,
   AgentOutboxMessage,
   AgentOutboxUpdateResult,
@@ -39,6 +40,7 @@ import type {
   AgentRuntimeResumeState,
   ClaimRecoverableAgentRunsCommand,
   ClaimAgentOutboxCommand,
+  AppendAgentReconciliationObservationCommand,
   CommitAgentRuntimeTaskCommand,
   CreateAgentRuntimeTaskCommand,
   DecideAgentRuntimeApprovalCommand,
@@ -49,8 +51,10 @@ import type {
   RenewAgentRunLeaseCommand,
   ResolveAgentRuntimeApprovalCommand,
   ScopedRunQuery,
+  ScopedAgentReconciliationCaseQuery,
 } from './runtime-store.js';
 import type {
+  AgentReconciliationPresentation,
   AgentToolEffectOutcome,
   AgentToolExecutionStatus,
 } from '../types.js';
@@ -539,6 +543,60 @@ class InMemoryAgentRuntimeStore implements AgentRuntimeStore {
         snapshotReconciliationCase(query, reconciliationCase),
       ),
     );
+  }
+
+  async readReconciliationObservations(
+    query: ScopedAgentReconciliationCaseQuery,
+  ): Promise<readonly AgentReconciliationObservationSnapshot[]> {
+    this.assertNotDisposed();
+    const reconciliationCase = this.reconciliationCases
+      .get(runKey(query, query.taskId, query.runId))
+      ?.find(
+        (candidate) =>
+          candidate.reconciliationCaseId === query.reconciliationCaseId,
+      );
+    return Object.freeze(
+      (reconciliationCase?.observations ?? []).map((observation) =>
+        snapshotReconciliationObservation(query, observation),
+      ),
+    );
+  }
+
+  async appendReconciliationObservation(
+    command: AppendAgentReconciliationObservationCommand,
+  ): Promise<AgentReconciliationObservationSnapshot> {
+    this.assertNotDisposed();
+    assertReconciliationObservation(command);
+    const key = runKey(command, command.taskId, command.runId);
+    const currentCases = this.reconciliationCases.get(key) ?? [];
+    const nextCases = currentCases.map(cloneReconciliationCase);
+    const reconciliationCase = nextCases.find(
+      (candidate) =>
+        candidate.reconciliationCaseId === command.reconciliationCaseId,
+    );
+    if (!reconciliationCase)
+      throw new AgentError(
+        'AGENT_RECONCILIATION_CASE_NOT_FOUND',
+        'Agent reconciliation Case not found',
+      );
+    if (reconciliationCase.status !== 'waiting')
+      throw new TypeError(
+        'Agent reconciliation Observation requires a waiting Case',
+      );
+    const observation: MutableReconciliationObservation = {
+      sequence: reconciliationCase.observations.length + 1,
+      adapterId: command.adapterId,
+      adapterVersion: command.adapterVersion,
+      outcome: command.outcome,
+      reasonCode: command.reasonCode,
+      presentation: command.presentation
+        ? freezeReconciliationPresentation(command.presentation)
+        : undefined,
+      observedAt: command.observedAt,
+    };
+    reconciliationCase.observations.push(observation);
+    this.reconciliationCases.set(key, nextCases);
+    return snapshotReconciliationObservation(command, observation);
   }
 
   async decideApproval(
@@ -1107,6 +1165,32 @@ function hasBoundedUtf8(value: string, maximumBytes: number): boolean {
   );
 }
 
+function hasReasonCode(value: string): boolean {
+  return value.length <= 128 && /^[A-Z][A-Z0-9_]*$/.test(value);
+}
+
+function isReconciliationObservationOutcome(
+  outcome: string,
+): outcome is AgentReconciliationObservationSnapshot['outcome'] {
+  return ['applied', 'not_applied', 'inconclusive', 'failed'].includes(outcome);
+}
+
+function isReconciliationPresentation(
+  presentation: AgentReconciliationPresentation,
+): boolean {
+  return (
+    hasBoundedUtf8(presentation.title, 512) &&
+    (presentation.description === undefined ||
+      typeof presentation.description === 'string') &&
+    (presentation.fields === undefined ||
+      presentation.fields.every(
+        (field) =>
+          hasBoundedUtf8(field.label, 512) && typeof field.value === 'string',
+      )) &&
+    Buffer.byteLength(JSON.stringify(presentation), 'utf8') <= 32 * 1024
+  );
+}
+
 function approvalDecisionKey(
   command: DecideAgentRuntimeApprovalCommand,
 ): string {
@@ -1329,6 +1413,17 @@ interface MutableReconciliationCase {
   reasonCode: 'EXTERNAL_EFFECT_UNKNOWN';
   createdAt: string;
   rowVersion: number;
+  observations: MutableReconciliationObservation[];
+}
+
+interface MutableReconciliationObservation {
+  sequence: number;
+  adapterId: string;
+  adapterVersion: string;
+  outcome: AgentReconciliationObservationSnapshot['outcome'];
+  reasonCode: string;
+  presentation?: AgentReconciliationPresentation;
+  observedAt: string;
 }
 
 interface MutableToolExecutionAttempt {
@@ -1793,6 +1888,7 @@ function applyReconciliationMutations(input: {
       reasonCode: mutation.reasonCode,
       createdAt: input.now,
       rowVersion: 1,
+      observations: [],
     });
   }
 }
@@ -1835,6 +1931,22 @@ function assertReconciliationCommit(
         'Agent reconciliation Case must be created with its quarantine boundary',
       );
   }
+}
+
+function assertReconciliationObservation(
+  command: AppendAgentReconciliationObservationCommand,
+): void {
+  if (
+    !hasBoundedUtf8(command.reconciliationCaseId, 256) ||
+    !hasBoundedUtf8(command.adapterId, 256) ||
+    !hasBoundedUtf8(command.adapterVersion, 256) ||
+    !hasReasonCode(command.reasonCode) ||
+    !isReconciliationObservationOutcome(command.outcome) ||
+    !Number.isFinite(Date.parse(command.observedAt)) ||
+    (command.presentation !== undefined &&
+      !isReconciliationPresentation(command.presentation))
+  )
+    throw new TypeError('Agent reconciliation Observation is invalid');
 }
 
 function assertToolExecutionStatus(
@@ -1913,14 +2025,58 @@ function snapshotToolExecution(
 function cloneReconciliationCase(
   reconciliationCase: MutableReconciliationCase,
 ): MutableReconciliationCase {
-  return { ...reconciliationCase };
+  return {
+    ...reconciliationCase,
+    observations: reconciliationCase.observations.map(
+      cloneReconciliationObservation,
+    ),
+  };
 }
 
 function snapshotReconciliationCase(
   query: ScopedRunQuery,
   reconciliationCase: MutableReconciliationCase,
 ): AgentReconciliationCaseSnapshot {
-  return Object.freeze({ ...query, ...reconciliationCase });
+  return Object.freeze({
+    ...query,
+    reconciliationCaseId: reconciliationCase.reconciliationCaseId,
+    toolExecutionId: reconciliationCase.toolExecutionId,
+    attemptId: reconciliationCase.attemptId,
+    toolName: reconciliationCase.toolName,
+    status: reconciliationCase.status,
+    reasonCode: reconciliationCase.reasonCode,
+    createdAt: reconciliationCase.createdAt,
+    rowVersion: reconciliationCase.rowVersion,
+  });
+}
+
+function cloneReconciliationObservation(
+  observation: MutableReconciliationObservation,
+): MutableReconciliationObservation {
+  return {
+    ...observation,
+    presentation: observation.presentation
+      ? freezeReconciliationPresentation(observation.presentation)
+      : undefined,
+  };
+}
+
+function snapshotReconciliationObservation(
+  query: ScopedAgentReconciliationCaseQuery,
+  observation: MutableReconciliationObservation,
+): AgentReconciliationObservationSnapshot {
+  return Object.freeze({
+    ...query,
+    sequence: observation.sequence,
+    adapterId: observation.adapterId,
+    adapterVersion: observation.adapterVersion,
+    outcome: observation.outcome,
+    reasonCode: observation.reasonCode,
+    presentation: observation.presentation
+      ? freezeReconciliationPresentation(observation.presentation)
+      : undefined,
+    observedAt: observation.observedAt,
+  });
 }
 
 function cloneApproval(approval: MutableApproval): MutableApproval {
@@ -1951,6 +2107,20 @@ function snapshotApproval(
 function freezeApprovalPresentation(
   presentation: AgentApprovalSnapshot['presentation'],
 ): AgentApprovalSnapshot['presentation'] {
+  return Object.freeze({
+    title: presentation.title,
+    description: presentation.description,
+    fields: presentation.fields
+      ? Object.freeze(
+          presentation.fields.map((field) => Object.freeze({ ...field })),
+        )
+      : undefined,
+  });
+}
+
+function freezeReconciliationPresentation(
+  presentation: AgentReconciliationPresentation,
+): AgentReconciliationPresentation {
   return Object.freeze({
     title: presentation.title,
     description: presentation.description,
