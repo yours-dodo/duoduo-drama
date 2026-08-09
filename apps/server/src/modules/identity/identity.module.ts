@@ -13,7 +13,6 @@ import { Logout } from './application/logout.js';
 import { RequestEmailLogin } from './application/request-email-login.js';
 import { VerifyEmailLogin } from './application/verify-email-login.js';
 import { AuthController } from './http/auth.controller.js';
-import { MeController } from './http/me.controller.js';
 import { SessionAuthGuard } from './http/session-auth.guard.js';
 import { TrustedOriginGuard } from './http/trusted-origin.guard.js';
 import { LocalEmailDelivery } from './infrastructure/local-email-delivery.js';
@@ -46,7 +45,7 @@ import {
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [AuthController, MeController],
+  controllers: [AuthController],
   providers: [
     PrismaLoginChallengeRepository,
     {
@@ -147,6 +146,12 @@ import {
     TrustedOriginGuard,
     { provide: APP_GUARD, useExisting: TrustedOriginGuard },
   ],
-  exports: [EMAIL_DELIVERY, RequestEmailLogin, SessionAuthGuard],
+  exports: [
+    EMAIL_DELIVERY,
+    IDENTITY_TOKEN_SECURITY,
+    RequestEmailLogin,
+    SESSION_REPOSITORY,
+    SessionAuthGuard,
+  ],
 })
 export class IdentityModule {}

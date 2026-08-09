@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, and passwordless Web identity: normalized email addresses, protected one-time login challenges, shared PostgreSQL request limits, single-use verification, persistent sessions, local delivery, `/v1/auth` endpoints, and `/v1/me`. Team tenancy, business authorization, other business modules, and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, and the first team-tenancy boundary. Users can create multiple teams through an idempotent API, list their active memberships through `/v1/teams` and `/v1/me`, and establish an immutable path-derived `TenantContext` only when they are active members. Team invitations, member-management HTTP APIs, story modules, and Agent integration have not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -17,6 +17,8 @@ Create directories only when real code needs them. Use these boundaries as the S
 - `src/domain/` for framework-independent entities, value objects, policies, and invariants.
 - `src/modules/` for NestJS modules and application use cases grouped by business capability.
 - `src/modules/identity/` for passwordless login application flows, ports, transport DTOs, and identity infrastructure adapters.
+- `src/modules/tenancy/` for team lifecycle, active memberships, path-derived tenant context, and tenant-scoped repository ports.
+- `src/modules/audit/` for append-only tenant audit records written in the same transaction as the state change they describe.
 - `src/integrations/agent/` for the Agent client and request/response mapping.
 - `src/config/` for Server-owned environment parsing and validation.
 - `src/platform/http/` for transport-wide middleware, filters, versioning, and health probes.
@@ -53,5 +55,7 @@ Validate environment variables during startup. Do not expose stack traces, crede
 Use `apps/server/.env.example` as the local configuration reference. Production requires a Cookie secret and login-token pepper of at least 32 characters, an HTTPS public Web URL, and an explicit comma-separated trusted-origin list. Configure `TRUST_PROXY_HOPS` to the deployment's exact trusted reverse-proxy count; keep the default `0` when the Server is directly exposed. Never log request bodies, authorization headers, Cookies, or URL query values.
 
 Raw login and session tokens may exist only at their delivery or HTTP Cookie boundaries. Persist purpose-separated HMAC digests only; never add raw token, verification code, magic-link URL, Cookie value, or source address columns or logs. Challenge consumption, user/session creation, revocation, and identity security events must keep their current transaction boundaries and use the database clock. Web session Cookies remain `HttpOnly`, `SameSite=Lax`, and `Secure` in production; every Cookie-authenticated write must pass the global exact-Origin check. The local email adapter is non-production only, and production startup must remain blocked until a real delivery adapter is configured.
+
+Treat `Team` and tenant as the same boundary. Never infer a current team from a session or global mutable state: tenant-scoped routes must take `teamId` from the path and establish `TenantContext` through an active membership lookup. Return the same not-found response for malformed, missing, and inaccessible tenant resources. Tenant mutations, idempotency results, and their audit records must commit atomically; tenant repository queries must accept `tenantId` explicitly and use tenant-aware database constraints.
 
 The Server database must use `SERVER_DATABASE_URL`; the Agent database uses its own `AGENT_*` variables, database, and credentials. Never share Prisma models, migration history, database users, or connection strings across those services. Application startup does not apply migrations automatically: deploy migrations explicitly before starting code that depends on them.

@@ -16,6 +16,7 @@ import {
   SESSION_REPOSITORY,
   type SessionRepository,
 } from '../ports/session-repository.js';
+import { ListMyTeams } from '../../tenancy/application/list-my-teams.js';
 import { SESSION_COOKIE_NAME } from './session-auth.guard.js';
 
 const LOGIN_TOKEN = 'a'.repeat(43);
@@ -60,6 +61,10 @@ describe('passwordless session HTTP API', () => {
       providerOverrides: [
         { token: VerifyEmailLogin, value: verifyEmailLogin },
         { token: Logout, value: logout },
+        {
+          token: ListMyTeams,
+          value: { execute: vi.fn(async () => ({ teams: [] })) },
+        },
         { token: SESSION_REPOSITORY, value: sessions },
         { token: IDENTITY_TOKEN_SECURITY, value: security },
       ],
@@ -105,6 +110,7 @@ describe('passwordless session HTTP API', () => {
     expect(response.body).toEqual({
       user: { id: 'user-id', email: 'creator@example.com' },
       session: { expiresAt: SESSION_EXPIRES_AT.toISOString() },
+      teams: [],
     });
   });
 

@@ -2,7 +2,7 @@
 
 > 日期：2026-08-09
 >
-> 状态：执行中（S01–S04 已完成）
+> 状态：执行中（S01–S05 已完成）
 >
 > 依据：[多租户故事创作后端框架设计](../specs/2026-08-09-multi-tenant-story-backend-framework-design.md)
 

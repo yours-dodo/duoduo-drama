@@ -51,7 +51,7 @@ describe.skipIf(!databaseUrl)('PrismaLoginChallengeRepository', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
   });
 
