@@ -275,7 +275,14 @@ import {
     },
     TenantContextGuard,
   ],
-  exports: [ListMyTeams, LocalTeamInvitationDelivery, TenantContextGuard],
+  exports: [
+    ListMyTeams,
+    LocalTeamInvitationDelivery,
+    TenantContextGuard,
+    TEAM_MEMBERSHIP_REPOSITORY,
+    IDEMPOTENCY_REPOSITORY,
+    NodeRequestFingerprint,
+  ],
 })
 export class TenancyModule {}
 

@@ -11,8 +11,20 @@ export interface AuditRecordSnapshot {
     | 'TEAM_INVITATION_REVOKED'
     | 'TEAM_MEMBER_JOINED'
     | 'TEAM_MEMBER_ROLE_CHANGED'
-    | 'TEAM_MEMBER_REMOVED';
-  targetType: 'TEAM' | 'TEAM_INVITATION' | 'TEAM_MEMBERSHIP';
+    | 'TEAM_MEMBER_REMOVED'
+    | 'STORY_PROJECT_CREATED'
+    | 'STORY_PROJECT_UPDATED'
+    | 'STORY_PROJECT_VISIBILITY_CHANGED'
+    | 'STORY_PROJECT_ARCHIVED'
+    | 'STORY_PROJECT_PRIVATE_VIEWED'
+    | 'STORY_PROJECT_COLLABORATOR_ADDED'
+    | 'STORY_PROJECT_COLLABORATOR_REMOVED';
+  targetType:
+    | 'TEAM'
+    | 'TEAM_INVITATION'
+    | 'TEAM_MEMBERSHIP'
+    | 'STORY_PROJECT'
+    | 'PROJECT_COLLABORATOR';
   targetId: string;
   beforeSummary: Record<string, unknown> | null;
   afterSummary: Record<string, unknown> | null;
@@ -29,6 +41,12 @@ export interface AuditQueryRepository {
     tenantId: string,
     page: KeysetPageRequest,
   ): Promise<KeysetPage<AuditRecordSnapshot>>;
+  listForTarget(request: {
+    tenantId: string;
+    targetType: AuditRecordSnapshot['targetType'];
+    targetId: string;
+    page: KeysetPageRequest;
+  }): Promise<KeysetPage<AuditRecordSnapshot>>;
 }
 import type {
   KeysetPage,

@@ -78,4 +78,46 @@ export class PrismaAuditRepository
       };
     });
   }
+
+  listForTarget(request: {
+    tenantId: string;
+    targetType: AuditRecordSnapshot['targetType'];
+    targetId: string;
+    page: KeysetPageRequest;
+  }): Promise<KeysetPage<AuditRecordSnapshot>> {
+    return this.database.withClient(async (client) => {
+      const after = request.page.after
+        ? Prisma.sql`AND (occurred_at, id) < (${request.page.after.at}, ${request.page.after.id}::uuid)`
+        : Prisma.empty;
+      const rows = await client.$queryRaw<AuditRecordSnapshot[]>`
+        SELECT
+          id,
+          tenant_id AS "tenantId",
+          actor_user_id AS "actorUserId",
+          action,
+          target_type AS "targetType",
+          target_id AS "targetId",
+          before_summary AS "beforeSummary",
+          after_summary AS "afterSummary",
+          request_id AS "requestId",
+          occurred_at AS "occurredAt"
+        FROM audit_records
+        WHERE tenant_id = ${request.tenantId}::uuid
+          AND target_type = ${request.targetType}
+          AND target_id = ${request.targetId}::uuid
+          ${after}
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT ${request.page.limit + 1}
+      `;
+      const items = rows.slice(0, request.page.limit);
+      const last = items.at(-1);
+      return {
+        items,
+        next:
+          rows.length > request.page.limit && last
+            ? { at: new Date(last.occurredAt), id: last.id }
+            : null,
+      };
+    });
+  }
 }

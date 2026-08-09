@@ -57,7 +57,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     userId = randomUUID();
     await insertUser(pool, userId, 'tenant.creator@example.com');

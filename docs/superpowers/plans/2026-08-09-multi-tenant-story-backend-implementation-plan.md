@@ -2,7 +2,7 @@
 
 > 日期：2026-08-09
 >
-> 状态：执行中（S01–S06 已完成）
+> 状态：执行中（S01–S07 已完成）
 >
 > 依据：[多租户故事创作后端框架设计](../specs/2026-08-09-multi-tenant-story-backend-framework-design.md)
 
@@ -373,6 +373,10 @@ pnpm --filter @duoduo/server test:postgres
 ### 提交
 
 `feat(server): add authorized story projects`
+
+### 状态
+
+已完成。项目与协作者的领域规则、租户复合约束、HTTP 接口、项目级审计和 PostgreSQL 回归验证均已落地。
 
 ## 11. 切片 S08：创作对话与消息
 

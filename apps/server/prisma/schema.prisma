@@ -20,6 +20,8 @@ model User {
   auditRecords        AuditRecord[]           @relation("AuditActor")
   sentInvitations     TeamInvitation[]        @relation("TeamInvitationSender")
   acceptedInvitations TeamInvitation[]        @relation("TeamInvitationAcceptor")
+  createdStoryProjects StoryProject[]         @relation("StoryProjectCreator")
+  projectCollaborations ProjectCollaborator[]
 
   @@map("users")
 }
@@ -35,6 +37,8 @@ model Team {
   idempotencyRecords IdempotencyRecord[]
   auditRecords       AuditRecord[]
   invitations        TeamInvitation[]
+  storyProjects      StoryProject[]
+  projectCollaborators ProjectCollaborator[]
 
   @@index([createdByUserId, createdAt(sort: Desc)], map: "teams_created_by_user_id_created_at_idx")
   @@map("teams")
@@ -75,12 +79,50 @@ model TeamMembership {
   sentInvitations     TeamInvitation[] @relation("TeamInvitationSenderMembership")
   acceptedInvitations TeamInvitation[] @relation("TeamInvitationAcceptorMembership")
   auditRecords        AuditRecord[]    @relation("AuditActorMembership")
+  projectCollaborations ProjectCollaborator[]
 
   @@unique([tenantId, userId], map: "team_memberships_tenant_id_user_id_key")
   @@unique([tenantId, id], map: "team_memberships_tenant_id_id_key")
   @@index([userId, removedAt], map: "team_memberships_user_id_removed_at_idx")
   @@index([tenantId, role, removedAt], map: "team_memberships_tenant_id_role_removed_at_idx")
   @@map("team_memberships")
+}
+
+model StoryProject {
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @map("tenant_id") @db.Uuid
+  createdByUserId   String                  @map("created_by_user_id") @db.Uuid
+  title             String                  @db.VarChar(200)
+  visibility        String                  @db.VarChar(16)
+  status            String                  @db.VarChar(16)
+  revision          Int                     @default(1)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team              Team                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy         User                    @relation("StoryProjectCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  collaborators     ProjectCollaborator[]
+
+  @@unique([tenantId, id], map: "story_projects_tenant_id_id_key")
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_tenant_id_created_at_id_idx")
+  @@index([tenantId, visibility, status, createdAt(sort: Desc)], map: "story_projects_tenant_id_visibility_status_idx")
+  @@map("story_projects")
+}
+
+model ProjectCollaborator {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  projectId     String       @map("project_id") @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  team          Team         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project       StoryProject @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  membership    TeamMembership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, id], map: "project_collaborators_tenant_id_id_key")
+  @@unique([tenantId, projectId, userId], map: "project_collaborators_tenant_id_project_id_user_id_key")
+  @@index([tenantId, projectId, createdAt(sort: Desc), id(sort: Desc)], map: "project_collaborators_tenant_id_project_id_created_at_id_idx")
+  @@map("project_collaborators")
 }
 
 model IdempotencyRecord {

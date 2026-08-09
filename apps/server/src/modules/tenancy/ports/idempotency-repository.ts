@@ -2,7 +2,8 @@ export const IDEMPOTENCY_REPOSITORY = Symbol('IDEMPOTENCY_REPOSITORY');
 
 export interface IdempotencyLookup {
   scopeKey: string;
-  operationType: 'CREATE_TEAM' | 'CREATE_TEAM_INVITATION';
+  operationType:
+    'CREATE_TEAM' | 'CREATE_TEAM_INVITATION' | 'CREATE_STORY_PROJECT';
   idempotencyKey: string;
 }
 

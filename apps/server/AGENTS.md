@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, and the complete first team lifecycle. Users can create multiple teams, invite matching email identities, accept one-use invitations, manage roles and removals, query tenant audit records, and establish an immutable path-derived `TenantContext` only while they are active members. Story modules and Agent integration have not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, the complete first team lifecycle, and the first story-project authorization slice. Users can create multiple teams, invite matching email identities, accept one-use invitations, manage roles and removals, query tenant audit records, establish an immutable path-derived `TenantContext` only while they are active members, and manage team/private story projects with creator, administrator, and collaborator permissions. The next slice is project conversations and messages; Agent integration has not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -59,5 +59,7 @@ Raw login and session tokens may exist only at their delivery or HTTP Cookie bou
 Team invitation tokens follow the same boundary: raw values may exist only during delivery and in the acceptance request body, while persistence contains a purpose-separated HMAC digest. Acceptance requires the authenticated normalized email to match, consumes the invitation under a row lock, and creates or reactivates membership in the same transaction as its audit record. Administrator role changes and removals must retain the team-level serialization lock that protects the last-administrator invariant.
 
 Treat `Team` and tenant as the same boundary. Never infer a current team from a session or global mutable state: tenant-scoped routes must take `teamId` from the path and establish `TenantContext` through an active membership lookup. Return the same not-found response for malformed, missing, and inaccessible tenant resources. Tenant mutations, idempotency results, and their audit records must commit atomically; tenant repository queries must accept `tenantId` explicitly and use tenant-aware database constraints.
+
+Story projects are tenant-owned. Team-visible projects can be viewed by active team members, while private projects are visible only to their creator and team administrators. Project collaborators can edit active team-visible projects but cannot manage other collaborators; only the creator and team administrators can add or remove collaborators. Project edits use `expectedRevision`, and switching a project to private revokes all collaborators in the same transaction without automatically restoring them later. Preserve the project and collaborator composite tenant constraints in both schema and repository queries.
 
 The Server database must use `SERVER_DATABASE_URL`; the Agent database uses its own `AGENT_*` variables, database, and credentials. Never share Prisma models, migration history, database users, or connection strings across those services. Application startup does not apply migrations automatically: deploy migrations explicitly before starting code that depends on them.
