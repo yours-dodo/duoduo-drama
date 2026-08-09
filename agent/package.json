@@ -3,19 +3,35 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js"
+    }
+  },
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src"
+    "db:migrate": "tsx src/cli/postgres.ts migrate",
+    "db:migrate:status": "tsx src/cli/postgres.ts status",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test-fixtures.json --noEmit",
+    "test": "vitest run src",
+    "test:postgres": "AGENT_TEST_POSTGRES_REQUIRED=1 vitest run src/infrastructure/postgres/postgres-agent-runtime-store.test.ts src/infrastructure/postgres/postgres-process-recovery.test.ts"
   },
   "dependencies": {
+    "@duoduo/ai": "workspace:*",
     "@hono/node-server": "^1.19.9",
-    "hono": "^4.12.30"
+    "hono": "^4.12.30",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.3",
     "tsx": "^4.23.1",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -1,6 +1,6 @@
 # Agent Core Phase A3 ToolExecutionLedger Design
 
-Status: Approved design pending written-spec review
+Status: Implemented and verified
 Date: 2026-08-02
 
 ## 1. Purpose
@@ -110,7 +110,7 @@ risk or prohibit execution, but it must not weaken the tool declaration.
 
 Validation rules:
 
-- `timeoutMs` is a positive bounded integer;
+- `timeoutMs` is an integer from 1 through 86,400,000 milliseconds;
 - duplicate and empty tool names remain invalid;
 - `keyed` means the downstream integration is designed to honor the supplied
   key; it is not a claim that every transport is automatically idempotent;
@@ -160,16 +160,16 @@ Terminal states do not transition in A3.
 
 ### 6.2 State meanings
 
-| State | Meaning |
-| --- | --- |
-| `proposed` | The model produced a Tool Call and its immutable input digest was recorded. |
-| `prepared` | Tool declaration, validated arguments, timeout, and optional idempotency key were fixed. No invocation has begun. |
-| `running` | An Attempt and start event are durable. The executor may now call the tool. |
-| `succeeded` | A valid result was returned and appended to the transcript. |
-| `failed` | Execution failed with a known effect outcome. |
-| `cancelled` | Cancellation completed with a known effect outcome. |
-| `timed_out` | The deadline expired with a known effect outcome. |
-| `unknown` | The external effect cannot be determined safely. Automatic retry is forbidden. |
+| State       | Meaning                                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `proposed`  | The model produced a Tool Call and its immutable input digest was recorded.                                       |
+| `prepared`  | Tool declaration, validated arguments, timeout, and optional idempotency key were fixed. No invocation has begun. |
+| `running`   | An Attempt and start event are durable. The executor may now call the tool.                                       |
+| `succeeded` | A valid result was returned and appended to the transcript.                                                       |
+| `failed`    | Execution failed with a known effect outcome.                                                                     |
+| `cancelled` | Cancellation completed with a known effect outcome.                                                               |
+| `timed_out` | The deadline expired with a known effect outcome.                                                                 |
+| `unknown`   | The external effect cannot be determined safely. Automatic retry is forbidden.                                    |
 
 Unknown tools and invalid arguments transition from `proposed` directly to
 `failed` with Attempt count zero. All real invocations require
@@ -278,14 +278,14 @@ only.
 
 Mapping rules:
 
-| Condition | Ledger result |
-| --- | --- |
-| Tool unavailable or invalid arguments | `failed + not_applied`, Attempt 0 |
-| Side-effect-free tool throws an ordinary error | `failed + not_applied` |
-| Side-effecting tool throws an ordinary error | `unknown + unknown` |
-| Structured error proves no effect | Declared kind + `not_applied` |
-| Structured error proves an effect occurred | `failed + applied` |
-| Timeout or cancellation before invocation | `timed_out` or `cancelled` + `not_applied` |
+| Condition                                                  | Ledger result                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| Tool unavailable or invalid arguments                      | `failed + not_applied`, Attempt 0                       |
+| Side-effect-free tool throws an ordinary error             | `failed + not_applied`                                  |
+| Side-effecting tool throws an ordinary error               | `unknown + unknown`                                     |
+| Structured error proves no effect                          | Declared kind + `not_applied`                           |
+| Structured error proves an effect occurred                 | `failed + applied`                                      |
+| Timeout or cancellation before invocation                  | `timed_out` or `cancelled` + `not_applied`              |
 | Timeout or cancellation during a side-effecting invocation | `unknown + unknown` unless the Adapter proves otherwise |
 
 The executor still appends a generic error ToolResult so the current Run can

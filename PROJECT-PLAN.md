@@ -5,8 +5,8 @@
 ## 1. 当前状态
 
 - 记录开始日期：2026-07-16
-- 项目阶段：产品形态已初步确认，开始讨论业务架构
-- 仓库状态：目前只有仓库级说明和许可证，尚未引入应用代码、构建系统或测试框架。
+- 项目阶段：Agent Core A4b 重启恢复已完成，下一阶段进入 A4c 外部副作用对账和业务服务设计
+- 仓库状态：TypeScript + pnpm monorepo、Web/Server/Agent 工程和 `packages/ai` 运行时已建立；Agent Core A1–A4b 已通过内存、PostgreSQL 和真实进程恢复验收。
 
 ## 2. 规划目标
 
@@ -333,6 +333,25 @@ Agent 任务按创作阶段独立建模，不设置覆盖整个创作流程的�
 - 单个任务可以独立暂停、恢复、失败重试或重新执行，不要求重启整个创作流程。
 - 移动端和 Web 的任务中心展示这些阶段任务，而不是额外展示一个总任务。
 - 跨阶段自动推进由流程编排关系负责，但不因此创建覆盖全部阶段的总任务实体。
+
+### Agent Core 技术架构
+
+Agent Core 采用“分层轻内核 + 可插拔能力端口”，由 Harness 层和 Agent 逻辑层组成：
+
+- **Harness 层**负责模型—工具循环、事件、审批、取消、预算、checkpoint、恢复、副作用一致性，以及 Agent 运行所需的上下文、记忆、知识检索、运行存储和沙箱能力。
+- **Agent 逻辑层**负责 Agent 定义、提示词、模型和工具策略、上下文/记忆/知识策略、完成条件和结构化输出。
+- `@duoduo/ai` 继续负责 Provider 协议、认证和模型传输边界，Agent Core 不重复实现 Provider wire protocol。
+- Session、Task、Run、Turn 是四个独立作用域：Session 隔离对话，Task 隔离业务目标和进度，Run 隔离一次执行尝试和版本，Turn 隔离一次模型决策和上下文快照。
+- Harness 内只有 Execution Kernel 保持轻量；Context、Memory、Knowledge/RAG/Wiki、Artifact Runtime、运行存储、搜索和沙箱作为 Harness 内部独立能力模块或适配器，不能直接耦合进模型—工具循环。
+- 租户、项目、用户身份和业务权限真相属于 Server 业务服务；Harness 只消费并强制执行明确的 `AuthorizationContext`，不复制业务授权规则。
+- 剧本、图片、音频和视频等 Artifact 的领域语义、归属和业务状态属于业务服务；Harness 负责 `ArtifactRef`、执行血缘、大工具结果外置和模型上下文投影。
+- Web、移动端、通知和面向产品的后台 Worker 属于业务服务与应用层，通过任务、事件和审批协议使用 Agent Core。
+- 长期记忆采用 Hermes 风格的有界精炼记忆、完整 Session 档案和可选外部 Provider；模型只能提出持久记忆候选，不能直接改写全局事实。
+- 知识检索采用结构化精确查询优先、全文与向量混合召回、可选 rerank 和强制引用；Wiki 是可审查的派生知识，Raw Source 和 Server 数据保持权威。
+- Harness Runtime Facilities 首版采用 PostgreSQL、对象存储和队列等通用设施，通过内部端口保留替换空间；不提前引入重型 Agent Runtime、知识图数据库或多个外部记忆平台。
+- 实施顺序是可靠执行内核、上下文与执行安全、记忆与知识，最后才是多 Agent 和高级检索。
+
+详细模块边界、端口、实施阶段和验收标准见 [Agent Core 功能调研与生产架构方案](docs/architecture/agent-core-market-research.md)。
 
 ### 创作流程实例
 
@@ -723,6 +742,15 @@ Agent 任务按创作阶段独立建模，不设置覆盖整个创作流程的�
 - 以一个短剧项目能够走完整个生命周期作为首期业务验证目标。
 - 该首期策略已被“优先完成短剧内容创作闭环”的当前决定取代。
 
+### 2026-08-01：确认 Agent Core 生产架构
+
+- 确认 Agent Core 由 Harness 层和 Agent 逻辑层组成，并使用分层轻内核与可插拔能力端口。
+- 确认 Session、Task、Run、Turn 四级隔离，补充 ToolExecution 副作用账本和耐久提交边界。
+- 确认集中式上下文装配、Hermes 风格分层记忆、Hybrid RAG、派生 Wiki、独立 Artifact 和沙箱隔离进入正式规划。
+- 确认 Provider 归 `@duoduo/ai`，业务权限真相和客户端归业务层；运行存储、知识检索和沙箱归 Harness；Artifact 由业务层与 Harness 分工协作。
+- 确认优先完成单 Agent 的一致性、恢复、安全和多租户隔离，再建设多 Agent 与高级知识能力。
+- 详细设计与一手资料记录在 Agent Core 架构文档中。
+
 ## 5. 当前待讨论事项
 
 ### 业务架构
@@ -781,6 +809,16 @@ Agent 任务按创作阶段独立建模，不设置覆盖整个创作流程的�
 - [x] 确定短剧项目按剧集独立推进的流程粒度
 - [x] 确定短剧项目、剧集、场景和镜头的内容层级
 - [x] 确定上游变化对下游产物的基本影响规则
+- [x] 调研主流 Agent SDK、Runtime 和 Harness 的生产功能
+- [x] 确认 Agent Core 的四级隔离、上下文、分层记忆、RAG/Wiki、Artifact、沙箱与可靠执行架构
+- [ ] 按 Agent Core 架构阶段 A 实现可靠执行内核
+  - [x] A1：无状态 Executor、内存 Harness、Task/Run/Turn 作用域与并发隔离
+  - [x] A2：耐久状态、事件/outbox、cursor/replay 与 checkpoint 可恢复边界
+  - [x] A3：ToolExecutionLedger、Attempt、幂等键、副作用分类、deadline 与 `unknown` 语义
+  - [ ] A4：持久化审批、恢复扫描、外部对账与安全自动恢复
+    - [x] A4a：持久化审批、跨实例决定与 exactly-once 消费
+    - [x] A4b：Run 租约/fencing、恢复 Worker、PostgreSQL 竞争与进程重启恢复
+    - [ ] A4c：外部副作用对账与人工处置闭环
 - [ ] 研究全流程扩展（暂缓）
 - [ ] 确定核心领域对象与层级
 - [ ] 明确业务角色、领域对象和主要流程

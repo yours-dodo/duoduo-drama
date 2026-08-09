@@ -1,6 +1,6 @@
 # Agent Core Phase A4b Restart Recovery Design
 
-Status: Approved design pending implementation
+Status: Implemented; S01–S10 verified
 Date: 2026-08-08
 
 ## 1. Purpose

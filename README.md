@@ -37,7 +37,7 @@ HarmonyOS 客户端 ─┘
 - 各客户端共享账号、项目、会话、任务和创作数据，不分别实现独立的 Agent 系统。
 - 第一阶段优先建设 Agent 服务和 Web 工作台；移动端在服务端接口与业务流程稳定后接入。
 
-当前工程基础栈为 Nuxt Web、NestJS Server 和 Hono Agent；数据库、队列和移动端框架尚未确定。
+当前工程基础栈为 Nuxt Web、NestJS Server 和 Hono Agent。Agent Runtime 已选择 PostgreSQL 作为可替换的 Harness 持久化适配器；业务主数据库、队列和移动端框架仍未确定。
 
 ## 核心业务领域
 
@@ -127,15 +127,15 @@ HarmonyOS 客户端 ─┘
 短剧预览与导出
 ```
 
-| 阶段 | 主要职责 |
-| --- | --- |
-| 故事 | 确定故事内容、人物、背景和情节走向 |
-| 剧本 | 创作、导入和编辑单集或多集剧本 |
-| 分镜 | 将剧本组织为场景、镜头和镜头顺序 |
-| 素材准备与管理 | 准备并管理人物、场景、道具、图片、视频和音频素材 |
-| 分镜提示词创作与分镜合成 | 创作镜头提示词，生成或组合分镜画面与镜头产物 |
-| 视频剪辑与合成 | 编排镜头视频、配音、音乐、字幕和转场 |
-| 短剧预览与导出 | 生成预览版本，完成确认并导出最终结果 |
+| 阶段                     | 主要职责                                         |
+| ------------------------ | ------------------------------------------------ |
+| 故事                     | 确定故事内容、人物、背景和情节走向               |
+| 剧本                     | 创作、导入和编辑单集或多集剧本                   |
+| 分镜                     | 将剧本组织为场景、镜头和镜头顺序                 |
+| 素材准备与管理           | 准备并管理人物、场景、道具、图片、视频和音频素材 |
+| 分镜提示词创作与分镜合成 | 创作镜头提示词，生成或组合分镜画面与镜头产物     |
+| 视频剪辑与合成           | 编排镜头视频、配音、音乐、字幕和转场             |
+| 短剧预览与导出           | 生成预览版本，完成确认并导出最终结果             |
 
 该流程不是只能执行一次的刚性流水线：
 
@@ -212,12 +212,12 @@ HarmonyOS 客户端 ─┘
 
 系统级权限角色保持简化：
 
-| 身份 | 主要权限 |
-| --- | --- |
-| 管理员 | 管理团队和成员；查看、编辑并管理团队项目和私人项目 |
-| 项目创建者 | 查看和编辑自己创建的项目；管理项目协作成员 |
-| 项目协作成员 | 查看和编辑被邀请参与的项目 |
-| 其他普通成员 | 查看团队项目，不可修改未参与的项目 |
+| 身份         | 主要权限                                           |
+| ------------ | -------------------------------------------------- |
+| 管理员       | 管理团队和成员；查看、编辑并管理团队项目和私人项目 |
+| 项目创建者   | 查看和编辑自己创建的项目；管理项目协作成员         |
+| 项目协作成员 | 查看和编辑被邀请参与的项目                         |
+| 其他普通成员 | 查看团队项目，不可修改未参与的项目                 |
 
 编剧、分镜师、素材制作、剪辑师和审核人等属于业务分工或成员标签，不作为系统级权限角色。
 
@@ -225,21 +225,36 @@ HarmonyOS 客户端 ─┘
 
 ## 当前状态
 
-截至 2026 年 7 月 17 日：
+截至 2026 年 8 月 9 日：
 
 - 产品基础形态已经确认。
 - 故事创作与短剧创作的一级业务边界已经确认。
 - 故事项目推进为短剧项目的快照规则已经确认。
 - 短剧创作主流程和项目、剧集、场景、镜头层级已经确认。
 - 团队空间、项目可见范围和基础权限规则已经确认。
-- 核心领域模型仍在继续设计。
-- MVP 边界、数据模型和业务 API 尚未确定。
-- TypeScript + pnpm monorepo 已初始化，包含可运行的 Web、Server 和 Agent 骨架。
+- TypeScript + pnpm monorepo 已初始化，包含可运行的 Web、Server 和 Agent 服务。
+- `packages/ai` 已提供 Provider 中立的模型运行时与内置 Provider 适配层。
+- Agent Core A1–A4b 已实现 Task/Run/Turn 隔离、耐久事件与检查点、
+  ToolExecutionLedger、持久人工审批、Run 租约/fencing、checkpoint v3、
+  确定性 RecoveryPlan、模型/工具/审批/孤儿 Attempt 恢复，以及有限批次、
+  heartbeat、退避和结构阻塞的 Recovery Worker。PostgreSQL 0007 使用数据库
+  时间、`SKIP LOCKED` 和单调 fence；真实双进程测试会 `SIGKILL` 原执行器，
+  并证明新 Worker 接续事件且不重放已完成模型 Turn。0001–0007 迁移、
+  PostgreSQL 契约测试和真实进程恢复测试均已通过。
+- A4c 外部副作用对账、基础预算，以及上下文装配、分层记忆、
+  知识检索、Artifact Runtime 与沙箱仍待后续阶段实现。
+- 核心领域模型仍在继续设计；MVP 业务 API 尚未确定。
 
 ## 项目文档
 
 - [`PROJECT-PLAN.md`](PROJECT-PLAN.md)：项目级规划、已确认决策和讨论记录。
 - [`Pi Agent 技术架构拆解`](docs/architecture/pi-agent-architecture.md)：对本地 vendor 参考实现的 Agent Loop、Harness、会话树、工具执行、上下文压缩与扩展边界进行源码级拆解。
+- [`Agent Core 功能调研与生产架构方案`](docs/architecture/agent-core-market-research.md)：定义 Harness、Agent 逻辑、四级隔离、上下文、分层记忆、RAG/Wiki、Artifact、沙箱和可靠执行的生产基线。
+- [`Agent Core 上下文、记忆与知识架构调研`](docs/architecture/agent-core-context-memory-knowledge-research.md)：汇总上下文工程、Hermes 记忆、LLM Wiki 与 Hybrid RAG 的一手资料和取舍依据。
+- [`Agent Core 运行时协议`](docs/architecture/agent-core-runtime-protocols.md)：记录隔离、原子提交、检查点、工具账本、持久审批、事件重放、Outbox 与迁移协议。
+- [`Agent Core A3 ToolExecutionLedger 设计`](docs/architecture/agent-core-phase-a3-tool-execution-ledger-design.md)：定义副作用一致性、Attempt 与保守未知结果。
+- [`Agent Core A4a 持久审批设计`](docs/architecture/agent-core-phase-a4a-persistent-approval-design.md)：定义审批策略、状态机、跨实例唤醒和原子消费边界。
+- [`Agent Core A4b 重启恢复设计`](docs/architecture/agent-core-phase-a4b-restart-recovery-design.md)：定义租约、fencing、恢复计划、Worker、PostgreSQL 竞争与真实进程退出验证。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
 - [`CLAUDE.md`](CLAUDE.md)：面向 AI 编码工具的仓库上下文说明。
