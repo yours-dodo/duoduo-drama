@@ -257,6 +257,7 @@ HarmonyOS 客户端 ─┘
 - [`Agent Core A4a 持久审批设计`](docs/architecture/agent-core-phase-a4a-persistent-approval-design.md)：定义审批策略、状态机、跨实例唤醒和原子消费边界。
 - [`Agent Core A4b 重启恢复设计`](docs/architecture/agent-core-phase-a4b-restart-recovery-design.md)：定义租约、fencing、恢复计划、Worker、PostgreSQL 竞争与真实进程退出验证。
 - [`多租户故事创作后端框架设计`](docs/superpowers/specs/2026-08-09-multi-tenant-story-backend-framework-design.md)：定义 NestJS 模块化单体、团队租户、无密码登录、故事创作 API、模拟 Agent 和分阶段验收基线。
+- [`多租户故事创作后端实施计划`](docs/superpowers/plans/2026-08-09-multi-tenant-story-backend-implementation-plan.md)：将后端框架拆为 11 个可独立测试和提交的实现切片。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
 - [`CLAUDE.md`](CLAUDE.md)：面向 AI 编码工具的仓库上下文说明。
