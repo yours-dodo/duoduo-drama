@@ -91,4 +91,24 @@ describe('StoryArtifact', () => {
       }),
     ).toThrow();
   });
+
+  it('moves the current version pointer without changing artifact identity', () => {
+    const UPDATED_AT = new Date('2026-08-10T01:00:00.000Z');
+    const artifact = StoryArtifact.create({
+      id: 'artifact-id',
+      tenantId: 'team-id',
+      projectId: 'project-id',
+      type: 'outline',
+      title: '故事大纲',
+      createdAt: CREATED_AT,
+    });
+
+    artifact.setCurrentVersion('version-id', UPDATED_AT);
+
+    expect(artifact.toSnapshot()).toMatchObject({
+      id: 'artifact-id',
+      currentVersionId: 'version-id',
+      updatedAt: UPDATED_AT,
+    });
+  });
 });

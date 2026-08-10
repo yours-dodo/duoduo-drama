@@ -37,6 +37,23 @@ export class PrismaStoryArtifactVersionRepository implements StoryArtifactVersio
     });
   }
 
+  update(
+    version: StoryArtifactVersionSnapshot,
+  ): Promise<StoryArtifactVersionSnapshot> {
+    return this.database.withClient(async (client) => {
+      const row = await client.storyArtifactVersion.update({
+        where: {
+          tenantId_id: {
+            tenantId: version.tenantId,
+            id: version.id,
+          },
+        },
+        data: version,
+      });
+      return readVersion(row);
+    });
+  }
+
   findById(request: {
     tenantId: string;
     versionId: string;

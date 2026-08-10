@@ -78,6 +78,12 @@ export class StoryArtifact {
       updatedAt: new Date(this.snapshot.updatedAt),
     };
   }
+
+  setCurrentVersion(versionId: string | null, updatedAt: Date): boolean {
+    this.snapshot.currentVersionId = versionId;
+    this.snapshot.updatedAt = new Date(updatedAt);
+    return true;
+  }
 }
 
 function normalizeType(type: StoryArtifactType): StoryArtifactType {

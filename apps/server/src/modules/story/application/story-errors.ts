@@ -22,6 +22,8 @@ export {
   MessageBodyInvalidError,
 } from '../../../domain/story/message.js';
 
+export { StoryArtifactVersionStateTransitionError } from '../../../domain/story/story-artifact-version.js';
+
 export class ConversationNotFoundError extends Error {
   constructor() {
     super('Conversation was not found');
@@ -40,6 +42,27 @@ export class StoryGenerationResultUnavailableError extends Error {
   constructor() {
     super('Story generation result is unavailable');
     this.name = 'StoryGenerationResultUnavailableError';
+  }
+}
+
+export class StoryArtifactNotFoundError extends Error {
+  constructor() {
+    super('Story artifact was not found');
+    this.name = 'StoryArtifactNotFoundError';
+  }
+}
+
+export class StoryArtifactVersionNotFoundError extends Error {
+  constructor() {
+    super('Story artifact version was not found');
+    this.name = 'StoryArtifactVersionNotFoundError';
+  }
+}
+
+export class StoryArtifactVersionConflictError extends Error {
+  constructor() {
+    super('Story artifact version was changed by another operation');
+    this.name = 'StoryArtifactVersionConflictError';
   }
 }
 

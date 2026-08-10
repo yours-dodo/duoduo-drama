@@ -7,7 +7,8 @@ export interface IdempotencyLookup {
     | 'CREATE_TEAM_INVITATION'
     | 'CREATE_STORY_PROJECT'
     | 'CREATE_STORY_CONVERSATION'
-    | 'APPEND_STORY_MESSAGE';
+    | 'APPEND_STORY_MESSAGE'
+    | 'CONFIRM_STORY_ARTIFACT_VERSION';
   idempotencyKey: string;
 }
 

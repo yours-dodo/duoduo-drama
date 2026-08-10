@@ -9,6 +9,10 @@ export interface StoryArtifactRepository {
     tenantId: string;
     artifactId: string;
   }): Promise<StoryArtifactSnapshot | null>;
+  findByIdLocked(request: {
+    tenantId: string;
+    artifactId: string;
+  }): Promise<StoryArtifactSnapshot | null>;
   listForProject(request: {
     tenantId: string;
     projectId: string;

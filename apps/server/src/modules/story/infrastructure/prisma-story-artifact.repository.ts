@@ -64,6 +64,32 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
     });
   }
 
+  findByIdLocked(request: {
+    tenantId: string;
+    artifactId: string;
+  }): Promise<StoryArtifactSnapshot | null> {
+    return this.database.withClient(async (client) => {
+      const rows = await client.$queryRaw<StoryArtifactRow[]>`
+        SELECT
+          id,
+          tenant_id AS "tenantId",
+          project_id AS "projectId",
+          type,
+          title,
+          status,
+          current_version_id AS "currentVersionId",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM story_artifacts
+        WHERE tenant_id = ${request.tenantId}::uuid
+          AND id = ${request.artifactId}::uuid
+        FOR UPDATE
+      `;
+      const row = rows[0];
+      return row === undefined ? null : readArtifact(row);
+    });
+  }
+
   listForProject(request: {
     tenantId: string;
     projectId: string;

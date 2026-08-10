@@ -18,13 +18,19 @@ export interface AuditRecordSnapshot {
     | 'STORY_PROJECT_ARCHIVED'
     | 'STORY_PROJECT_PRIVATE_VIEWED'
     | 'STORY_PROJECT_COLLABORATOR_ADDED'
-    | 'STORY_PROJECT_COLLABORATOR_REMOVED';
+    | 'STORY_PROJECT_COLLABORATOR_REMOVED'
+    | 'STORY_ARTIFACT_DRAFT_EDITED'
+    | 'STORY_ARTIFACT_DRAFT_DISCARDED'
+    | 'STORY_ARTIFACT_VERSION_CONFIRMED'
+    | 'STORY_ARTIFACT_VERSION_ROLLED_BACK';
   targetType:
     | 'TEAM'
     | 'TEAM_INVITATION'
     | 'TEAM_MEMBERSHIP'
     | 'STORY_PROJECT'
-    | 'PROJECT_COLLABORATOR';
+    | 'PROJECT_COLLABORATOR'
+    | 'STORY_ARTIFACT'
+    | 'STORY_ARTIFACT_VERSION';
   targetId: string;
   beforeSummary: Record<string, unknown> | null;
   afterSummary: Record<string, unknown> | null;

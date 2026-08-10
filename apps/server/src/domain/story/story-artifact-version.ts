@@ -54,6 +54,13 @@ export class StoryArtifactVersionSourceInvalidError extends Error {
   }
 }
 
+export class StoryArtifactVersionStateTransitionError extends Error {
+  constructor() {
+    super('Story artifact version cannot perform this state transition');
+    this.name = 'StoryArtifactVersionStateTransitionError';
+  }
+}
+
 export class StoryArtifactVersion {
   private constructor(
     private readonly snapshot: StoryArtifactVersionSnapshot,
@@ -105,6 +112,26 @@ export class StoryArtifactVersion {
       ...this.snapshot,
       createdAt: new Date(this.snapshot.createdAt),
     };
+  }
+
+  confirm(): boolean {
+    if (this.snapshot.status === 'confirmed') return false;
+    this.assertDraft();
+    this.snapshot.status = 'confirmed';
+    return true;
+  }
+
+  discard(): boolean {
+    if (this.snapshot.status === 'discarded') return false;
+    this.assertDraft();
+    this.snapshot.status = 'discarded';
+    return true;
+  }
+
+  private assertDraft(): void {
+    if (this.snapshot.status !== 'draft') {
+      throw new StoryArtifactVersionStateTransitionError();
+    }
   }
 }
 

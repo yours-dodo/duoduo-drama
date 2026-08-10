@@ -32,22 +32,30 @@ import { AddProjectCollaborator } from './application/add-project-collaborator.j
 import { AppendStoryMessage } from './application/append-story-message.js';
 import { ArchiveStoryProject } from './application/archive-story-project.js';
 import { ArchiveStoryConversation } from './application/archive-story-conversation.js';
+import { ConfirmStoryDraft } from './application/confirm-story-draft.js';
 import { CreateStoryConversation } from './application/create-story-conversation.js';
 import { CreateStoryProject } from './application/create-story-project.js';
+import { DiscardStoryDraft } from './application/discard-story-draft.js';
+import { EditStoryDraft } from './application/edit-story-draft.js';
 import { GenerateStoryDraft } from './application/generate-story-draft.js';
+import { GetStoryArtifact } from './application/get-story-artifact.js';
 import { GetStoryProject } from './application/get-story-project.js';
+import { ListStoryArtifacts } from './application/list-story-artifacts.js';
+import { ListStoryVersions } from './application/list-story-versions.js';
 import { ListProjectAuditRecords } from './application/list-project-audit-records.js';
 import { ListProjectCollaborators } from './application/list-project-collaborators.js';
 import { ListConversationMessages } from './application/list-conversation-messages.js';
 import { ListStoryConversations } from './application/list-story-conversations.js';
 import { ListStoryProjects } from './application/list-story-projects.js';
 import { RemoveProjectCollaborator } from './application/remove-project-collaborator.js';
+import { RollbackStoryArtifact } from './application/rollback-story-artifact.js';
 import { RetryStoryGeneration } from './application/retry-story-generation.js';
 import { UpdateStoryProject } from './application/update-story-project.js';
 import { UpdateStoryConversation } from './application/update-story-conversation.js';
 import { ConversationsController } from './http/conversations.controller.js';
 import { GenerationRequestsController } from './http/generation-requests.controller.js';
 import { MessagesController } from './http/messages.controller.js';
+import { StoryArtifactsController } from './http/story-artifacts.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
@@ -94,6 +102,7 @@ import {
     ConversationsController,
     GenerationRequestsController,
     MessagesController,
+    StoryArtifactsController,
   ],
   providers: [
     PrismaTeamMembershipRepository,
@@ -147,6 +156,70 @@ import {
     {
       provide: AGENT_GATEWAY,
       useExisting: MockAgentGateway,
+    },
+    {
+      provide: ListStoryArtifacts,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+      ) =>
+        new ListStoryArtifacts(projects, memberships, collaborators, artifacts),
+    },
+    {
+      provide: GetStoryArtifact,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+      ) =>
+        new GetStoryArtifact(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+        ),
+    },
+    {
+      provide: ListStoryVersions,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+      ) =>
+        new ListStoryVersions(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+        ),
     },
     {
       provide: CreateStoryProject,
@@ -611,6 +684,148 @@ import {
           transactions,
           databaseClock,
           generate,
+        ),
+    },
+    {
+      provide: EditStoryDraft,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new EditStoryDraft(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: DiscardStoryDraft,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new DiscardStoryDraft(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: ConfirmStoryDraft,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+        idempotency: IdempotencyRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+      ) =>
+        new ConfirmStoryDraft(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+          idempotency,
+          audit,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+        ),
+    },
+    {
+      provide: RollbackStoryArtifact,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new RollbackStoryArtifact(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
         ),
     },
   ],

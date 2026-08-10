@@ -119,6 +119,51 @@ describe.skipIf(!databaseUrl)('story artifact PostgreSQL boundary', () => {
     ).resolves.toMatchObject([{ id: artifact.id, type: 'outline' }]);
   });
 
+  it('locks an artifact before changing a version lifecycle state', async () => {
+    const artifact = StoryArtifact.create({
+      id: randomUUID(),
+      tenantId: teamId,
+      projectId,
+      type: 'outline',
+      title: '故事大纲',
+      createdAt: NOW,
+    }).toSnapshot();
+    const version = StoryArtifactVersion.createDraft({
+      id: randomUUID(),
+      tenantId: teamId,
+      artifactId: artifact.id,
+      versionNumber: 1,
+      content: '待确认大纲',
+      contentFormat: 'text',
+      sourceType: 'agent',
+      sourceMessageId: null,
+      generationRequestId: null,
+      createdByUserId: null,
+      createdAt: NOW,
+    }).toSnapshot();
+    await artifacts.create(artifact);
+    await versions.create(version);
+    await artifacts.update({
+      ...artifact,
+      currentVersionId: version.id,
+      updatedAt: NOW,
+    });
+
+    await expect(
+      artifacts.findByIdLocked({
+        tenantId: teamId,
+        artifactId: artifact.id,
+      }),
+    ).resolves.toMatchObject({ currentVersionId: version.id });
+
+    const aggregate = StoryArtifactVersion.restore(version);
+    aggregate.confirm();
+    await versions.update(aggregate.toSnapshot());
+    await expect(
+      versions.findById({ tenantId: teamId, versionId: version.id }),
+    ).resolves.toMatchObject({ id: version.id, status: 'confirmed' });
+  });
+
   it('rejects cross-tenant artifact and version references', async () => {
     const artifact = StoryArtifact.create({
       id: randomUUID(),

@@ -8,6 +8,9 @@ export interface StoryArtifactVersionRepository {
   create(
     version: StoryArtifactVersionSnapshot,
   ): Promise<StoryArtifactVersionSnapshot>;
+  update(
+    version: StoryArtifactVersionSnapshot,
+  ): Promise<StoryArtifactVersionSnapshot>;
   findById(request: {
     tenantId: string;
     versionId: string;

@@ -22,6 +22,10 @@ import {
   StoryProjectTitleInvalidError,
   StoryGenerationRequestNotFoundError,
   StoryGenerationResultUnavailableError,
+  StoryArtifactNotFoundError,
+  StoryArtifactVersionNotFoundError,
+  StoryArtifactVersionConflictError,
+  StoryArtifactVersionStateTransitionError,
 } from '../application/story-errors.js';
 
 export function throwStoryHttpError(error: unknown): never {
@@ -64,6 +68,34 @@ export function throwStoryHttpError(error: unknown): never {
     throw storyError(
       'STORY_GENERATION_RESULT_UNAVAILABLE',
       'Story generation result is unavailable',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryArtifactNotFoundError) {
+    throw storyError(
+      'STORY_ARTIFACT_NOT_FOUND',
+      'Story artifact not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+  if (error instanceof StoryArtifactVersionNotFoundError) {
+    throw storyError(
+      'STORY_ARTIFACT_VERSION_NOT_FOUND',
+      'Story artifact version not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+  if (error instanceof StoryArtifactVersionConflictError) {
+    throw storyError(
+      'STORY_ARTIFACT_VERSION_CONFLICT',
+      'Story artifact version was changed by another operation',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryArtifactVersionStateTransitionError) {
+    throw storyError(
+      'STORY_ARTIFACT_VERSION_STATE_INVALID',
+      'Story artifact version cannot perform this operation',
       HttpStatus.CONFLICT,
     );
   }
