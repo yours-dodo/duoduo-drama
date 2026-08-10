@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import { Module } from '@nestjs/common';
 
+import { AGENT_GATEWAY } from '../../integrations/agent/agent-gateway.js';
+import type { AgentGateway } from '../../integrations/agent/agent-contracts.js';
+import { MockAgentGateway } from '../../integrations/agent/mock-agent-gateway.js';
 import { DatabaseClock } from '../../platform/database/database-clock.js';
 import { DatabaseModule } from '../../platform/database/database.module.js';
 import { TransactionRunner } from '../../platform/database/transaction-runner.js';
@@ -31,6 +34,7 @@ import { ArchiveStoryProject } from './application/archive-story-project.js';
 import { ArchiveStoryConversation } from './application/archive-story-conversation.js';
 import { CreateStoryConversation } from './application/create-story-conversation.js';
 import { CreateStoryProject } from './application/create-story-project.js';
+import { GenerateStoryDraft } from './application/generate-story-draft.js';
 import { GetStoryProject } from './application/get-story-project.js';
 import { ListProjectAuditRecords } from './application/list-project-audit-records.js';
 import { ListProjectCollaborators } from './application/list-project-collaborators.js';
@@ -38,9 +42,11 @@ import { ListConversationMessages } from './application/list-conversation-messag
 import { ListStoryConversations } from './application/list-story-conversations.js';
 import { ListStoryProjects } from './application/list-story-projects.js';
 import { RemoveProjectCollaborator } from './application/remove-project-collaborator.js';
+import { RetryStoryGeneration } from './application/retry-story-generation.js';
 import { UpdateStoryProject } from './application/update-story-project.js';
 import { UpdateStoryConversation } from './application/update-story-conversation.js';
 import { ConversationsController } from './http/conversations.controller.js';
+import { GenerationRequestsController } from './http/generation-requests.controller.js';
 import { MessagesController } from './http/messages.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
@@ -71,8 +77,14 @@ import {
   STORY_GENERATION_REQUEST_REPOSITORY,
   type StoryGenerationRequestRepository,
 } from './ports/story-generation-request-repository.js';
-import { STORY_ARTIFACT_REPOSITORY } from './ports/story-artifact-repository.js';
-import { STORY_ARTIFACT_VERSION_REPOSITORY } from './ports/story-artifact-version-repository.js';
+import {
+  STORY_ARTIFACT_REPOSITORY,
+  type StoryArtifactRepository,
+} from './ports/story-artifact-repository.js';
+import {
+  STORY_ARTIFACT_VERSION_REPOSITORY,
+  type StoryArtifactVersionRepository,
+} from './ports/story-artifact-version-repository.js';
 
 @Module({
   imports: [DatabaseModule, AuditModule, IdentityModule],
@@ -80,6 +92,7 @@ import { STORY_ARTIFACT_VERSION_REPOSITORY } from './ports/story-artifact-versio
     StoryProjectsController,
     ProjectCollaboratorsController,
     ConversationsController,
+    GenerationRequestsController,
     MessagesController,
   ],
   providers: [
@@ -129,6 +142,11 @@ import { STORY_ARTIFACT_VERSION_REPOSITORY } from './ports/story-artifact-versio
     {
       provide: STORY_ARTIFACT_VERSION_REPOSITORY,
       useExisting: PrismaStoryArtifactVersionRepository,
+    },
+    MockAgentGateway,
+    {
+      provide: AGENT_GATEWAY,
+      useExisting: MockAgentGateway,
     },
     {
       provide: CreateStoryProject,
@@ -519,6 +537,88 @@ import { STORY_ARTIFACT_VERSION_REPOSITORY } from './ports/story-artifact-versio
           ids(),
         ),
     },
+    {
+      provide: GenerateStoryDraft,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        MESSAGE_REPOSITORY,
+        STORY_GENERATION_REQUEST_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        AGENT_GATEWAY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        messages: MessageRepository,
+        generationRequests: StoryGenerationRequestRepository,
+        artifacts: StoryArtifactRepository,
+        artifactVersions: StoryArtifactVersionRepository,
+        gateway: AgentGateway,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new GenerateStoryDraft(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          messages,
+          generationRequests,
+          artifacts,
+          artifactVersions,
+          gateway,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: RetryStoryGeneration,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        CONVERSATION_REPOSITORY,
+        STORY_GENERATION_REQUEST_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        GenerateStoryDraft,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        conversations: ConversationRepository,
+        generationRequests: StoryGenerationRequestRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        generate: GenerateStoryDraft,
+      ) =>
+        new RetryStoryGeneration(
+          projects,
+          memberships,
+          collaborators,
+          conversations,
+          generationRequests,
+          transactions,
+          databaseClock,
+          generate,
+        ),
+    },
+  ],
+  exports: [
+    PROJECT_COLLABORATOR_REPOSITORY,
+    STORY_PROJECT_REPOSITORY,
+    TEAM_MEMBERSHIP_REPOSITORY,
+    TenantContextGuard,
   ],
 })
 export class StoryModule {}

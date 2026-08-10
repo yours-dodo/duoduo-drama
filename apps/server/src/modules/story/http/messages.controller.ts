@@ -26,6 +26,7 @@ import {
   TenantContextGuard,
 } from '../../tenancy/http/tenant-context.guard.js';
 import { AppendStoryMessage } from '../application/append-story-message.js';
+import { GenerateStoryDraft } from '../application/generate-story-draft.js';
 import { ListConversationMessages } from '../application/list-conversation-messages.js';
 import { AppendStoryMessageDto } from './story-conversation.dto.js';
 import { throwStoryHttpError } from './story-http-errors.js';
@@ -41,6 +42,8 @@ export class MessagesController {
     private readonly listMessages: ListConversationMessages,
     @Inject(AppendStoryMessage)
     private readonly appendMessage: AppendStoryMessage,
+    @Inject(GenerateStoryDraft)
+    private readonly generateStory: GenerateStoryDraft,
   ) {}
 
   @Get()
@@ -92,7 +95,7 @@ export class MessagesController {
   ) {
     const tenant = readTenantContext(request);
     try {
-      return await this.appendMessage.execute({
+      const appended = await this.appendMessage.execute({
         tenantId: tenant.tenantId,
         actorUserId: tenant.userId,
         projectId,
@@ -100,6 +103,20 @@ export class MessagesController {
         body: body.body,
         idempotencyKey: readIdempotencyKey(suppliedIdempotencyKey),
       });
+      const generated = await this.generateStory.execute({
+        tenantId: tenant.tenantId,
+        actorUserId: tenant.userId,
+        projectId,
+        conversationId,
+        requestId: appended.generationRequest.id,
+      });
+      return {
+        message: appended.message,
+        generationRequest: generated.generationRequest,
+        assistantMessage: generated.message,
+        artifact: generated.artifact,
+        artifactVersion: generated.artifactVersion,
+      };
     } catch (error) {
       throwStoryHttpError(error);
     }

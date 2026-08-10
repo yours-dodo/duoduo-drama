@@ -29,6 +29,20 @@ export class ConversationNotFoundError extends Error {
   }
 }
 
+export class StoryGenerationRequestNotFoundError extends Error {
+  constructor() {
+    super('Story generation request was not found');
+    this.name = 'StoryGenerationRequestNotFoundError';
+  }
+}
+
+export class StoryGenerationResultUnavailableError extends Error {
+  constructor() {
+    super('Story generation result is unavailable');
+    this.name = 'StoryGenerationResultUnavailableError';
+  }
+}
+
 export class StoryProjectAccessDeniedError extends Error {
   constructor() {
     super('The story project cannot be accessed');

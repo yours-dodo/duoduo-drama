@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ServerConfig } from '../../../config/server-config.js';
 import type { ConversationSnapshot } from '../../../domain/story/conversation.js';
 import type { MessageSnapshot } from '../../../domain/story/message.js';
+import { StoryGenerationRequest } from '../../../domain/story/story-generation-request.js';
 import type { StoryGenerationRequestSnapshot } from '../../../domain/story/story-generation-request.js';
 import { DatabaseClock } from '../../../platform/database/database-clock.js';
 import { PrismaService } from '../../../platform/database/prisma.service.js';
@@ -146,6 +147,47 @@ describe.skipIf(!databaseUrl)('story conversation PostgreSQL boundary', () => {
     expect(second.next).toBeNull();
   });
 
+  it('locks and updates a generation request state without losing result metadata', async () => {
+    const conversation = conversationSnapshot({ id: randomUUID() });
+    await conversations.create(conversation);
+    const message = messageSnapshot({
+      id: randomUUID(),
+      conversationId: conversation.id,
+    });
+    await messages.create(message);
+    const pending = generationRequestSnapshot({
+      id: randomUUID(),
+      conversationId: conversation.id,
+      triggerMessageId: message.id,
+    });
+    await generationRequests.create(pending);
+
+    const aggregate = StoryGenerationRequest.restore(pending);
+    aggregate.startProcessing(NOW);
+    aggregate.succeed(
+      {
+        agentMessageId: randomUUID(),
+        artifactId: randomUUID(),
+        artifactVersionId: randomUUID(),
+      },
+      new Date(NOW.getTime() + 1_000),
+    );
+    await generationRequests.update(aggregate.toSnapshot());
+
+    await expect(
+      generationRequests.findByIdLocked({
+        tenantId: teamId,
+        requestId: pending.id,
+      }),
+    ).resolves.toMatchObject({
+      id: pending.id,
+      status: 'succeeded',
+      agentMessageId: expect.any(String),
+      artifactId: expect.any(String),
+      artifactVersionId: expect.any(String),
+    });
+  });
+
   it('rejects cross-tenant conversation, message, and generation references', async () => {
     const conversationId = randomUUID();
     await expect(
@@ -263,6 +305,12 @@ describe.skipIf(!databaseUrl)('story conversation PostgreSQL boundary', () => {
       idempotencyKey: 'message-key',
       inputSnapshot: { body: '请梳理人物关系' },
       status: 'pending',
+      failureCode: null,
+      processingStartedAt: null,
+      completedAt: null,
+      agentMessageId: null,
+      artifactId: null,
+      artifactVersionId: null,
       createdAt: NOW,
       updatedAt: NOW,
       ...overrides,

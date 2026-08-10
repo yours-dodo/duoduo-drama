@@ -20,6 +20,8 @@ import {
   StoryProjectNotFoundError,
   StoryProjectRevisionConflictError,
   StoryProjectTitleInvalidError,
+  StoryGenerationRequestNotFoundError,
+  StoryGenerationResultUnavailableError,
 } from '../application/story-errors.js';
 
 export function throwStoryHttpError(error: unknown): never {
@@ -49,6 +51,20 @@ export function throwStoryHttpError(error: unknown): never {
       'CONVERSATION_TITLE_INVALID',
       'Conversation title is invalid',
       HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof StoryGenerationRequestNotFoundError) {
+    throw storyError(
+      'STORY_GENERATION_REQUEST_NOT_FOUND',
+      'Story generation request not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+  if (error instanceof StoryGenerationResultUnavailableError) {
+    throw storyError(
+      'STORY_GENERATION_RESULT_UNAVAILABLE',
+      'Story generation result is unavailable',
+      HttpStatus.CONFLICT,
     );
   }
   if (error instanceof MessageBodyInvalidError) {

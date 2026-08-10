@@ -12,4 +12,15 @@ export interface StoryGenerationRequestRepository {
     tenantId: string;
     triggerMessageId: string;
   }): Promise<StoryGenerationRequestSnapshot | null>;
+  findById(request: {
+    tenantId: string;
+    requestId: string;
+  }): Promise<StoryGenerationRequestSnapshot | null>;
+  findByIdLocked(request: {
+    tenantId: string;
+    requestId: string;
+  }): Promise<StoryGenerationRequestSnapshot | null>;
+  update(
+    request: StoryGenerationRequestSnapshot,
+  ): Promise<StoryGenerationRequestSnapshot>;
 }

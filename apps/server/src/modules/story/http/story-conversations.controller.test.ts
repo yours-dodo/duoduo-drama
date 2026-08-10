@@ -11,6 +11,7 @@ import { AppendStoryMessage } from '../application/append-story-message.js';
 import { ArchiveStoryConversation } from '../application/archive-story-conversation.js';
 import { ConversationRevisionConflictError } from '../application/story-errors.js';
 import { CreateStoryConversation } from '../application/create-story-conversation.js';
+import { GenerateStoryDraft } from '../application/generate-story-draft.js';
 import { ListConversationMessages } from '../application/list-conversation-messages.js';
 import { ListStoryConversations } from '../application/list-story-conversations.js';
 import { UpdateStoryConversation } from '../application/update-story-conversation.js';
@@ -52,6 +53,12 @@ describe('story conversation HTTP API', () => {
         message: { id: 'message-id', body: '请梳理人物关系' },
         generationRequest: { id: 'generation-id', status: 'pending' },
       }),
+      generate: executable({
+        message: { id: 'agent-message-id', authorType: 'agent' },
+        generationRequest: { id: 'generation-id', status: 'succeeded' },
+        artifact: { id: 'artifact-id' },
+        artifactVersion: { id: 'version-id' },
+      }),
     };
 
     app = await createTestApp({
@@ -62,6 +69,7 @@ describe('story conversation HTTP API', () => {
         { token: ArchiveStoryConversation, value: useCases.archive },
         { token: ListConversationMessages, value: useCases.messages },
         { token: AppendStoryMessage, value: useCases.append },
+        { token: GenerateStoryDraft, value: useCases.generate },
         {
           token: TEAM_MEMBERSHIP_REPOSITORY,
           value: {

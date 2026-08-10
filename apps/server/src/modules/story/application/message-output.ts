@@ -22,6 +22,14 @@ export function generationRequestOutput(
     conversationId: request.conversationId,
     triggerMessageId: request.triggerMessageId,
     status: request.status,
+    failureCode: request.failureCode,
+    processingStartedAt: request.processingStartedAt
+      ? new Date(request.processingStartedAt)
+      : null,
+    completedAt: request.completedAt ? new Date(request.completedAt) : null,
+    agentMessageId: request.agentMessageId,
+    artifactId: request.artifactId,
+    artifactVersionId: request.artifactVersionId,
     createdAt: new Date(request.createdAt),
     updatedAt: new Date(request.updatedAt),
   };
