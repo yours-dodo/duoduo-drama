@@ -1,0 +1,19 @@
+import type { StoryArtifactVersionSnapshot } from '../../../domain/story/story-artifact-version.js';
+
+export const STORY_ARTIFACT_VERSION_REPOSITORY = Symbol(
+  'STORY_ARTIFACT_VERSION_REPOSITORY',
+);
+
+export interface StoryArtifactVersionRepository {
+  create(
+    version: StoryArtifactVersionSnapshot,
+  ): Promise<StoryArtifactVersionSnapshot>;
+  findById(request: {
+    tenantId: string;
+    versionId: string;
+  }): Promise<StoryArtifactVersionSnapshot | null>;
+  listForArtifact(request: {
+    tenantId: string;
+    artifactId: string;
+  }): Promise<StoryArtifactVersionSnapshot[]>;
+}

@@ -163,6 +163,7 @@ model Message {
   author         User?            @relation("MessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
   authorMembership TeamMembership? @relation("MessageAuthorMembership", fields: [tenantId, authorUserId], references: [tenantId, userId], onDelete: Restrict)
   generationRequest StoryGenerationRequest? @relation("GenerationTrigger")
+  storyArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionSourceMessage")
 
   @@unique([tenantId, id], map: "messages_tenant_id_id_key")
   @@unique([tenantId, conversationId, id], map: "messages_tenant_conversation_id_key")
@@ -183,12 +184,64 @@ model StoryGenerationRequest {
   team             Team         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   conversation     Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
   triggerMessage   Message      @relation("GenerationTrigger", fields: [tenantId, conversationId, triggerMessageId], references: [tenantId, conversationId, id], onDelete: Restrict)
+  storyArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionGenerationRequest")
 
   @@unique([tenantId, id], map: "story_generation_requests_tenant_id_id_key")
   @@unique([tenantId, conversationId, triggerMessageId], map: "story_gen_requests_tenant_conversation_trigger_key")
   @@unique([tenantId, triggerMessageId], map: "story_generation_requests_tenant_id_trigger_message_id_key")
   @@index([tenantId, conversationId, createdAt(sort: Desc), id(sort: Desc)], map: "story_gen_requests_tenant_conversation_created_id_idx")
   @@map("story_generation_requests")
+}
+
+model StoryArtifact {
+  id               String                 @id @default(uuid()) @db.Uuid
+  tenantId         String                 @map("tenant_id") @db.Uuid
+  projectId        String                 @map("project_id") @db.Uuid
+  type             String                 @db.VarChar(32)
+  title            String                 @db.VarChar(200)
+  status           String                 @db.VarChar(16)
+  currentVersionId String?                @map("current_version_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team             Team                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project          StoryProject           @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict)
+  currentVersion   StoryArtifactVersion?  @relation("StoryArtifactCurrentVersion", fields: [tenantId, currentVersionId], references: [tenantId, id], onDelete: Restrict)
+  versions         StoryArtifactVersion[] @relation("StoryArtifactVersions")
+
+  @@unique([tenantId, id], map: "story_artifacts_tenant_id_id_key")
+  @@unique([tenantId, currentVersionId], map: "story_artifacts_tenant_id_current_version_id_key")
+  @@index([tenantId, projectId, createdAt(sort: Desc), id(sort: Desc)], map: "story_artifacts_tenant_id_project_id_created_at_id_idx")
+  @@index([tenantId, projectId, type, status, createdAt(sort: Desc)], map: "story_artifacts_tenant_project_type_status_idx")
+  @@map("story_artifacts")
+}
+
+model StoryArtifactVersion {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  tenantId            String                 @map("tenant_id") @db.Uuid
+  artifactId          String                 @map("artifact_id") @db.Uuid
+  versionNumber       Int                    @map("version_number")
+  content             String                 @db.Text
+  contentFormat       String                 @map("content_format") @db.VarChar(16)
+  status              String                 @db.VarChar(16)
+  sourceType          String                 @map("source_type") @db.VarChar(16)
+  sourceMessageId     String?                @map("source_message_id") @db.Uuid
+  generationRequestId String?                @map("generation_request_id") @db.Uuid
+  createdByUserId     String?                @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  team                Team                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  artifact            StoryArtifact          @relation("StoryArtifactVersions", fields: [tenantId, artifactId], references: [tenantId, id], onDelete: Restrict)
+  currentFor          StoryArtifact?         @relation("StoryArtifactCurrentVersion")
+  createdBy           User?                  @relation("StoryArtifactVersionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdByMembership TeamMembership?       @relation("StoryArtifactVersionCreatorMembership", fields: [tenantId, createdByUserId], references: [tenantId, userId], onDelete: Restrict)
+  sourceMessage       Message?               @relation("StoryArtifactVersionSourceMessage", fields: [tenantId, sourceMessageId], references: [tenantId, id], onDelete: Restrict)
+  generationRequest   StoryGenerationRequest? @relation("StoryArtifactVersionGenerationRequest", fields: [tenantId, generationRequestId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id], map: "story_artifact_versions_tenant_id_id_key")
+  @@unique([tenantId, artifactId, versionNumber], map: "story_artifact_versions_tenant_artifact_version_key")
+  @@index([tenantId, artifactId, createdAt(sort: Desc), id(sort: Desc)], map: "story_artifact_versions_tenant_artifact_created_id_idx")
+  @@index([tenantId, sourceMessageId], map: "story_artifact_versions_tenant_source_message_idx")
+  @@index([tenantId, generationRequestId], map: "story_artifact_versions_tenant_generation_request_idx")
+  @@map("story_artifact_versions")
 }
 
 model IdempotencyRecord {

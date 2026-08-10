@@ -47,6 +47,8 @@ import { StoryProjectsController } from './http/story-projects.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
 import { PrismaConversationRepository } from './infrastructure/prisma-conversation.repository.js';
 import { PrismaMessageRepository } from './infrastructure/prisma-message.repository.js';
+import { PrismaStoryArtifactRepository } from './infrastructure/prisma-story-artifact.repository.js';
+import { PrismaStoryArtifactVersionRepository } from './infrastructure/prisma-story-artifact-version.repository.js';
 import { PrismaStoryProjectRepository } from './infrastructure/prisma-story-project.repository.js';
 import { PrismaStoryGenerationRequestRepository } from './infrastructure/prisma-story-generation-request.repository.js';
 import {
@@ -69,6 +71,8 @@ import {
   STORY_GENERATION_REQUEST_REPOSITORY,
   type StoryGenerationRequestRepository,
 } from './ports/story-generation-request-repository.js';
+import { STORY_ARTIFACT_REPOSITORY } from './ports/story-artifact-repository.js';
+import { STORY_ARTIFACT_VERSION_REPOSITORY } from './ports/story-artifact-version-repository.js';
 
 @Module({
   imports: [DatabaseModule, AuditModule, IdentityModule],
@@ -115,6 +119,16 @@ import {
     {
       provide: STORY_GENERATION_REQUEST_REPOSITORY,
       useExisting: PrismaStoryGenerationRequestRepository,
+    },
+    PrismaStoryArtifactRepository,
+    {
+      provide: STORY_ARTIFACT_REPOSITORY,
+      useExisting: PrismaStoryArtifactRepository,
+    },
+    PrismaStoryArtifactVersionRepository,
+    {
+      provide: STORY_ARTIFACT_VERSION_REPOSITORY,
+      useExisting: PrismaStoryArtifactVersionRepository,
     },
     {
       provide: CreateStoryProject,
