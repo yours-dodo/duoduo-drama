@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="登录｜多多短剧"
+  description="登录多多短剧，继续你的故事创作和短剧制作。"
+>
+  <section class="auth-page" aria-labelledby="login-title">
+    <div class="auth-card">
+      <p class="eyebrow">欢迎回来</p>
+      <h1 id="login-title">继续你的<br /><em>创作。</em></h1>
+      <p class="auth-description">登录后进入故事创作或短剧制作工作台。</p>
+      <form class="auth-form" id="login-form">
+        <label for="email">邮箱地址</label>
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        <button class="button button-primary" type="submit">发送登录链接 <span aria-hidden="true">↗</span></button>
+      </form>
+      <p class="auth-note" id="login-status" role="status">登录链接只会发送到你提供的邮箱。</p>
+      <a class="text-link" href="/">← 返回首页</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#login-form');
+  const email = document.querySelector<HTMLInputElement>('#email');
+  const status = document.querySelector<HTMLElement>('#login-status');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!email || !status || !form.checkValidity()) return;
+
+    const button = form.querySelector('button');
+    if (button) button.disabled = true;
+    status.textContent = '正在发送登录链接…';
+
+    try {
+      const response = await fetch('/api/v1/auth/email-login-requests', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.value }),
+      });
+
+      if (!response.ok) {
+        throw new Error('login-request-failed');
+      }
+
+      status.textContent = '登录链接已发送，请检查邮箱。';
+      form.reset();
+    } catch {
+      status.textContent = '暂时无法发送，请稍后重试。';
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+</script>

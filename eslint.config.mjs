@@ -8,6 +8,7 @@ export default tseslint.config(
     ignores: [
       '**/.nuxt/**',
       '**/.output/**',
+      '**/.astro/**',
       '**/coverage/**',
       '**/dist/**',
       '**/node_modules/**',

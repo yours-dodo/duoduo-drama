@@ -1,0 +1,98 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="多多短剧｜用 AI 把故事变成可制作的短剧"
+  description="多多短剧连接故事创作、剧本处理、分镜制作与素材管理，让创作者从一句灵感开始，持续推进到可制作的短剧项目。"
+  eyebrow="AI 故事与短剧创作平台"
+>
+  <section class="hero-section" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow">AI 故事与短剧创作平台</p>
+      <h1 id="hero-title">把一个灵感，<em>写成一部短剧。</em></h1>
+      <p class="hero-description">
+        多多短剧把对话式故事创作、剧本处理和短剧制作串成一条可追溯的创作流程。你负责判断和取舍，Agent 帮你推进每一步。
+      </p>
+      <div class="hero-actions">
+        <a class="button button-primary" href="/login">开始创作 <span aria-hidden="true">↗</span></a>
+        <a class="text-link" href="#workflow">了解创作流程 <span aria-hidden="true">↓</span></a>
+      </div>
+      <p class="hero-note">保留人工编辑、确认、回退和版本历史，让每个决定都属于你。</p>
+    </div>
+    <div class="hero-art" aria-label="故事创作流程预览" role="img">
+      <div class="orbit orbit-one"></div>
+      <div class="orbit orbit-two"></div>
+      <div class="hero-card hero-card-main">
+        <span class="card-label">当前创作</span>
+        <strong>雨停之前</strong>
+        <span class="card-meta">故事项目 · 第 03 版</span>
+        <div class="card-progress"><span></span></div>
+        <span class="card-status">正在整理人物关系</span>
+      </div>
+      <div class="hero-card hero-card-note">
+        <span class="note-dot"></span>
+        <span>Agent 已完成一轮梳理</span>
+      </div>
+      <div class="hero-stamp">STORY<br />TO<br />SCREEN</div>
+    </div>
+  </section>
+
+  <section class="signal-row" aria-label="平台能力">
+    <div><strong>01</strong><span>对话式创作</span></div>
+    <div><strong>02</strong><span>版本可追溯</span></div>
+    <div><strong>03</strong><span>人机协同推进</span></div>
+  </section>
+
+  <section id="workflow" class="workflow-section" aria-labelledby="workflow-title">
+    <div class="section-heading">
+      <p class="eyebrow">一条连续的创作路径</p>
+      <h2 id="workflow-title">先把故事讲好，<br /><em>再把它拍出来。</em></h2>
+    </div>
+    <div class="workflow-list">
+      <article>
+        <span class="step-number">01</span>
+        <h3>故事</h3>
+        <p>从一句话、一个人物或一份旧稿开始，把模糊的想法变成有方向的故事。</p>
+      </article>
+      <article>
+        <span class="step-number">02</span>
+        <h3>剧本</h3>
+        <p>沿着对话继续打磨，让人物、冲突和情节逐步沉淀成可编辑的剧本成果。</p>
+      </article>
+      <article>
+        <span class="step-number">03</span>
+        <h3>短剧</h3>
+        <p>确认后的故事可以进入独立的短剧项目，继续推进剧集、分镜与制作素材。</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="workspaces" class="workspace-section" aria-labelledby="workspace-title">
+    <div class="workspace-intro">
+      <p class="eyebrow">两个工作台，一个创作闭环</p>
+      <h2 id="workspace-title">你的故事，<br /><em>值得被认真推进。</em></h2>
+      <p>故事创作和短剧制作各自拥有适合自己的工作方式，同时通过确认过的成果版本自然衔接。</p>
+    </div>
+    <div class="workspace-cards">
+      <a class="workspace-card story-card" href="/app/stories">
+        <span class="card-index">A / STORY</span>
+        <h3>故事创作</h3>
+        <p>用对话发展故事、整理人物和剧本，保留每次创作判断。</p>
+        <span class="card-arrow" aria-hidden="true">↗</span>
+      </a>
+      <a class="workspace-card drama-card" href="/app/dramas">
+        <span class="card-index">B / DRAMA</span>
+        <h3>短剧制作</h3>
+        <p>从确认的故事版本出发，组织剧集、场景、镜头和制作素材。</p>
+        <span class="card-arrow" aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="closing-section" aria-labelledby="closing-title">
+    <p class="eyebrow">从今天的第一句开始</p>
+    <h2 id="closing-title">让好故事，<em>继续往下走。</em></h2>
+    <a class="button button-light" href="/login">进入多多短剧 <span aria-hidden="true">↗</span></a>
+  </section>
+</BaseLayout>

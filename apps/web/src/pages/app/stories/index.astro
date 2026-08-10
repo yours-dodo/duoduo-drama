@@ -1,0 +1,10 @@
+---
+import StoryApp from '../../../features/story/StoryApp.vue';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout title="故事创作｜多多短剧" description="在多多短剧中发展故事、对话和剧本。">
+  <StoryApp client:only="vue" />
+</BaseLayout>

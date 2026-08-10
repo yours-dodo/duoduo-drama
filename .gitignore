@@ -3,6 +3,7 @@ dist/
 coverage/
 .nuxt/
 .output/
+.astro/
 .env
 .env.*
 !.env.example

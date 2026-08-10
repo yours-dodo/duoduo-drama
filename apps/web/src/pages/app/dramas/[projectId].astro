@@ -1,0 +1,12 @@
+---
+import DramaApp from '../../../features/drama/DramaApp';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+
+const { projectId } = Astro.params;
+---
+
+<BaseLayout title="短剧项目｜多多短剧" description="继续你的短剧项目制作。">
+  <DramaApp client:only="react" projectId={projectId} />
+</BaseLayout>

@@ -1,0 +1,29 @@
+---
+import '../styles/global.css';
+import SeoHead from '../components/astro/SeoHead.astro';
+import SiteFooter from '../components/astro/SiteFooter.astro';
+import SiteHeader from '../components/astro/SiteHeader.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  eyebrow?: string;
+}
+
+const { title, description, eyebrow } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <SeoHead title={title} description={description} />
+  </head>
+  <body>
+    <SiteHeader />
+    {eyebrow && <span class="sr-only">{eyebrow}</span>}
+    <main>
+      <slot />
+    </main>
+    <SiteFooter />
+  </body>
+</html>
