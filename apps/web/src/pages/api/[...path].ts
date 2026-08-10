@@ -13,12 +13,23 @@ export const ALL: APIRoute = async ({ params, request }) => {
   const body = ['GET', 'HEAD'].includes(request.method)
     ? undefined
     : await request.arrayBuffer();
-  const response = await fetch(target, {
-    method: request.method,
-    headers,
-    body,
-    redirect: 'manual',
-  });
+  let response: Response;
+  try {
+    response = await fetch(target, {
+      method: request.method,
+      headers,
+      body,
+      redirect: 'manual',
+    });
+  } catch {
+    return new Response(
+      JSON.stringify({ message: '创作服务暂时不可用，请稍后重试。' }),
+      {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+  }
   const responseHeaders = new Headers(response.headers);
   responseHeaders.delete('content-length');
   responseHeaders.delete('content-encoding');
