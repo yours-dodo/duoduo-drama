@@ -1,6 +1,7 @@
 # @duoduo/agent
 
-`@duoduo/agent` is the Hono Agent service and the provider-neutral Agent Core.
+`@duoduo/agent` is the NestJS Agent host and infrastructure adapter. The
+framework-neutral Agent Core is published as `@duoduo/agent-runtime`.
 The implemented runtime includes A1–A4a, A4b S01–S10, and A4c external-effect
 reconciliation:
 
@@ -51,10 +52,27 @@ reconciliation:
   audits, checkpoint v3 resume state, idempotent lease operations, and atomic
   orphan-Attempt recovery.
 
-The Agent Core consumes Provider-neutral APIs from `@duoduo/ai`. Provider wire
+The Agent Runtime consumes Provider-neutral APIs from `@duoduo/ai`. Provider wire
 protocols and credentials remain owned by `packages/ai`; authentication,
 product authorization, and canonical project data remain owned by the business
 service.
+
+## Runtime and protocol adapters
+
+`@duoduo/agent-runtime` has no dependency on NestJS, Hono, PostgreSQL, or a
+transport. NestJS hosts the Agent HTTP process, while future CLI and MCP
+adapters can call the same runtime directly:
+
+```text
+NestJS HTTP ─┐
+CLI          ├─> @duoduo/agent-runtime ─> @duoduo/ai
+MCP          ┘
+```
+
+Tenant scope, authorization context, cancellation, and streaming are supplied
+by each adapter. The Agent service's `agent/src/index.ts` remains a compatibility
+facade; new shared runtime consumers should import `@duoduo/agent-runtime`
+directly.
 
 ## Public entry points
 

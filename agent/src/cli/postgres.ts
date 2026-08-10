@@ -1,4 +1,4 @@
-import { AgentError } from '../core/errors.js';
+import { AgentError } from '@duoduo/agent-runtime';
 import {
   getAgentRuntimeMigrationStatus,
   migrateAgentRuntime,

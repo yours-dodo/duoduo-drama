@@ -3,16 +3,16 @@ import { randomUUID } from 'node:crypto';
 import type { Message } from '@duoduo/ai';
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 
-import { AgentError } from '../../core/errors.js';
-import { hashRuntimeCommit } from '../../core/harness/commit-hash.js';
+import { AgentError } from '@duoduo/agent-runtime';
 import {
   applyRuntimeMutations,
   createRuntimeTask,
+  hashRuntimeCommit,
   snapshotRuntimeTask,
   type MutableAgentRun,
   type MutableAgentTask,
   type MutableAgentTurn,
-} from '../../core/harness/runtime-aggregate.js';
+} from '@duoduo/agent-runtime/internal';
 import type {
   AcknowledgeAgentOutboxCommand,
   AppendAgentReconciliationObservationCommand,
@@ -51,17 +51,17 @@ import type {
   RenewAgentRunLeaseCommand,
   ResolveAgentRuntimeApprovalCommand,
   ScopedRunQuery,
-} from '../../core/harness/runtime-store.js';
+} from '@duoduo/agent-runtime';
 import type {
   AgentHarnessEvent,
+  AgentReconciliationPresentation,
   AgentRequestScope,
   AgentRunStatus,
   AgentTaskSnapshot,
   AgentTaskStatus,
   AgentTurnStatus,
   ScopedTaskQuery,
-} from '../../core/harness/types.js';
-import type { AgentReconciliationPresentation } from '../../core/types.js';
+} from '@duoduo/agent-runtime';
 import { resolvePool } from './migrations.js';
 import type { PostgresAgentRuntimeOptions } from './types.js';
 

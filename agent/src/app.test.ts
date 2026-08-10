@@ -1,13 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import 'reflect-metadata';
 
-import { app } from './app.js';
+import type { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { AppModule } from './app.module.js';
+import { HealthController } from './health.controller.js';
 
 describe('agent health endpoint', () => {
-  it('reports agent health', async () => {
-    const response = await app.request('/health');
+  let app: INestApplication;
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = module.createNestApplication();
+    await app.init();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('reports agent health', async () => {
+    expect(app.get(HealthController).health()).toEqual({
       service: 'agent',
       status: 'ok',
     });

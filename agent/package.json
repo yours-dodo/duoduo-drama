@@ -24,12 +24,16 @@
     "test:postgres": "AGENT_TEST_POSTGRES_REQUIRED=1 vitest run src/infrastructure/postgres/postgres-agent-runtime-store.test.ts src/infrastructure/postgres/postgres-process-recovery.test.ts"
   },
   "dependencies": {
+    "@duoduo/agent-runtime": "workspace:*",
     "@duoduo/ai": "workspace:*",
-    "@hono/node-server": "^1.19.9",
-    "hono": "^4.12.30",
-    "pg": "^8.22.0"
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
+    "pg": "^8.22.0",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
+    "@nestjs/testing": "^11.1.28",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.20.3",
     "tsx": "^4.23.1",

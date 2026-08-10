@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { AgentError } from '../../core/errors.js';
+import { AgentError } from '@duoduo/agent-runtime';
 import type { PostgresAgentRuntimeOptions } from './types.js';
 
 const migrationDirectory = new URL(
