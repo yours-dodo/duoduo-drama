@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository is a TypeScript pnpm monorepo. Runtime applications live in `apps/`: `apps/web` is Nuxt, `apps/server` is NestJS, and `apps/mobile` is reserved until a mobile framework is selected. The NestJS-based Agent service lives in the top-level `agent/` workspace. `packages/ai` contains the provider-neutral `@duoduo/ai` runtime, built-in Provider integrations, and its CLI; `packages/agent-runtime` contains the framework-neutral Agent execution and Harness core. Agent orchestration consumes these packages through public exports instead of reimplementing provider wire protocols. Keep code close to its owning project; extract another shared package only after at least two real consumers need the same stable abstraction. Local third-party reference repositories may be cloned under `vendor/` or `skill-vendor/`; they are ignored by Git, excluded from the workspace, and must never become runtime dependencies.
+This repository is a TypeScript pnpm monorepo. Runtime applications live in `apps/`: `apps/web` is the C-end Nuxt workbench, `apps/admin` is the React + Ant Design operations console, `apps/server` is NestJS, and `apps/mobile` is reserved until a mobile framework is selected. The NestJS-based Agent service lives in the top-level `agent/` workspace. `packages/ai` contains the provider-neutral `@duoduo/ai` runtime, built-in Provider integrations, and its CLI; `packages/agent-runtime` contains the framework-neutral Agent execution and Harness core. Agent orchestration consumes these packages through public exports instead of reimplementing provider wire protocols. Keep code close to its owning project; extract another shared package only after at least two real consumers need the same stable abstraction. Local third-party reference repositories may be cloned under `vendor/` or `skill-vendor/`; they are ignored by Git, excluded from the workspace, and must never become runtime dependencies.
 
 Each project root contains a more specific `AGENTS.md`. Rules inherit from this file; the closest file to the code being changed adds project-specific guidance and takes precedence where it is more specific. Update the relevant guide whenever a project's structure, commands, or boundaries change.
 
@@ -10,7 +10,7 @@ Each project root contains a more specific `AGENTS.md`. Rules inherit from this 
 
 Use Node.js 22 or newer and the pnpm version declared in the root `package.json`. Install dependencies with `pnpm install`. Standard commands are:
 
-- `pnpm dev` — run Web, Server, and Agent development processes in parallel.
+- `pnpm dev` — run Web, Admin, Server, and Agent development processes in parallel.
 - `pnpm build` — build all runnable workspaces.
 - `pnpm typecheck` — type-check all participating workspaces.
 - `pnpm lint` — run the repository ESLint configuration.

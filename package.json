@@ -8,7 +8,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @duoduo/web --filter @duoduo/server --filter @duoduo/agent dev",
+    "dev": "pnpm --parallel --filter @duoduo/web --filter @duoduo/admin --filter @duoduo/server --filter @duoduo/agent dev",
     "build": "pnpm --recursive --if-present build",
     "typecheck": "pnpm --recursive --if-present typecheck",
     "lint": "eslint .",

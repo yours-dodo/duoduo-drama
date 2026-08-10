@@ -1,0 +1,283 @@
+:root {
+  color: #172033;
+  background: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+#root,
+.admin-shell {
+  min-height: 100vh;
+}
+
+.admin-sider {
+  background: #0b1220 !important;
+  box-shadow: 8px 0 24px rgba(15, 23, 42, 0.08);
+  z-index: 2;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 84px;
+  padding: 0 22px;
+  cursor: pointer;
+}
+
+.brand-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.32);
+}
+
+.brand-mark-large {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  font-size: 24px;
+}
+
+.brand-title,
+.brand-subtitle {
+  display: block;
+  color: #f8fafc !important;
+}
+
+.brand-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.brand-subtitle {
+  margin-top: 2px;
+  color: #94a3b8 !important;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.admin-menu {
+  border-inline-end: 0 !important;
+  background: transparent !important;
+}
+
+.admin-menu .ant-menu-item-group-title {
+  color: #64748b !important;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-menu .ant-menu-item {
+  margin-inline: 10px;
+  width: calc(100% - 20px);
+  color: #cbd5e1;
+}
+
+.admin-menu .ant-menu-item-selected {
+  color: #fff;
+  background: #1d4ed8 !important;
+}
+
+.sider-footer {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  left: 20px;
+  color: #64748b;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 28px;
+  border-bottom: 1px solid #e7edf5;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(16px);
+}
+
+.admin-header .ant-btn {
+  color: #64748b;
+}
+
+.profile-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155 !important;
+}
+
+.admin-content {
+  padding: 30px;
+}
+
+.content-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.page-heading {
+  display: flex;
+  margin-bottom: 24px;
+}
+
+.page-heading .ant-typography {
+  margin: 0;
+}
+
+.page-description {
+  max-width: 680px;
+}
+
+.metric-card,
+.runtime-card,
+.insight-card,
+.placeholder-card {
+  border: 1px solid #e7edf5;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.metric-card {
+  height: 100%;
+}
+
+.metric-heading {
+  color: #64748b;
+}
+
+.metric-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.metric-trend {
+  font-size: 12px;
+}
+
+.dashboard-row {
+  margin-top: 18px;
+}
+
+.runtime-status {
+  width: 100%;
+}
+
+.status-pulse {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 6px #dcfce7;
+}
+
+.insight-card {
+  margin-top: 16px;
+}
+
+.placeholder-card {
+  min-height: 340px;
+  display: grid;
+  place-items: center;
+}
+
+.placeholder-icon {
+  color: #2563eb;
+  font-size: 52px;
+}
+
+.route-loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: #64748b;
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, #dbeafe, transparent 36%), #0b1220;
+}
+
+.login-card {
+  width: min(100%, 440px);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(2, 6, 23, 0.28);
+}
+
+.login-content {
+  width: 100%;
+}
+
+.login-heading {
+  text-align: center;
+}
+
+.login-heading .ant-typography {
+  margin: 0;
+}
+
+.login-heading .ant-typography + .ant-typography {
+  display: block;
+  margin-top: 8px;
+}
+
+.login-note {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .admin-header {
+    padding: 0 16px;
+  }
+
+  .admin-header > .ant-space:first-child .ant-typography {
+    display: none;
+  }
+
+  .profile-button span {
+    display: none;
+  }
+
+  .admin-content {
+    padding: 20px 16px;
+  }
+}

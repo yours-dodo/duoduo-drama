@@ -37,7 +37,7 @@ HarmonyOS 客户端 ─┘
 - 各客户端共享账号、项目、会话、任务和创作数据，不分别实现独立的 Agent 系统。
 - 第一阶段优先建设 Agent 服务和 Web 工作台；移动端在服务端接口与业务流程稳定后接入。
 
-当前工程基础栈为 Nuxt Web、NestJS Server 和 NestJS Agent。框架无关的 Agent Runtime 位于 `packages/agent-runtime`，Agent 服务使用 PostgreSQL 作为可替换的 Harness 持久化适配器；业务主数据库、队列和移动端框架仍未确定。
+当前工程基础栈为 Nuxt C 端 Web、React + Ant Design Admin、NestJS Server 和 NestJS Agent。框架无关的 Agent Runtime 位于 `packages/agent-runtime`，Agent 服务使用 PostgreSQL 作为可替换的 Harness 持久化适配器；业务主数据库、队列和移动端框架仍未确定。
 
 ## 核心业务领域
 
@@ -283,12 +283,13 @@ pnpm format:check
 pnpm test
 ```
 
-`pnpm dev` 并行启动 Nuxt Web（3000）、NestJS Server（3001）和 NestJS Agent（3002）。可以使用 `pnpm --filter @duoduo/server dev` 等命令只启动单个 workspace。
+`pnpm dev` 并行启动 Nuxt Web（3000）、React Admin（3003）、NestJS Server（3001）和 NestJS Agent（3002）。可以使用 `pnpm --filter @duoduo/admin dev` 等命令只启动管理端。
 
 主要代码目录：
 
 ```text
-apps/web/       Nuxt Web 工作台
+apps/web/       Nuxt C 端创作工作台
+apps/admin/     React + Ant Design 管理后台
 apps/server/    NestJS 业务服务
 apps/mobile/    移动端预留目录，尚未加入 workspace
 agent/          NestJS Agent 服务与基础设施适配器
