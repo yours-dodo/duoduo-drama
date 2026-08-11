@@ -24,6 +24,8 @@ model User {
   createdStoryProjects StoryProject[]         @relation("StoryProjectCreator")
   projectCollaborations ProjectCollaborator[]
   authoredMessages    Message[]                @relation("MessageAuthor")
+  uploadedAssets      Asset[]                  @relation("AssetUploader")
+  createdStoryArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionCreator")
 
   @@map("users")
 }
@@ -44,6 +46,9 @@ model Team {
   conversations      Conversation[]
   messages           Message[]
   generationRequests StoryGenerationRequest[]
+  assets             Asset[]
+  storyArtifacts     StoryArtifact[]
+  storyArtifactVersions StoryArtifactVersion[]
 
   @@index([createdByUserId, createdAt(sort: Desc)], map: "teams_created_by_user_id_created_at_idx")
   @@map("teams")
@@ -86,6 +91,8 @@ model TeamMembership {
   auditRecords        AuditRecord[]    @relation("AuditActorMembership")
   projectCollaborations ProjectCollaborator[]
   authoredMessages     Message[]        @relation("MessageAuthorMembership")
+  uploadedAssets       Asset[]          @relation("AssetUploaderMembership")
+  createdStoryArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionCreatorMembership")
 
   @@unique([tenantId, userId], map: "team_memberships_tenant_id_user_id_key")
   @@unique([tenantId, id], map: "team_memberships_tenant_id_id_key")
@@ -108,11 +115,39 @@ model StoryProject {
   createdBy         User                    @relation("StoryProjectCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   collaborators     ProjectCollaborator[]
   conversations     Conversation[]
+  assets            Asset[]
+  artifacts         StoryArtifact[]
 
   @@unique([tenantId, id], map: "story_projects_tenant_id_id_key")
   @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_tenant_id_created_at_id_idx")
   @@index([tenantId, visibility, status, createdAt(sort: Desc)], map: "story_projects_tenant_id_visibility_status_idx")
   @@map("story_projects")
+}
+
+model Asset {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  projectId        String         @map("project_id") @db.Uuid
+  uploadedByUserId String         @map("uploaded_by_user_id") @db.Uuid
+  objectKey        String         @unique(map: "assets_object_key_key") @map("object_key") @db.VarChar(512)
+  originalFileName String         @map("original_file_name") @db.VarChar(255)
+  contentType      String         @map("content_type") @db.VarChar(128)
+  byteSize         Int            @map("byte_size")
+  checksum         String?        @db.Char(64)
+  status           String         @db.VarChar(24)
+  uploadExpiresAt  DateTime       @map("upload_expires_at") @db.Timestamptz(3)
+  completedAt      DateTime?      @map("completed_at") @db.Timestamptz(3)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team             Team           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project          StoryProject   @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict)
+  uploadedBy       User           @relation("AssetUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedByMember TeamMembership @relation("AssetUploaderMembership", fields: [tenantId, uploadedByUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@unique([tenantId, id], map: "assets_tenant_id_id_key")
+  @@index([tenantId, projectId, createdAt(sort: Desc), id(sort: Desc)], map: "assets_tenant_id_project_id_created_at_id_idx")
+  @@index([tenantId, projectId, status, createdAt(sort: Desc), id(sort: Desc)], map: "assets_tenant_id_project_id_status_idx")
+  @@map("assets")
 }
 
 model ProjectCollaborator {

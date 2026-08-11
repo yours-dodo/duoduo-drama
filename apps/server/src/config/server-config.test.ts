@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseServerConfig } from './server-config.js';
+import {
+  parseObjectStorageConfig,
+  parseServerConfig,
+} from './server-config.js';
 
 const TEST_DATABASE_URL =
   'postgresql://duoduo_server:local@127.0.0.1:5432/duoduo_server';
 const TEST_DATABASE_ENVIRONMENT = { SERVER_DATABASE_URL: TEST_DATABASE_URL };
+const PRODUCTION_OBJECT_STORAGE_ENVIRONMENT = {
+  ...TEST_DATABASE_ENVIRONMENT,
+  NODE_ENV: 'production',
+  SERVER_OBJECT_STORAGE_ENDPOINT: 'https://s3.example.com',
+  SERVER_OBJECT_STORAGE_REGION: 'us-east-1',
+  SERVER_OBJECT_STORAGE_ACCESS_KEY: 'server-access',
+  SERVER_OBJECT_STORAGE_SECRET_KEY: 'server-secret',
+  SERVER_OBJECT_STORAGE_BUCKET: 'duoduo-assets-prod',
+};
 
 describe('parseServerConfig', () => {
   it('provides safe local-development defaults', () => {
@@ -177,5 +189,73 @@ describe('parseServerConfig', () => {
         TRUSTED_ORIGINS: 'https://app.example.com/dashboard',
       }),
     ).toThrow('TRUSTED_ORIGINS must contain URL origins without paths');
+  });
+});
+
+describe('parseObjectStorageConfig', () => {
+  it('provides local MinIO defaults', () => {
+    expect(parseObjectStorageConfig(TEST_DATABASE_ENVIRONMENT)).toEqual({
+      endpoint: 'http://127.0.0.1:9000',
+      region: 'us-east-1',
+      accessKey: 'duoduo_server',
+      secretKey: 'change-me',
+      bucket: 'duoduo-assets',
+      presignedUrlTtlSeconds: 600,
+      forcePathStyle: true,
+    });
+  });
+
+  it('parses explicit object storage configuration', () => {
+    expect(
+      parseObjectStorageConfig({
+        ...TEST_DATABASE_ENVIRONMENT,
+        SERVER_OBJECT_STORAGE_ENDPOINT: 'https://s3.example.com/',
+        SERVER_OBJECT_STORAGE_REGION: 'cn-shanghai',
+        SERVER_OBJECT_STORAGE_ACCESS_KEY: 'server-access',
+        SERVER_OBJECT_STORAGE_SECRET_KEY: 'server-secret',
+        SERVER_OBJECT_STORAGE_BUCKET: 'duoduo-assets-prod',
+        SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS: '1800',
+        SERVER_OBJECT_STORAGE_FORCE_PATH_STYLE: 'false',
+      }),
+    ).toEqual({
+      endpoint: 'https://s3.example.com',
+      region: 'cn-shanghai',
+      accessKey: 'server-access',
+      secretKey: 'server-secret',
+      bucket: 'duoduo-assets-prod',
+      presignedUrlTtlSeconds: 1800,
+      forcePathStyle: false,
+    });
+  });
+
+  it.each([
+    ['SERVER_OBJECT_STORAGE_ENDPOINT', 'not-a-url'],
+    ['SERVER_OBJECT_STORAGE_ENDPOINT', 'https://s3.example.com/path'],
+    ['SERVER_OBJECT_STORAGE_BUCKET', 'Invalid_Bucket'],
+    ['SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS', '59'],
+    ['SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS', '3601'],
+    ['SERVER_OBJECT_STORAGE_FORCE_PATH_STYLE', 'yes'],
+  ])('rejects invalid object storage configuration: %s=%s', (name, value) => {
+    expect(() =>
+      parseObjectStorageConfig({
+        ...TEST_DATABASE_ENVIRONMENT,
+        [name]: value,
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    'SERVER_OBJECT_STORAGE_ENDPOINT',
+    'SERVER_OBJECT_STORAGE_REGION',
+    'SERVER_OBJECT_STORAGE_ACCESS_KEY',
+    'SERVER_OBJECT_STORAGE_SECRET_KEY',
+    'SERVER_OBJECT_STORAGE_BUCKET',
+  ])('requires %s in production', (name) => {
+    expect(() =>
+      parseObjectStorageConfig({
+        ...PRODUCTION_OBJECT_STORAGE_ENVIRONMENT,
+        [name]: ' ',
+      }),
+    ).toThrow(`${name} is required in production`);
   });
 });

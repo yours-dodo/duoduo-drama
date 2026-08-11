@@ -1,4 +1,5 @@
 export const SERVER_CONFIG = Symbol('SERVER_CONFIG');
+export const OBJECT_STORAGE_CONFIG = Symbol('OBJECT_STORAGE_CONFIG');
 
 export type ServerEnvironment = 'development' | 'test' | 'production';
 
@@ -13,12 +14,29 @@ export interface ServerConfig {
   trustedProxyHops: number;
 }
 
+export interface ObjectStorageConfig {
+  endpoint: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+  presignedUrlTtlSeconds: number;
+  forcePathStyle: boolean;
+}
+
 const DEFAULT_PORT = 3001;
 const DEFAULT_COOKIE_SECRET = 'local-development-cookie-secret-change-me';
 const DEFAULT_TRUSTED_ORIGINS = ['http://localhost:3000'];
 const DEFAULT_PUBLIC_WEB_URL = 'http://localhost:3000';
 const DEFAULT_LOGIN_TOKEN_PEPPER =
   'local-development-login-token-pepper-change-me';
+const DEFAULT_OBJECT_STORAGE_ENDPOINT = 'http://127.0.0.1:9000';
+const DEFAULT_OBJECT_STORAGE_REGION = 'us-east-1';
+const DEFAULT_OBJECT_STORAGE_ACCESS_KEY = 'duoduo_server';
+const DEFAULT_OBJECT_STORAGE_SECRET_KEY = 'change-me';
+const DEFAULT_OBJECT_STORAGE_BUCKET = 'duoduo-assets';
+const DEFAULT_OBJECT_STORAGE_TTL_SECONDS = 600;
+const DEFAULT_OBJECT_STORAGE_FORCE_PATH_STYLE = true;
 const PRODUCTION_COOKIE_SECRET_MIN_LENGTH = 32;
 const LOGIN_TOKEN_PEPPER_MIN_LENGTH = 32;
 
@@ -56,6 +74,148 @@ export function parseServerConfig(
     ),
     trustedProxyHops: parseTrustedProxyHops(environment.TRUST_PROXY_HOPS),
   };
+}
+
+export function parseObjectStorageConfig(
+  environment: NodeJS.ProcessEnv,
+): ObjectStorageConfig {
+  const runtimeEnvironment = parseEnvironment(environment.NODE_ENV);
+
+  return {
+    endpoint: parseObjectStorageEndpoint(
+      environment.SERVER_OBJECT_STORAGE_ENDPOINT,
+      runtimeEnvironment,
+    ),
+    region: parseRequiredObjectStorageValue(
+      environment.SERVER_OBJECT_STORAGE_REGION,
+      DEFAULT_OBJECT_STORAGE_REGION,
+      'SERVER_OBJECT_STORAGE_REGION',
+      runtimeEnvironment,
+    ),
+    accessKey: parseRequiredObjectStorageValue(
+      environment.SERVER_OBJECT_STORAGE_ACCESS_KEY,
+      DEFAULT_OBJECT_STORAGE_ACCESS_KEY,
+      'SERVER_OBJECT_STORAGE_ACCESS_KEY',
+      runtimeEnvironment,
+    ),
+    secretKey: parseRequiredObjectStorageValue(
+      environment.SERVER_OBJECT_STORAGE_SECRET_KEY,
+      DEFAULT_OBJECT_STORAGE_SECRET_KEY,
+      'SERVER_OBJECT_STORAGE_SECRET_KEY',
+      runtimeEnvironment,
+    ),
+    bucket: parseBucketName(
+      environment.SERVER_OBJECT_STORAGE_BUCKET,
+      runtimeEnvironment,
+    ),
+    presignedUrlTtlSeconds: parseObjectStorageTtl(
+      environment.SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS,
+    ),
+    forcePathStyle: parseBoolean(
+      environment.SERVER_OBJECT_STORAGE_FORCE_PATH_STYLE,
+      DEFAULT_OBJECT_STORAGE_FORCE_PATH_STYLE,
+      'SERVER_OBJECT_STORAGE_FORCE_PATH_STYLE',
+    ),
+  };
+}
+
+function parseObjectStorageEndpoint(
+  value: string | undefined,
+  environment: ServerEnvironment,
+): string {
+  const endpoint = value?.trim() || DEFAULT_OBJECT_STORAGE_ENDPOINT;
+  if ((!value || value.trim() === '') && environment === 'production') {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_ENDPOINT is required in production',
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_ENDPOINT must be a valid HTTP(S) URL',
+    );
+  }
+
+  if (
+    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+    parsed.pathname !== '/' ||
+    parsed.search !== '' ||
+    parsed.hash !== ''
+  ) {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_ENDPOINT must be a valid HTTP(S) URL',
+    );
+  }
+
+  return parsed.origin;
+}
+
+function parseRequiredObjectStorageValue(
+  value: string | undefined,
+  fallback: string,
+  name: string,
+  environment: ServerEnvironment,
+): string {
+  if (value === undefined || value.trim() === '') {
+    if (environment === 'production') {
+      throw new ServerConfigError(`${name} is required in production`);
+    }
+    return fallback;
+  }
+  return value.trim();
+}
+
+function parseBucketName(
+  value: string | undefined,
+  environment: ServerEnvironment,
+): string {
+  const bucket = value?.trim() || DEFAULT_OBJECT_STORAGE_BUCKET;
+  if ((!value || value.trim() === '') && environment === 'production') {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_BUCKET is required in production',
+    );
+  }
+  if (
+    !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) ||
+    bucket.includes('..') ||
+    bucket.includes('.-') ||
+    bucket.includes('-.')
+  ) {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_BUCKET must be a valid bucket name',
+    );
+  }
+  return bucket;
+}
+
+function parseObjectStorageTtl(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_OBJECT_STORAGE_TTL_SECONDS;
+  if (!/^\d+$/.test(value)) {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS must be between 60 and 3600',
+    );
+  }
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds) || seconds < 60 || seconds > 3600) {
+    throw new ServerConfigError(
+      'SERVER_OBJECT_STORAGE_PRESIGNED_TTL_SECONDS must be between 60 and 3600',
+    );
+  }
+  return seconds;
+}
+
+function parseBoolean(
+  value: string | undefined,
+  fallback: boolean,
+  name: string,
+): boolean {
+  if (value === undefined) return fallback;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new ServerConfigError(`${name} must be true or false`);
 }
 
 function parseTrustedProxyHops(value: string | undefined): number {
