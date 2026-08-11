@@ -7,6 +7,7 @@ import type {
   RequestLogSink,
 } from '../../../platform/observability/request-logging.interceptor.js';
 import { createTestApp } from '../../../test/create-test-app.js';
+import { RequestEmailCode } from '../application/request-email-code.js';
 import { LocalEmailDelivery } from '../infrastructure/local-email-delivery.js';
 import { EMAIL_DELIVERY } from '../ports/email-delivery.js';
 import {
@@ -25,6 +26,7 @@ class CapturingRequestLogSink implements RequestLogSink {
 describe('AuthController', () => {
   let app: INestApplication;
   let createIfAllowed: ReturnType<typeof vi.fn>;
+  let requestEmailCode: { execute: ReturnType<typeof vi.fn> };
   let requestLogSink: CapturingRequestLogSink;
 
   beforeEach(async () => {
@@ -33,6 +35,12 @@ describe('AuthController', () => {
       challenge: request.challenge,
     }));
     requestLogSink = new CapturingRequestLogSink();
+    requestEmailCode = {
+      execute: vi.fn(async () => ({
+        message:
+          'If the address can receive email, a verification code was sent.',
+      })),
+    };
     app = await createTestApp({
       requestLogSink,
       providerOverrides: [
@@ -43,6 +51,7 @@ describe('AuthController', () => {
             findActiveByTokenHash: vi.fn(),
           },
         },
+        { token: RequestEmailCode, value: requestEmailCode },
       ],
     });
   });
@@ -105,5 +114,33 @@ describe('AuthController', () => {
       },
     });
     expect(createIfAllowed).not.toHaveBeenCalled();
+  });
+
+  it('requests login and password-reset codes through the same safe response', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/v1/auth/email-code-requests')
+      .send({ email: 'Writer@Example.COM' })
+      .expect(202);
+    const reset = await request(app.getHttpServer())
+      .post('/v1/auth/password-reset-requests')
+      .send({ email: 'Writer@Example.COM' })
+      .expect(202);
+
+    const response = {
+      message:
+        'If the address can receive email, a verification code was sent.',
+    };
+    expect(login.body).toEqual(response);
+    expect(reset.body).toEqual(response);
+    expect(requestEmailCode.execute).toHaveBeenNthCalledWith(1, {
+      email: 'Writer@Example.COM',
+      sourceAddress: expect.any(String),
+      purpose: 'login',
+    });
+    expect(requestEmailCode.execute).toHaveBeenNthCalledWith(2, {
+      email: 'Writer@Example.COM',
+      sourceAddress: expect.any(String),
+      purpose: 'password_reset',
+    });
   });
 });

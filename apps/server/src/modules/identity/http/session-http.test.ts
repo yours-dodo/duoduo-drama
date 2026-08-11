@@ -3,7 +3,11 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestApp } from '../../../test/create-test-app.js';
+import { LoginWithPassword } from '../application/login-with-password.js';
 import { Logout } from '../application/logout.js';
+import { ResetPasswordWithCode } from '../application/reset-password-with-code.js';
+import { SetPassword } from '../application/set-password.js';
+import { VerifyEmailCodeLogin } from '../application/verify-email-code-login.js';
 import {
   InvalidLoginChallengeError,
   VerifyEmailLogin,
@@ -26,6 +30,10 @@ const SESSION_EXPIRES_AT = new Date('2026-09-08T00:00:00.000Z');
 describe('passwordless session HTTP API', () => {
   let app: INestApplication;
   let verifyEmailLogin: { execute: ReturnType<typeof vi.fn> };
+  let verifyEmailCodeLogin: { execute: ReturnType<typeof vi.fn> };
+  let loginWithPassword: { execute: ReturnType<typeof vi.fn> };
+  let resetPasswordWithCode: { execute: ReturnType<typeof vi.fn> };
+  let setPassword: { execute: ReturnType<typeof vi.fn> };
   let logout: { execute: ReturnType<typeof vi.fn> };
   let sessions: SessionRepository;
 
@@ -37,6 +45,31 @@ describe('passwordless session HTTP API', () => {
         sessionExpiresAt: SESSION_EXPIRES_AT,
       })),
     };
+    verifyEmailCodeLogin = {
+      execute: vi.fn(async () => ({
+        user: { id: 'user-id', email: 'creator@example.com' },
+        sessionToken: SESSION_TOKEN,
+        sessionExpiresAt: SESSION_EXPIRES_AT,
+        hasPassword: false,
+      })),
+    };
+    loginWithPassword = {
+      execute: vi.fn(async () => ({
+        user: { id: 'user-id', email: 'creator@example.com' },
+        sessionToken: SESSION_TOKEN,
+        sessionExpiresAt: SESSION_EXPIRES_AT,
+        hasPassword: true,
+      })),
+    };
+    resetPasswordWithCode = {
+      execute: vi.fn(async () => ({
+        user: { id: 'user-id', email: 'creator@example.com' },
+        sessionToken: SESSION_TOKEN,
+        sessionExpiresAt: SESSION_EXPIRES_AT,
+        hasPassword: true,
+      })),
+    };
+    setPassword = { execute: vi.fn(async () => ({ hasPassword: true })) };
     logout = { execute: vi.fn(async () => undefined) };
     sessions = {
       create: vi.fn(),
@@ -60,6 +93,10 @@ describe('passwordless session HTTP API', () => {
     app = await createTestApp({
       providerOverrides: [
         { token: VerifyEmailLogin, value: verifyEmailLogin },
+        { token: VerifyEmailCodeLogin, value: verifyEmailCodeLogin },
+        { token: LoginWithPassword, value: loginWithPassword },
+        { token: ResetPasswordWithCode, value: resetPasswordWithCode },
+        { token: SetPassword, value: setPassword },
         { token: Logout, value: logout },
         {
           token: ListMyTeams,
@@ -96,6 +133,65 @@ describe('passwordless session HTTP API', () => {
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Path=/');
+  });
+
+  it('verifies an email code and reports whether a password is configured', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/auth/email-code-verifications')
+      .set('x-request-id', 'email-code-verification-request')
+      .send({ email: 'creator@example.com', code: '012345' })
+      .expect(200);
+
+    expect(verifyEmailCodeLogin.execute).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      code: '012345',
+      requestId: 'email-code-verification-request',
+    });
+    expect(response.body).toEqual({
+      user: { id: 'user-id', email: 'creator@example.com' },
+      session: { expiresAt: SESSION_EXPIRES_AT.toISOString() },
+      hasPassword: false,
+    });
+    expect(response.headers['set-cookie']?.[0] ?? '').toContain(
+      `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}`,
+    );
+  });
+
+  it('supports password login, password reset, and setting a password', async () => {
+    await request(app.getHttpServer())
+      .post('/v1/auth/password-logins')
+      .send({ email: 'creator@example.com', password: 'password-123' })
+      .expect(200);
+    expect(loginWithPassword.execute).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      password: 'password-123',
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/password-reset-verifications')
+      .send({
+        email: 'creator@example.com',
+        code: '012345',
+        password: 'password-456',
+      })
+      .expect(200);
+    expect(resetPasswordWithCode.execute).toHaveBeenCalledWith({
+      email: 'creator@example.com',
+      code: '012345',
+      password: 'password-456',
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/passwords')
+      .set('Cookie', `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}`)
+      .set('Origin', 'http://localhost:3000')
+      .send({ password: 'password-789' })
+      .expect(200);
+    expect(setPassword.execute).toHaveBeenCalledWith({
+      userId: 'user-id',
+      currentPassword: undefined,
+      password: 'password-789',
+    });
   });
 
   it('reads the current user through a protected session', async () => {

@@ -3,7 +3,7 @@ export const IDENTITY_SECURITY_EVENT_REPOSITORY = Symbol(
 );
 
 export type IdentitySecurityAction =
-  'LOGIN_CHALLENGE_LOCKED' | 'SESSION_REVOKED';
+  'LOGIN_CHALLENGE_LOCKED' | 'EMAIL_LOGIN_CODE_LOCKED' | 'SESSION_REVOKED';
 
 export interface IdentitySecurityEventSnapshot {
   id: string;

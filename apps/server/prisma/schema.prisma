@@ -11,6 +11,7 @@ datasource db {
 model User {
   id                  String                  @id @default(uuid()) @db.Uuid
   email               String                  @unique(map: "users_email_key") @db.VarChar(254)
+  passwordHash        String?                 @map("password_hash") @db.VarChar(255)
   createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
   sessions            Session[]
@@ -315,6 +316,23 @@ model EmailLoginChallenge {
   @@index([sourceDigest, createdAt(sort: Desc)], map: "email_login_challenges_source_created_at_idx")
   @@index([expiresAt], map: "email_login_challenges_expires_at_idx")
   @@map("email_login_challenges")
+}
+
+model EmailVerificationCode {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @db.VarChar(254)
+  purpose      String    @db.VarChar(32)
+  codeHash     String    @map("code_hash") @db.Char(64)
+  sourceDigest String    @map("source_digest") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  attemptCount Int       @default(0) @map("attempt_count") @db.SmallInt
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([email, purpose, createdAt(sort: Desc)], map: "email_verification_codes_email_purpose_created_at_idx")
+  @@index([sourceDigest, purpose, createdAt(sort: Desc)], map: "email_verification_codes_source_purpose_created_at_idx")
+  @@index([expiresAt], map: "email_verification_codes_expires_at_idx")
+  @@map("email_verification_codes")
 }
 
 model IdentitySecurityEvent {
