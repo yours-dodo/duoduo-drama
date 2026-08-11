@@ -1,6 +1,6 @@
 # `@duoduo/ai`
 
-`@duoduo/ai` 是多多短剧使用的供应商中立 AI 运行时。它在模块导入期间不引入供应商 SDK，也不读取凭证，并明确划分了聊天、图像、视频、认证、目录、会话、传输、可恢复操作、CLI 和测试边界。
+`@duoduo/ai` 是多多剧场使用的供应商中立 AI 运行时。它在模块导入期间不引入供应商 SDK，也不读取凭证，并明确划分了聊天、图像、视频、认证、目录、会话、传输、可恢复操作、CLI 和测试边界。
 
 如果要维护或扩展本包，请先阅读[目录结构与模块职责](./docs/directory-structure.md)。如果要判断当前 Runtime 距离生产完成还差什么、一个需求应落入 Runtime、Agent 还是未来 Gateway Host，请阅读 [AI Gateway Runtime 差距基线](./docs/reviews/2026-07-28-ai-gateway-runtime-gap-analysis.md)。如果要评估何时值得拆出独立 Gateway Host、它能解决什么问题以及会引入哪些成本，请阅读 [AI Gateway Host 拆分收益与启用判据](./docs/ai-gateway-host-rationale.md)。
 

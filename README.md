@@ -1,6 +1,6 @@
-# 多多短剧（Duoduo Drama）
+# 多多剧场（Duoduo Drama）
 
-多多短剧是一个以 Agent 为核心的 AI 故事与短剧内容创作平台。项目希望把对话式创作、剧本处理、分镜制作、素材管理、视频合成和成片导出连接为连续、可追溯的创作流程，同时保留人工编辑、确认和回退能力。
+多多剧场是一个以 Agent 为核心的 AI 故事与短剧内容创作平台。项目希望把对话式创作、剧本处理、分镜制作、素材管理、视频合成和成片导出连接为连续、可追溯的创作流程，同时保留人工编辑、确认和回退能力。
 
 > 当前项目仍处于产品规划和核心领域模型设计阶段，已初始化 TypeScript + pnpm monorepo 基础架构。
 
@@ -37,7 +37,7 @@ HarmonyOS 客户端 ─┘
 - 各客户端共享账号、项目、会话、任务和创作数据，不分别实现独立的 Agent 系统。
 - 第一阶段优先建设 Agent 服务和 Web 工作台；移动端在服务端接口与业务流程稳定后接入。
 
-当前工程基础栈为 Nuxt C 端 Web、React + Ant Design Admin、NestJS Server 和 NestJS Agent。框架无关的 Agent Runtime 位于 `packages/agent-runtime`，Agent 服务使用 PostgreSQL 作为可替换的 Harness 持久化适配器；业务主数据库、队列和移动端框架仍未确定。
+当前工程基础栈为 Astro C 端 Web、React + Ant Design Admin、NestJS Server 和 NestJS Agent。Astro 负责 SEO 首屏和页面宿主，故事创作用 Vue，短剧项目用 React；框架无关的 Agent Runtime 位于 `packages/agent-runtime`，Agent 服务使用 PostgreSQL 作为可替换的 Harness 持久化适配器；业务主数据库、队列和移动端框架仍未确定。
 
 ## 核心业务领域
 
@@ -244,7 +244,7 @@ HarmonyOS 客户端 ─┘
   0001–0008 迁移、PostgreSQL 契约测试和真实进程恢复测试均已通过。
 - A4c 已补齐外部副作用对账、人工处置和跨进程恢复验收。基础预算、上下文装配、分层记忆、
   知识检索、Artifact Runtime 与沙箱仍待后续阶段实现。
-- 首个业务后端已确定为“多租户故事创作”模块化单体；已完成框架设计，尚未进入实现。
+- 首个业务后端已确定为“多租户故事创作”模块化单体；已落地用户认证、邮箱验证码/密码登录、团队租户生命周期、租户上下文和故事项目权限，Agent 生成链路仍在后续阶段。
 
 ## 项目文档
 
@@ -256,7 +256,7 @@ HarmonyOS 客户端 ─┘
 - [`Agent Core A3 ToolExecutionLedger 设计`](docs/architecture/agent-core-phase-a3-tool-execution-ledger-design.md)：定义副作用一致性、Attempt 与保守未知结果。
 - [`Agent Core A4a 持久审批设计`](docs/architecture/agent-core-phase-a4a-persistent-approval-design.md)：定义审批策略、状态机、跨实例唤醒和原子消费边界。
 - [`Agent Core A4b 重启恢复设计`](docs/architecture/agent-core-phase-a4b-restart-recovery-design.md)：定义租约、fencing、恢复计划、Worker、PostgreSQL 竞争与真实进程退出验证。
-- [`多租户故事创作后端框架设计`](docs/superpowers/specs/2026-08-09-multi-tenant-story-backend-framework-design.md)：定义 NestJS 模块化单体、团队租户、无密码登录、故事创作 API、模拟 Agent 和分阶段验收基线。
+- [`多租户故事创作后端框架设计`](docs/superpowers/specs/2026-08-09-multi-tenant-story-backend-framework-design.md)：定义 NestJS 模块化单体、团队租户、邮箱认证、故事创作 API、模拟 Agent 和分阶段验收基线。
 - [`多租户故事创作后端实施计划`](docs/superpowers/plans/2026-08-09-multi-tenant-story-backend-implementation-plan.md)：将后端框架拆为 11 个可独立测试和提交的实现切片。
 - [`remaining-tasks.md`](remaining-tasks.md)：尚未完成的设计、技术与实现任务。
 - [`AGENTS.md`](AGENTS.md)：仓库结构、编码、测试和贡献约定。
@@ -283,17 +283,26 @@ pnpm format:check
 pnpm test
 ```
 
-`pnpm dev` 并行启动 Nuxt Web（3000）、React Admin（3003）、NestJS Server（3001）和 NestJS Agent（3002）。可以使用 `pnpm --filter @duoduo/admin dev` 等命令只启动管理端。
+`pnpm dev` 并行启动 Astro Web（3000）、React Admin（3003）、NestJS Server（3001）和 NestJS Agent（3002）。可以使用 `pnpm --filter @duoduo/admin dev` 等命令只启动管理端。
+
+本地素材对象存储可以单独启动 MinIO：
+
+```bash
+docker compose -f compose.minio.yml up -d
+```
+
+MinIO API 默认运行在 `http://localhost:9000`，控制台运行在 `http://localhost:9001`；本地默认账号是 `duoduo_server`，密码是 `change-me`。首次启动后，在控制台创建与 `SERVER_OBJECT_STORAGE_BUCKET` 一致的 Bucket（默认是 `duoduo-assets`），再启动 Server。
 
 主要代码目录：
 
 ```text
-apps/web/       Nuxt C 端创作工作台
+apps/web/       Astro C 端创作工作台（故事 Vue、短剧 React）
 apps/admin/     React + Ant Design 管理后台
 apps/server/    NestJS 业务服务
 apps/mobile/    移动端预留目录，尚未加入 workspace
 agent/          NestJS Agent 服务与基础设施适配器
 packages/agent-runtime/  框架无关的 Agent Runtime 与 Harness
+compose.minio.yml        本地 MinIO 对象存储
 vendor/         仅限本地使用的外部参考项目
 ```
 

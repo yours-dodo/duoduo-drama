@@ -47,7 +47,7 @@ export function AdminLayout() {
           {!sidebarCollapsed && (
             <div>
               <Typography.Text className="brand-title">
-                多多短剧
+                多多剧场
               </Typography.Text>
               <Typography.Text className="brand-subtitle">
                 ADMIN CONSOLE
