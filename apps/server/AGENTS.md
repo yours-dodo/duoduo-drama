@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless Web identity, the complete first team lifecycle, story-project authorization, and persisted project conversations/messages. Users can create multiple teams, invite matching email identities, accept one-use invitations, manage roles and removals, query tenant audit records, establish an immutable path-derived `TenantContext` only while they are active members, manage team/private story projects with creator, administrator, and collaborator permissions, and append idempotent user messages that create pending generation requests. The next slice is mock Agent generation and recovery; Agent integration has not been introduced yet.
+The Server has an HTTP platform baseline, the Prisma/PostgreSQL runtime boundary, passwordless and email-code Web identity with optional password credentials, the complete first team lifecycle, story-project authorization, and persisted project conversations/messages. Users can create multiple teams, invite matching email identities, accept one-use invitations, manage roles and removals, query tenant audit records, establish an immutable path-derived `TenantContext` only while they are active members, manage team/private story projects with creator, administrator, and collaborator permissions, and append idempotent user messages that create pending generation requests. Development email verification codes currently use a console delivery adapter that is rejected in production. The next slice is mock Agent generation and recovery; Agent integration has not been introduced yet.
 
 ## Scope and Responsibilities
 
@@ -23,6 +23,7 @@ Create directories only when real code needs them. Use these boundaries as the S
 - `src/config/` for Server-owned environment parsing and validation.
 - `src/platform/http/` for transport-wide middleware, filters, versioning, and health probes.
 - `src/platform/database/` for the private Prisma lifecycle, database readiness, and transaction boundary. Business modules must consume exported database ports rather than a global Prisma Client.
+- `src/platform/object-storage/` for the S3-compatible object storage port and MinIO adapter. Business modules must consume the object storage port rather than SDK clients.
 - `src/platform/observability/` for request-level logs and future telemetry adapters.
 - `src/test/` for reusable Server test harnesses; production builds must exclude this directory.
 
@@ -43,6 +44,10 @@ Run from the repository root:
 - `pnpm --filter @duoduo/server db:migrate:dev` — create and apply a reviewed local migration.
 - `pnpm --filter @duoduo/server db:migrate:deploy` — apply checked-in migrations during deployment.
 - `pnpm --filter @duoduo/server test:postgres` — require `SERVER_TEST_POSTGRES_URL` and run the real PostgreSQL boundary suite.
+
+Start local MinIO from the repository root with `docker compose -f compose.minio.yml up -d`; create the configured `duoduo-assets` Bucket before exercising asset upload APIs.
+
+Start local PostgreSQL from the repository root with `docker compose -f compose.postgres.yml up -d`. The database data is persisted under `db/postgres/`; run `pnpm --filter @duoduo/server db:migrate:deploy` after the database is ready.
 
 Also run root `pnpm lint` and `pnpm format:check` before submitting changes.
 

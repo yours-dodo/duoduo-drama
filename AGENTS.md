@@ -17,6 +17,8 @@ Use Node.js 22 or newer and the pnpm version declared in the root `package.json`
 - `pnpm format` / `pnpm format:check` — write or check Prettier formatting.
 - `pnpm test` — run all Vitest suites.
 
+Start the local PostgreSQL database with `docker compose -f compose.postgres.yml up -d`. Its persistent data is bind-mounted to `db/postgres/` and is ignored by Git.
+
 Use `pnpm --filter <workspace> <script>` for a single workspace. Before submitting changes, also run `git status`, `git diff`, and `git diff --check`. Do not require undocumented global tools.
 
 ## Coding Style & Naming Conventions
