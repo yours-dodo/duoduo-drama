@@ -1,0 +1,38 @@
+---
+interface Props {
+  requireTeam?: boolean;
+}
+
+const { requireTeam = false } = Astro.props;
+---
+
+<div data-auth-gate data-require-team={requireTeam ? 'true' : 'false'}>
+  <slot />
+</div>
+
+<script>
+  const gates = document.querySelectorAll('[data-auth-gate]');
+
+  gates.forEach(async (gate) => {
+    const element = gate as HTMLElement;
+    try {
+      const response = await fetch('/api/v1/me', {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error('authentication-required');
+      const session = await response.json();
+      element.setAttribute('data-authenticated', 'true');
+      if (
+        element.dataset.requireTeam === 'true' &&
+        session.teams?.length === 0 &&
+        window.location.pathname !== '/app/onboarding'
+      ) {
+        window.location.assign('/app/onboarding');
+      }
+    } catch {
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+    }
+  });
+</script>

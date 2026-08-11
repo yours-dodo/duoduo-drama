@@ -1,24 +1,27 @@
 ---
+import AuthGate from '../../components/astro/AuthGate.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 export const prerender = false;
 ---
 
-<BaseLayout title="工作台｜多多短剧" description="多多短剧创作工作台。">
-  <section class="workspace-page" aria-labelledby="workspace-page-title">
-    <p class="eyebrow">创作工作台</p>
-    <h1 id="workspace-page-title">选择你的<br /><em>创作方向。</em></h1>
-    <div class="workspace-entry-grid">
-      <a class="workspace-entry story-entry" href="/app/stories">
-        <span class="card-index">A / STORY</span>
-        <strong>故事创作</strong>
-        <span>用 Vue 工作台发展故事、对话和剧本。</span>
-      </a>
-      <a class="workspace-entry drama-entry" href="/app/dramas">
-        <span class="card-index">B / DRAMA</span>
-        <strong>短剧制作</strong>
-        <span>用 React 工作台推进剧集、场景和镜头。</span>
-      </a>
-    </div>
-  </section>
+<BaseLayout title="工作台｜多多剧场" description="多多剧场创作工作台。">
+  <AuthGate requireTeam>
+    <section class="workspace-page" aria-labelledby="workspace-page-title">
+      <p class="eyebrow">创作工作台</p>
+      <h1 id="workspace-page-title">选择你的<br /><em>创作方向。</em></h1>
+      <div class="workspace-entry-grid">
+        <a class="workspace-entry story-entry" href="/app/stories">
+          <span class="card-index">A / STORY</span>
+          <strong>故事创作</strong>
+          <span>用 Vue 工作台发展故事、对话和剧本。</span>
+        </a>
+        <a class="workspace-entry drama-entry" href="/app/dramas">
+          <span class="card-index">B / DRAMA</span>
+          <strong>短剧制作</strong>
+          <span>用 React 工作台推进剧集、场景和镜头。</span>
+        </a>
+      </div>
+    </section>
+  </AuthGate>
 </BaseLayout>

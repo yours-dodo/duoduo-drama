@@ -37,8 +37,8 @@ Astro 页面级路由和布局
 ├── /app/dramas
 └── /app/dramas/:projectId
         │
-        ├── StoryApp.vue       Vue 故事工作台
-        └── DramaApp.tsx       React 短剧工作台
+├── StoryApp.vue       Vue 故事工作台
+└── DramaApp.tsx       React 短剧工作台
                 │
                 └── Server API
 ```
@@ -71,7 +71,7 @@ apps/web/src/pages/app/
 ### 故事工作台
 
 ```text
-apps/web/src/features/story/
+apps/web/src/workspaces/story/
 ├── StoryApp.vue
 ├── story-api.ts
 └── components/
@@ -87,7 +87,7 @@ apps/web/src/features/story/
 ### 短剧工作台
 
 ```text
-apps/web/src/features/drama/
+apps/web/src/workspaces/drama/
 ├── DramaApp.tsx
 └── components/
     ├── DramaHeader.tsx

@@ -20,6 +20,7 @@ import {
   type StoryArtifactVersion,
   type StoryProject,
 } from './story-api';
+import StoryStatusBar from './components/StoryStatusBar.vue';
 
 const props = defineProps<{
   projectId?: string;
@@ -56,6 +57,13 @@ const canEdit = computed(
     selectedVersion.value?.status === 'draft',
 );
 const projectMode = computed(() => (props.projectId ? 'project' : 'catalog'));
+const statusBarMessage = computed(() => {
+  if (viewState.value === 'loading') return '读取中…';
+  if (viewState.value === 'error') return '需要处理';
+  if (saving.value || confirming.value || discarding.value) return '同步中…';
+  if (actionMessage.value) return '已同步';
+  return project.value ? '已连接' : '等待选择项目';
+});
 
 const artifactTypeLabels: Record<StoryArtifact['type'], string> = {
   idea: '灵感',
@@ -581,5 +589,11 @@ function formatDate(value: string | undefined) {
         </section>
       </div>
     </template>
+
+    <StoryStatusBar
+      :team-name="activeTeam?.name"
+      :project-name="project?.title"
+      :status="statusBarMessage"
+    />
   </section>
 </template>

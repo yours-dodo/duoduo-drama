@@ -1,0 +1,59 @@
+---
+import AuthGate from '../../components/astro/AuthGate.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout title="创建工作空间｜多多剧场" description="创建你的多多剧场工作空间。">
+  <AuthGate>
+    <section class="auth-page" aria-labelledby="onboarding-title">
+      <div class="auth-card">
+        <p class="eyebrow">开始创作</p>
+        <h1 id="onboarding-title">创建你的<br /><em>工作空间。</em></h1>
+        <p class="auth-description">工作空间用于隔离你的故事、短剧项目和协作成员。</p>
+        <form class="auth-form" id="create-team-form">
+          <label for="team-name">工作空间名称</label>
+          <input id="team-name" name="name" type="text" maxlength="100" placeholder="例如：我的故事工作室" required />
+          <button class="button button-primary" type="submit">创建并继续 <span aria-hidden="true">↗</span></button>
+        </form>
+        <p class="auth-note" id="create-team-status" role="status"></p>
+      </div>
+    </section>
+  </AuthGate>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#create-team-form');
+  const status = document.querySelector<HTMLElement>('#create-team-status');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector<HTMLInputElement>('#team-name');
+    if (!name || !status || !form.checkValidity()) return;
+    const button = form.querySelector('button');
+    if (button) button.disabled = true;
+    status.textContent = '正在创建工作空间…';
+    try {
+      const response = await fetch('/api/v1/teams', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ name: name.value }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error?.message ?? '暂时无法创建，请稍后重试。');
+      }
+      window.location.assign('/app');
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : '暂时无法创建，请稍后重试。';
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+</script>

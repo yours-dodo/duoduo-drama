@@ -1,10 +1,12 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = true;
 ---
 
 <BaseLayout
-  title="多多短剧｜用 AI 把故事变成可制作的短剧"
-  description="多多短剧连接故事创作、剧本处理、分镜制作与素材管理，让创作者从一句灵感开始，持续推进到可制作的短剧项目。"
+  title="多多剧场｜用 AI 把故事变成可制作的短剧"
+  description="多多剧场连接故事创作、剧本处理、分镜制作与素材管理，让创作者从一句灵感开始，持续推进到可制作的短剧项目。"
   eyebrow="AI 故事与短剧创作平台"
 >
   <section class="hero-section" aria-labelledby="hero-title">
@@ -12,7 +14,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <p class="eyebrow">AI 故事与短剧创作平台</p>
       <h1 id="hero-title">把一个灵感，<em>写成一部短剧。</em></h1>
       <p class="hero-description">
-        多多短剧把对话式故事创作、剧本处理和短剧制作串成一条可追溯的创作流程。你负责判断和取舍，Agent 帮你推进每一步。
+        多多剧场把对话式故事创作、剧本处理和短剧制作串成一条可追溯的创作流程。你负责判断和取舍，Agent 帮你推进每一步。
       </p>
       <div class="hero-actions">
         <a class="button button-primary" href="/login">开始创作 <span aria-hidden="true">↗</span></a>
@@ -93,6 +95,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <section class="closing-section" aria-labelledby="closing-title">
     <p class="eyebrow">从今天的第一句开始</p>
     <h2 id="closing-title">让好故事，<em>继续往下走。</em></h2>
-    <a class="button button-light" href="/login">进入多多短剧 <span aria-hidden="true">↗</span></a>
+    <a class="button button-light" href="/login">进入多多剧场 <span aria-hidden="true">↗</span></a>
   </section>
 </BaseLayout>

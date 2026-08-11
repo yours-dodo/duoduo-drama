@@ -1,5 +1,6 @@
 ---
-import DramaApp from '../../../features/drama/DramaApp';
+import AuthGate from '../../../components/astro/AuthGate.astro';
+import DramaApp from '../../../workspaces/drama/DramaApp';
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 
 export const prerender = false;
@@ -7,6 +8,8 @@ export const prerender = false;
 const { projectId } = Astro.params;
 ---
 
-<BaseLayout title="短剧项目｜多多短剧" description="继续你的短剧项目制作。">
-  <DramaApp client:only="react" projectId={projectId} />
+<BaseLayout title="短剧项目｜多多剧场" description="继续你的短剧项目制作。">
+  <AuthGate requireTeam>
+    <DramaApp client:only="react" projectId={projectId} />
+  </AuthGate>
 </BaseLayout>

@@ -13,8 +13,8 @@ It does not own core business rules, persistence, authentication policy, or Agen
 ## Framework Boundaries
 
 - Astro owns SEO, public HTML, page layouts, route shells, loading states, and error boundaries.
-- `src/features/story/` owns the Vue story-creation experience.
-- `src/features/drama/` owns the React short-drama experience.
+- `src/workspaces/story/` owns the Vue story-creation experience.
+- `src/workspaces/drama/` owns the React short-drama experience.
 - A single business workspace must use one client UI framework; do not mix Vue and React state or components inside the same workspace.
 - Shared code must remain framework-neutral: Server API adapters, transport types, session representations, design tokens, and small utilities.
 - Keep story and drama feature modules independent so either can become a separate application later without introducing runtime microfrontend infrastructure now.
@@ -26,8 +26,8 @@ Place Astro application code under `src/`:
 - `src/pages/` for Astro file-based routes.
 - `src/layouts/` for Astro page layouts.
 - `src/components/astro/` for static layout, SEO, navigation, and page-state components.
-- `src/features/story/` for Vue story-project components, state, and adapters.
-- `src/features/drama/` for React short-drama components, state, and adapters.
+- `src/workspaces/story/` for Vue story-project components, state, and adapters.
+- `src/workspaces/drama/` for React short-drama components, state, and adapters.
 - `src/lib/server-api/` for framework-neutral Server API access and error mapping.
 - `src/lib/session/` for session representations and navigation helpers; Server remains authoritative.
 - `src/styles/` for shared tokens, accessible base styles, and public-page styles.
