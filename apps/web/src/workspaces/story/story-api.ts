@@ -74,6 +74,36 @@ export interface StoryVersionsResponse {
   items: StoryArtifactVersion[];
 }
 
+export interface StoryConversation {
+  id: string;
+  tenantId: string;
+  projectId: string;
+  title: string;
+  status: 'active' | 'archived';
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoryConversationResponse {
+  conversation: StoryConversation;
+}
+
+export interface StoryMessageAppendResponse {
+  message: {
+    id: string;
+    tenantId: string;
+    conversationId: string;
+    authorType: 'user' | 'assistant' | 'system';
+    body: string;
+    createdAt: string;
+  };
+  generationRequest: {
+    id: string;
+    status: string;
+  };
+}
+
 export interface StoryArtifactMutationResponse {
   artifact: StoryArtifact;
   version: StoryArtifactVersion;
@@ -108,6 +138,35 @@ export function createStoryProject(
       title: input.title,
       visibility: input.visibility ?? 'team',
     },
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createStoryConversation(
+  teamId: string,
+  projectId: string,
+  input: { title: string },
+  idempotencyKey = createIdempotencyKey('create-story-conversation'),
+): Promise<StoryConversationResponse> {
+  return sendJson<StoryConversationResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/conversations`,
+    'POST',
+    input,
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function appendStoryMessage(
+  teamId: string,
+  projectId: string,
+  conversationId: string,
+  body: string,
+  idempotencyKey = createIdempotencyKey('append-story-message'),
+): Promise<StoryMessageAppendResponse> {
+  return sendJson<StoryMessageAppendResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/conversations/${conversationId}/messages`,
+    'POST',
+    { body },
     { 'Idempotency-Key': idempotencyKey },
   );
 }

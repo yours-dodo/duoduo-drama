@@ -4,9 +4,18 @@ interface Props {
   showThemeToggle?: boolean;
   showPublicNav?: boolean;
   showBackLink?: boolean;
+  showStoryTools?: boolean;
+  showWorkspaceTools?: boolean;
 }
 
-const { brandName = '多多剧场', showThemeToggle = false, showPublicNav = true, showBackLink = false } = Astro.props;
+const {
+  brandName = '多多剧场',
+  showThemeToggle = false,
+  showPublicNav = true,
+  showBackLink = false,
+  showStoryTools = false,
+  showWorkspaceTools = false,
+} = Astro.props;
 ---
 
 <header class="site-header">
@@ -14,6 +23,102 @@ const { brandName = '多多剧场', showThemeToggle = false, showPublicNav = tru
     <span class="brand-mark" aria-hidden="true">多</span>
     <span>{brandName}</span>
   </a>
+  {showWorkspaceTools && (
+    <div class="workspace-header-tools" aria-label="工作台工具">
+      <button
+        class="workspace-header-tool"
+        type="button"
+        data-workspace-theme-toggle
+        aria-label="切换浅色主题"
+        title="切换浅色主题"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+          <circle cx="10" cy="10" r="3.2" stroke="currentColor" stroke-width="1.4" />
+          <path d="M10 2.2v2M10 15.8v2M17.8 10h-2M4.2 10h-2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9 4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+        </svg>
+        <span class="sr-only">切换主题</span>
+      </button>
+      <button
+        class="workspace-header-tool"
+        type="button"
+        data-workspace-fullscreen-toggle
+        aria-label="全屏展示"
+        aria-pressed="false"
+        title="全屏展示"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+          <path d="M7 3H3v4M13 3h4v4M17 13v4h-4M3 13v4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="sr-only">全屏展示</span>
+      </button>
+    </div>
+  )}
+  {showStoryTools && (
+    <div class="story-header-tools" aria-label="故事工作区工具">
+      <nav class="story-header-nav" aria-label="故事工作区导航">
+        <a href="/dramas">短剧工作台</a>
+        <a href="/works">作品广场</a>
+        <a href="/collaboration">联合创作</a>
+      </nav>
+      <button
+        class="story-header-tool"
+        type="button"
+        data-story-theme-toggle
+        aria-label="切换主题色"
+        title="切换主题色"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+          <circle cx="10" cy="10" r="3.2" stroke="currentColor" stroke-width="1.4" />
+          <path d="M10 2.2v2M10 15.8v2M17.8 10h-2M4.2 10h-2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9 4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+        </svg>
+        <span class="sr-only">切换主题色</span>
+      </button>
+      <button
+        class="story-header-tool"
+        type="button"
+        data-story-fullscreen-toggle
+        aria-label="全屏展示"
+        aria-pressed="false"
+        title="全屏展示"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+          <path d="M7 3H3v4M13 3h4v4M17 13v4h-4M3 13v4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="sr-only">全屏展示</span>
+      </button>
+      <div class="story-header-help">
+        <button
+          class="story-header-tool"
+          type="button"
+          data-story-help-toggle
+          aria-label="系统教程"
+          aria-controls="story-help-menu"
+          aria-expanded="false"
+          title="系统教程"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+            <circle cx="10" cy="10" r="7.2" stroke="currentColor" stroke-width="1.4" />
+            <path d="M7.9 7.6a2.2 2.2 0 1 1 3.4 1.8c-.8.5-1.3.9-1.3 1.8M10 14.4v.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+          <span class="sr-only">系统教程</span>
+        </button>
+        <div
+          id="story-help-menu"
+          class="story-help-menu"
+          role="menu"
+          aria-label="系统教程菜单"
+          hidden
+        >
+          <button class="story-help-menu-item" type="button" role="menuitem" data-story-help-item>
+            系统教程
+          </button>
+          <button class="story-help-menu-item" type="button" role="menuitem" data-story-help-item>
+            基础知识学习
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
   <nav aria-label="主导航">
     {showPublicNav && <a href="/stories">故事创作</a>}
     {showPublicNav && <a href="/dramas">短剧创作</a>}
@@ -29,3 +134,154 @@ const { brandName = '多多剧场', showThemeToggle = false, showPublicNav = tru
     {showBackLink ? <a class="header-back" href="/">返回首页</a> : <a class="header-login" href="/login">开始创作</a>}
   </nav>
 </header>
+
+{showWorkspaceTools && (
+  <script is:inline>
+    (() => {
+      const root = document.documentElement;
+      const themeToggle = document.querySelector('[data-workspace-theme-toggle]');
+      const fullscreenToggle = document.querySelector('[data-workspace-fullscreen-toggle]');
+
+      if (!themeToggle || !fullscreenToggle) return;
+
+      const applyWorkspaceTheme = (theme) => {
+        root.dataset.theme = theme;
+        root.dataset.storyTheme = theme;
+        themeToggle.setAttribute('aria-label', theme === 'light' ? '切换深色主题' : '切换浅色主题');
+        themeToggle.setAttribute('title', theme === 'light' ? '切换深色主题' : '切换浅色主题');
+        themeToggle.setAttribute('aria-pressed', String(theme === 'light'));
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#F5F5F3' : '#080808');
+      };
+
+      let savedTheme = null;
+      try {
+        savedTheme = window.localStorage.getItem('duoduo-theme') ?? window.localStorage.getItem('duoduo-story-theme');
+      } catch {
+        // Use the default theme when storage is unavailable.
+      }
+      applyWorkspaceTheme(savedTheme === 'light' ? 'light' : 'dark');
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = root.dataset.storyTheme === 'light' ? 'dark' : 'light';
+        applyWorkspaceTheme(nextTheme);
+        try {
+          window.localStorage.setItem('duoduo-theme', nextTheme);
+          window.localStorage.setItem('duoduo-story-theme', nextTheme);
+        } catch {
+          // Keep the in-memory theme when storage is unavailable.
+        }
+      });
+
+      const updateFullscreenState = () => {
+        const isFullscreen = Boolean(document.fullscreenElement);
+        fullscreenToggle.setAttribute('aria-pressed', String(isFullscreen));
+        fullscreenToggle.setAttribute('aria-label', isFullscreen ? '退出全屏展示' : '全屏展示');
+        fullscreenToggle.setAttribute('title', isFullscreen ? '退出全屏展示' : '全屏展示');
+      };
+
+      fullscreenToggle.addEventListener('click', async () => {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          } else if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch {
+          updateFullscreenState();
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenState);
+    })();
+  </script>
+)}
+
+{showStoryTools && (
+  <script is:inline>
+    (() => {
+      const root = document.documentElement;
+      const themeToggle = document.querySelector('[data-story-theme-toggle]');
+      const fullscreenToggle = document.querySelector('[data-story-fullscreen-toggle]');
+      const helpToggle = document.querySelector('[data-story-help-toggle]');
+      const helpMenu = document.querySelector('#story-help-menu');
+      const helpRoot = document.querySelector('.story-header-help');
+
+      if (!themeToggle || !fullscreenToggle || !helpToggle || !helpMenu || !helpRoot) return;
+
+      const applyStoryTheme = (theme) => {
+        root.dataset.theme = theme;
+        root.dataset.storyTheme = theme;
+        themeToggle.setAttribute('aria-label', theme === 'light' ? '切换深色主题' : '切换浅色主题');
+        themeToggle.setAttribute('title', theme === 'light' ? '切换深色主题' : '切换浅色主题');
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#F5F5F3' : '#080808');
+      };
+
+      let savedTheme = null;
+      try {
+        savedTheme = window.localStorage.getItem('duoduo-theme') ?? window.localStorage.getItem('duoduo-story-theme');
+      } catch {
+        // Use the default theme when storage is unavailable.
+      }
+      const initialTheme = root.dataset.storyTheme;
+      applyStoryTheme(
+        initialTheme === 'light' || initialTheme === 'dark'
+          ? initialTheme
+          : savedTheme === 'light'
+            ? 'light'
+            : 'dark',
+      );
+
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = root.dataset.storyTheme === 'light' ? 'dark' : 'light';
+        applyStoryTheme(nextTheme);
+        try {
+          window.localStorage.setItem('duoduo-theme', nextTheme);
+          window.localStorage.setItem('duoduo-story-theme', nextTheme);
+        } catch {
+          // Keep the in-memory theme when storage is unavailable.
+        }
+      });
+
+      const updateFullscreenState = () => {
+        const isFullscreen = Boolean(document.fullscreenElement);
+        fullscreenToggle.setAttribute('aria-pressed', String(isFullscreen));
+        fullscreenToggle.setAttribute('aria-label', isFullscreen ? '退出全屏展示' : '全屏展示');
+        fullscreenToggle.setAttribute('title', isFullscreen ? '退出全屏展示' : '全屏展示');
+      };
+
+      fullscreenToggle.addEventListener('click', async () => {
+        try {
+          if (document.fullscreenElement) {
+            await document.exitFullscreen();
+          } else if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch {
+          updateFullscreenState();
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenState);
+
+      const closeHelpMenu = () => {
+        helpMenu.hidden = true;
+        helpToggle.setAttribute('aria-expanded', 'false');
+      };
+
+      helpToggle.addEventListener('click', () => {
+        const isOpen = !helpMenu.hidden;
+        helpMenu.hidden = isOpen;
+        helpToggle.setAttribute('aria-expanded', String(!isOpen));
+      });
+      helpMenu.addEventListener('click', (event) => {
+        if (event.target.closest('[data-story-help-item]')) closeHelpMenu();
+      });
+      document.addEventListener('click', (event) => {
+        if (!helpRoot.contains(event.target)) closeHelpMenu();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeHelpMenu();
+      });
+    })();
+  </script>
+)}

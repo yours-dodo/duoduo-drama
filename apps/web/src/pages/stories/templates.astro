@@ -1,0 +1,22 @@
+---
+import AuthGate from '../../components/astro/AuthGate.astro';
+import StorySubroutePage from '../../components/astro/StorySubroutePage.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="模版库｜多多剧场"
+  description="从故事模版开始，快速进入创作。"
+  pageClass="story-page story-catalog-page story-subroute-page"
+>
+  <AuthGate>
+    <StorySubroutePage
+      activePath="/stories/templates"
+      index="03"
+      title="模版库"
+      description="从经过整理的故事结构和创作方法开始，快速找到适合你的起点。"
+    />
+  </AuthGate>
+</BaseLayout>

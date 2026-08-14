@@ -7,7 +7,9 @@ import {
   type SessionSnapshot,
 } from '../../lib/server-api/session-api';
 import {
+  appendStoryMessage,
   confirmStoryDraft,
+  createStoryConversation,
   createStoryProject,
   discardStoryDraft,
   editStoryDraft,
@@ -21,6 +23,19 @@ import {
 } from './story-api';
 import StoryStatusBar from './components/StoryStatusBar.vue';
 
+type StorySpeechRecognition = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+};
+
+type StorySpeechRecognitionConstructor = new () => StorySpeechRecognition;
+
 const props = defineProps<{
   projectId?: string;
 }>();
@@ -33,61 +48,46 @@ const selectedArtifact = ref<StoryArtifact | null>(null);
 const selectedVersion = ref<StoryArtifactVersion | null>(null);
 const draftContent = ref('');
 const draftFormat = ref<StoryArtifactContentFormat>('text');
-const newProjectTitle = ref('');
 const selectedTeamId = ref<string | null>(null);
 const viewState = ref<'loading' | 'ready' | 'error' | 'auth-required'>(
   'loading',
 );
 const errorMessage = ref('');
 const actionMessage = ref('');
-const creating = ref(false);
 const saving = ref(false);
 const confirming = ref(false);
 const discarding = ref(false);
-type WorkFilter = 'all' | 'active' | 'archived';
-
-const workFilter = ref<WorkFilter>('all');
-const workFilters: Array<{ value: WorkFilter; label: string }> = [
-  { value: 'all', label: '全部作品' },
-  { value: 'active', label: '创作中' },
-  { value: 'archived', label: '已归档' },
-];
+const searchQuery = ref('');
+const searchDate = ref('');
+const storyPrompt = ref('');
+const voiceInputActive = ref(false);
+const storyPromptSubmitting = ref(false);
+const appliedSearch = ref({ query: '', date: '' });
+let speechRecognition: StorySpeechRecognition | null = null;
 const placeholderWorks = [
   {
     title: '雨停之前',
     type: '故事项目',
-    status: 'active' as const,
-    statusLabel: '创作中',
     updated: '刚刚更新',
-    meta: '03 个成果 · 第 4 次更新',
-    mark: '01',
+    updatedAt: '2026-08-14',
   },
   {
     title: '无声电台',
     type: '故事项目',
-    status: 'active' as const,
-    statusLabel: '创作中',
     updated: '昨天更新',
-    meta: '05 个成果 · 第 8 次更新',
-    mark: '02',
+    updatedAt: '2026-08-13',
   },
   {
     title: '潮汐之后',
     type: '故事项目',
-    status: 'archived' as const,
-    statusLabel: '已归档',
     updated: '6 月 18 日',
-    meta: '08 个成果 · 第 12 次更新',
-    mark: '03',
+    updatedAt: '2026-06-18',
   },
   {
     title: '明天的旧照片',
     type: '故事项目',
-    status: 'active' as const,
-    statusLabel: '创作中',
     updated: '6 月 16 日',
-    meta: '02 个成果 · 第 2 次更新',
-    mark: '04',
+    updatedAt: '2026-06-16',
   },
 ] as const;
 
@@ -102,10 +102,30 @@ const canEdit = computed(
     selectedVersion.value?.status === 'draft',
 );
 const projectMode = computed(() => (props.projectId ? 'project' : 'catalog'));
-const visiblePlaceholderWorks = computed(() =>
-  workFilter.value === 'all'
-    ? placeholderWorks
-    : placeholderWorks.filter((work) => work.status === workFilter.value),
+const hasAppliedWorkConditions = computed(() =>
+  Boolean(appliedSearch.value.query || appliedSearch.value.date),
+);
+const filteredPlaceholderWorks = computed(() => {
+  const { query, date } = appliedSearch.value;
+  const filteredWorks = placeholderWorks.filter((work) => {
+    const matchesQuery =
+      !query ||
+      [work.title, work.type, work.updated].some(
+        (value) => value.toLocaleLowerCase().includes(query),
+      );
+    const matchesDate = !date || work.updatedAt === date;
+    return matchesQuery && matchesDate;
+  });
+  return hasAppliedWorkConditions.value
+    ? filteredWorks
+    : [...filteredWorks].sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt),
+      );
+});
+const recentPlaceholderWorkTitle = computed(() =>
+  hasAppliedWorkConditions.value
+    ? null
+    : (filteredPlaceholderWorks.value[0]?.title ?? null),
 );
 const statusBarMessage = computed(() => {
   if (viewState.value === 'loading') return '读取中…';
@@ -193,22 +213,6 @@ async function selectArtifact(artifact: StoryArtifact) {
     await loadArtifact(activeTeam.value.id, project.value.id, artifact.id);
   } catch (error) {
     handleError(error);
-  }
-}
-
-async function createProject() {
-  if (!activeTeam.value || !newProjectTitle.value.trim()) return;
-  creating.value = true;
-  errorMessage.value = '';
-  try {
-    const result = await createStoryProject(activeTeam.value.id, {
-      title: newProjectTitle.value.trim(),
-    });
-    window.location.assign(`/stories/${result.project.id}`);
-  } catch (error) {
-    handleError(error);
-  } finally {
-    creating.value = false;
   }
 }
 
@@ -321,6 +325,138 @@ function handleError(error: unknown) {
     error instanceof Error ? error.message : '故事工作台暂时无法加载。';
 }
 
+function applySearch() {
+  appliedSearch.value = {
+    query: searchQuery.value.trim().toLocaleLowerCase(),
+    date: searchDate.value,
+  };
+}
+
+function createStoryTitle(prompt: string) {
+  const firstThought = prompt.split(/[。！？.!?]/u)[0]?.trim() || prompt;
+  const normalized = firstThought.replace(/\s+/gu, ' ');
+  return normalized.length > 32
+    ? `${normalized.slice(0, 32).trim()}…`
+    : normalized;
+}
+
+async function submitStoryPrompt() {
+  const prompt = storyPrompt.value.trim();
+  if (!prompt || storyPromptSubmitting.value) return;
+  if (!activeTeam.value) {
+    actionMessage.value = '请先选择一个团队空间，再开始 AI 对话。';
+    return;
+  }
+
+  storyPromptSubmitting.value = true;
+  errorMessage.value = '';
+  actionMessage.value = '';
+  const title = createStoryTitle(prompt);
+  try {
+    const { project: createdProject } = await createStoryProject(
+      activeTeam.value.id,
+      { title },
+    );
+    const { conversation } = await createStoryConversation(
+      activeTeam.value.id,
+      createdProject.id,
+      { title: '第一次创作对话' },
+    );
+    await appendStoryMessage(
+      activeTeam.value.id,
+      createdProject.id,
+      conversation.id,
+      prompt,
+    );
+    rememberRecentConversation({
+      id: conversation.id,
+      projectId: createdProject.id,
+      title: conversation.title,
+    });
+    storyPrompt.value = '';
+    window.location.assign(`/stories/${createdProject.id}`);
+  } catch (error) {
+    handleError(error);
+  } finally {
+    storyPromptSubmitting.value = false;
+  }
+}
+
+function rememberRecentConversation(conversation: {
+  id: string;
+  projectId: string;
+  title: string;
+}) {
+  if (typeof window === 'undefined') return;
+  const storageKey = 'duoduo-story-recent-conversations';
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]');
+    const conversations = Array.isArray(stored) ? stored : [];
+    const nextConversation = {
+      ...conversation,
+      updatedAt: Date.now(),
+    };
+    const next = [
+      nextConversation,
+      ...conversations.filter((item) => item?.id !== conversation.id),
+    ].slice(0, 5);
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+  } catch {
+    // Recent conversations are a convenience cache; creation should still succeed.
+  }
+}
+
+function toggleVoiceInput() {
+  if (voiceInputActive.value) {
+    speechRecognition?.stop();
+    return;
+  }
+  if (typeof window === 'undefined') return;
+
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: StorySpeechRecognitionConstructor;
+    webkitSpeechRecognition?: StorySpeechRecognitionConstructor;
+  };
+  const SpeechRecognition =
+    speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'zh-CN';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  recognition.onresult = (event) => {
+    const resultEvent = event as {
+      resultIndex?: number;
+      results: ArrayLike<ArrayLike<{ transcript: string }>>;
+    };
+    const transcript = Array.from(resultEvent.results)
+      .slice(resultEvent.resultIndex ?? 0)
+      .map((result) => result[0]?.transcript ?? '')
+      .join('')
+      .trim();
+    if (transcript) {
+      storyPrompt.value = `${storyPrompt.value.trim()} ${transcript}`.trim();
+    }
+  };
+  recognition.onend = () => {
+    voiceInputActive.value = false;
+    speechRecognition = null;
+  };
+  recognition.onerror = () => {
+    voiceInputActive.value = false;
+    speechRecognition = null;
+  };
+  speechRecognition = recognition;
+  voiceInputActive.value = true;
+  try {
+    recognition.start();
+  } catch {
+    voiceInputActive.value = false;
+    speechRecognition = null;
+  }
+}
+
 function formatDate(value: string | undefined) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('zh-CN', {
@@ -335,7 +471,11 @@ function formatDate(value: string | undefined) {
 <template>
   <section
     class="workspace-shell story-workspace story-workbench"
-    aria-labelledby="story-workspace-title"
+    :aria-labelledby="
+      projectMode === 'project' ? 'story-workspace-title' : undefined
+    "
+    :aria-label="projectMode === 'project' ? undefined : '作品工作区'"
+    :aria-busy="viewState === 'loading'"
   >
     <header
       v-if="projectMode === 'project'"
@@ -357,12 +497,191 @@ function formatDate(value: string | undefined) {
     </header>
 
     <div
-      v-if="viewState === 'loading'"
+      v-if="viewState === 'loading' && projectMode === 'catalog'"
+      class="story-catalog-layout story-catalog-skeleton"
+      role="status"
+      aria-label="正在加载作品"
+    >
+      <span class="sr-only">正在加载作品</span>
+      <div class="story-catalog-main">
+        <div class="story-quick-input-group">
+          <div class="story-quick-input-heading">
+            <div class="story-quick-input-copy">
+              <h2 class="story-quick-input-title">把一个想法变成故事</h2>
+            </div>
+          </div>
+          <section class="story-quick-input" aria-label="新的故事想法">
+            <div class="story-quick-input-control">
+              <textarea
+                id="story-quick-input"
+                v-model="storyPrompt"
+                maxlength="500"
+                rows="3"
+                placeholder="例如：一个失忆的急诊医生，在旧车站发现了自己的死亡证明……"
+                aria-label="输入一个故事想法"
+                disabled
+              ></textarea>
+              <button
+                class="story-quick-input-send"
+                type="button"
+                aria-label="发送创作想法"
+                title="发送创作想法"
+                disabled
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="18"
+                  height="18"
+                  fill="none"
+                >
+                  <path
+                    d="M10 15V5m0 0L6.5 8.5M10 5l3.5 3.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="sr-only">发送创作想法</span>
+              </button>
+              <button
+                class="story-quick-input-voice"
+                :class="{ 'is-active': voiceInputActive }"
+                type="button"
+                :aria-label="voiceInputActive ? '停止语音输入' : '语音输入'"
+                :aria-pressed="voiceInputActive"
+                :title="voiceInputActive ? '停止语音输入' : '语音输入'"
+                disabled
+                @click="toggleVoiceInput"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  focusable="false"
+                >
+                  <use
+                    href="/icons/voice-regular-24.svg#voice-regular-24"
+                    fill="currentColor"
+                  ></use>
+                </svg>
+                <span class="sr-only">{{
+                  voiceInputActive ? '停止语音输入' : '语音输入'
+                }}</span>
+              </button>
+            </div>
+          </section>
+        </div>
+        <section
+          id="story-works"
+          class="story-works-region"
+          aria-label="作品列表"
+        >
+          <header class="story-works-header">
+            <div class="story-works-heading">
+              <div class="story-works-title-row">
+                <h1 id="story-works-title">个人空间</h1>
+                <label
+                  v-if="session?.teams.length"
+                  class="story-space-switcher"
+                >
+                  <span class="sr-only">切换空间</span>
+                  <select disabled aria-label="切换空间">
+                    <option>读取中…</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </header>
+
+          <div class="story-works-toolbar" aria-label="作品搜索">
+            <form class="story-search-form" @submit.prevent="applySearch">
+              <label class="story-search-field">
+                <span class="story-search-icon" aria-hidden="true">⌕</span>
+                <span class="sr-only">搜索作品</span>
+                <input
+                  v-model="searchQuery"
+                  type="search"
+                  placeholder="搜索作品"
+                  aria-label="搜索作品"
+                  disabled
+                />
+              </label>
+              <label class="story-date-field">
+                <span class="sr-only">按日期搜索</span>
+                <input
+                  v-model="searchDate"
+                  type="date"
+                  aria-label="按日期搜索"
+                  disabled
+                />
+              </label>
+              <button
+                class="story-search-button"
+                type="submit"
+                aria-label="搜索作品"
+                title="搜索作品"
+                disabled
+              >
+                <span class="sr-only">搜索</span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  width="16"
+                  height="16"
+                  fill="none"
+                >
+                  <circle
+                    cx="8.5"
+                    cy="8.5"
+                    r="5.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  />
+                  <path
+                    d="m12.5 12.5 4 4"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </form>
+          </div>
+
+          <div class="story-placeholder-grid" aria-hidden="true">
+            <article
+              v-for="index in 4"
+              :key="index"
+              class="story-skeleton-item"
+            >
+              <div class="story-skeleton-card">
+                <div class="story-skeleton-cover story-skeleton-shimmer"></div>
+                <div class="story-skeleton-card-body">
+                  <span class="story-skeleton-type story-skeleton-shimmer"></span>
+                  <span
+                    class="story-skeleton-card-meta story-skeleton-shimmer"
+                  ></span>
+                </div>
+              </div>
+              <span
+                class="story-skeleton-title story-skeleton-shimmer"
+              ></span>
+            </article>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div
+      v-else-if="viewState === 'loading'"
       class="workspace-state workspace-state-loading"
       role="status"
     >
       <span class="state-mark" aria-hidden="true">✦</span>
-      <strong>正在铺开你的故事桌面</strong>
+      <strong>正在加载故事工作区</strong>
       <span>读取项目与已确认成果……</span>
     </div>
 
@@ -390,144 +709,218 @@ function formatDate(value: string | undefined) {
 
     <template v-else-if="projectMode === 'catalog'">
       <div class="story-catalog-layout">
-        <aside class="story-floating-sidebar" aria-label="故事工作区功能导航">
-          <div class="story-floating-sidebar-mark" aria-hidden="true">S</div>
-          <nav class="story-floating-nav">
-            <a class="story-floating-nav-item is-active" href="#story-entry-title">
-              <span class="story-floating-nav-index">01</span>
-              <span>创作</span>
-            </a>
-            <a class="story-floating-nav-item" href="#story-works">
-              <span class="story-floating-nav-index">02</span>
-              <span>作品</span>
-            </a>
-            <button class="story-floating-nav-item" type="button" disabled>
-              <span class="story-floating-nav-index">03</span>
-              <span>素材</span>
-            </button>
-            <button class="story-floating-nav-item" type="button" disabled>
-              <span class="story-floating-nav-index">04</span>
-              <span>协作</span>
-            </button>
-          </nav>
-          <span class="story-floating-sidebar-note">STORY / DESK</span>
-        </aside>
-
         <div class="story-catalog-main">
-          <section class="story-entry-dialog" aria-labelledby="story-entry-title">
-            <div class="story-entry-brand" aria-hidden="true">DUODUO / STORY</div>
-            <div class="story-entry-copy">
-              <span class="story-entry-kicker">AI 创作入口</span>
-              <h1 id="story-entry-title">你想写什么？</h1>
-              <p>把脑海里的第一句话交给我。</p>
+          <div class="story-quick-input-group">
+            <div class="story-quick-input-heading">
+              <div class="story-quick-input-copy">
+                <h2 class="story-quick-input-title">把一个想法变成故事</h2>
+              </div>
             </div>
-
-            <form class="story-entry-form" @submit.prevent="createProject">
-              <label class="sr-only" for="story-entry-prompt">故事想法</label>
-              <textarea
-                id="story-entry-prompt"
-                v-model="newProjectTitle"
-                autofocus
-                rows="4"
-                maxlength="200"
-                placeholder="比如：一个失去记忆的女孩，每晚都会收到来自未来的语音……"
-                :disabled="creating || !activeTeam"
-                @keydown.enter.meta.prevent="createProject"
-                @keydown.enter.ctrl.prevent="createProject"
-              ></textarea>
-              <div class="story-entry-form-footer">
-                <span>{{
-                  activeTeam ? '按 ⌘ Enter 开始' : '当前账号还没有可用的团队空间'
-                }}</span>
+            <section class="story-quick-input" aria-label="新的故事想法">
+              <div class="story-quick-input-control">
+                <textarea
+                  id="story-quick-input"
+                  v-model="storyPrompt"
+                  maxlength="500"
+                  rows="3"
+                  placeholder="例如：一个失忆的急诊医生，在旧火车站发现了自己的死亡证明……"
+                  aria-label="输入一个故事想法"
+                  :disabled="storyPromptSubmitting"
+                  @keydown.enter.exact.prevent="submitStoryPrompt"
+                ></textarea>
                 <button
-                  class="story-entry-submit"
-                  type="submit"
-                  :disabled="creating || !activeTeam || !newProjectTitle.trim()"
-                  :aria-label="creating ? '正在创建故事' : '开始创作'"
+                  class="story-quick-input-send"
+                  type="button"
+                  :aria-label="
+                    storyPromptSubmitting ? '正在准备故事' : '发送创作想法'
+                  "
+                  :title="
+                    storyPromptSubmitting ? '正在准备故事' : '发送创作想法'
+                  "
+                  :disabled="
+                    !storyPrompt.trim() || storyPromptSubmitting || !activeTeam
+                  "
+                  @click="submitStoryPrompt"
                 >
-                  <span>{{ creating ? '创建中…' : '开始' }}</span>
-                  <span aria-hidden="true">↗</span>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="18"
+                    height="18"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 15V5m0 0L6.5 8.5M10 5l3.5 3.5"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span class="sr-only">发送创作想法</span>
+                </button>
+                <button
+                  class="story-quick-input-voice"
+                  :class="{ 'is-active': voiceInputActive }"
+                  type="button"
+                  :aria-label="voiceInputActive ? '停止语音输入' : '语音输入'"
+                  :aria-pressed="voiceInputActive"
+                  :title="voiceInputActive ? '停止语音输入' : '语音输入'"
+                  :disabled="storyPromptSubmitting"
+                  @click="toggleVoiceInput"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    focusable="false"
+                  >
+                    <use
+                      href="/icons/voice-regular-24.svg#voice-regular-24"
+                      fill="currentColor"
+                    ></use>
+                  </svg>
+                  <span class="sr-only">{{
+                    voiceInputActive ? '停止语音输入' : '语音输入'
+                  }}</span>
                 </button>
               </div>
-            </form>
-
-            <p v-if="errorMessage" class="story-entry-error" role="alert">
-              {{ errorMessage }}
-            </p>
-          </section>
-
+              <p
+                v-if="storyPromptSubmitting"
+                class="story-quick-input-status"
+                role="status"
+              >
+                正在准备你的故事……
+              </p>
+            </section>
+          </div>
           <section
             id="story-works"
             class="story-works-region"
-            aria-labelledby="story-works-title"
+            aria-label="作品列表"
           >
             <header class="story-works-header">
-              <div>
-                <span class="story-entry-kicker">MY WORKS / 02</span>
-                <h2 id="story-works-title">我的作品</h2>
-                <p>把已经发生的创作收在这里，继续下一次推进。</p>
-              </div>
-              <label class="story-space-switcher">
-                <span>当前空间</span>
-                <select v-model="selectedTeamId" aria-label="切换空间">
-                  <option
-                    v-for="team in session?.teams ?? []"
-                    :key="team.id"
-                    :value="team.id"
+              <div class="story-works-heading">
+                <div class="story-works-title-row">
+                  <h1 id="story-works-title">个人空间</h1>
+                  <label
+                    v-if="session?.teams.length"
+                    class="story-space-switcher"
                   >
-                    {{ team.name }}
-                  </option>
-                </select>
-              </label>
+                    <span class="sr-only">切换空间</span>
+                    <select
+                      v-model="selectedTeamId"
+                      aria-label="切换空间"
+                      :disabled="storyPromptSubmitting"
+                    >
+                      <option
+                        v-if="!(session?.teams.length ?? 0)"
+                        :value="null"
+                      >
+                        个人空间
+                      </option>
+                      <option
+                        v-for="team in session?.teams ?? []"
+                        :key="team.id"
+                        :value="team.id"
+                      >
+                        {{ team.name }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <p>按空间整理你的故事资产。</p>
+              </div>
             </header>
 
-            <div class="story-works-toolbar" aria-label="作品筛选">
-              <div class="story-filter-list" role="group" aria-label="按状态筛选作品">
+            <div class="story-works-toolbar" aria-label="作品搜索">
+              <form class="story-search-form" @submit.prevent="applySearch">
+                <label class="story-search-field">
+                  <span class="story-search-icon" aria-hidden="true">⌕</span>
+                  <span class="sr-only">搜索作品</span>
+                  <input
+                    v-model="searchQuery"
+                    type="search"
+                    placeholder="搜索作品"
+                    aria-label="搜索作品"
+                  />
+                </label>
+                <label class="story-date-field">
+                  <span class="sr-only">按日期搜索</span>
+                  <input
+                    v-model="searchDate"
+                    type="date"
+                    aria-label="按日期搜索"
+                  />
+                </label>
                 <button
-                  v-for="filter in workFilters"
-                  :key="filter.value"
-                  class="story-filter-button"
-                  :class="{ 'is-active': workFilter === filter.value }"
-                  type="button"
-                  :aria-pressed="workFilter === filter.value"
-                  @click="workFilter = filter.value"
+                  class="story-search-button"
+                  type="submit"
+                  aria-label="搜索作品"
+                  title="搜索作品"
                 >
-                  {{ filter.label }}
+                  <span class="sr-only">搜索</span>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    width="16"
+                    height="16"
+                    fill="none"
+                  >
+                    <circle
+                      cx="8.5"
+                      cy="8.5"
+                      r="5.5"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                    />
+                    <path
+                      d="m12.5 12.5 4 4"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                    />
+                  </svg>
                 </button>
-              </div>
-              <span class="story-works-count"
-                >{{ visiblePlaceholderWorks.length }} / {{ placeholderWorks.length }} 件作品</span
-              >
+              </form>
             </div>
 
-            <div v-if="visiblePlaceholderWorks.length" class="story-placeholder-grid">
+            <div
+              v-if="filteredPlaceholderWorks.length"
+              class="story-placeholder-grid"
+            >
               <article
-                v-for="work in visiblePlaceholderWorks"
+                v-for="work in filteredPlaceholderWorks"
                 :key="work.title"
-                class="story-placeholder-card"
-                :class="`is-${work.status}`"
+                class="story-placeholder-item"
               >
-                <div class="story-placeholder-card-top">
-                  <span>{{ work.mark }}</span>
-                  <span>{{ work.updated }}</span>
+                <div class="story-placeholder-card">
+                  <div class="story-placeholder-card-top">
+                    <span
+                      v-if="
+                        !hasAppliedWorkConditions &&
+                        work.title === recentPlaceholderWorkTitle
+                      "
+                      class="story-card-recent"
+                    >
+                      最近编辑
+                    </span>
+                  </div>
+                  <div class="story-placeholder-cover" aria-hidden="true">
+                    <strong>{{ work.title.slice(0, 1) }}</strong>
+                  </div>
+                  <div class="story-placeholder-card-body">
+                    <span class="story-placeholder-type">{{ work.type }}</span>
+                    <p>{{ work.updated }}</p>
+                  </div>
                 </div>
-                <div class="story-placeholder-cover" aria-hidden="true">
-                  <span>{{ work.title.slice(0, 1) }}</span>
-                </div>
-                <div class="story-placeholder-card-body">
-                  <span class="story-placeholder-type">{{ work.type }}</span>
-                  <h3>{{ work.title }}</h3>
-                  <p>{{ work.meta }}</p>
-                </div>
-                <footer class="story-placeholder-card-footer">
-                  <span>{{ work.statusLabel }}</span>
-                  <span aria-hidden="true">↗</span>
-                </footer>
+                <h3 class="story-placeholder-title">{{ work.title }}</h3>
               </article>
             </div>
             <div v-else class="story-works-empty">
-              <strong>还没有符合条件的作品</strong>
-              <span>切换筛选条件后，作品会继续留在这里。</span>
+              <strong>没有找到匹配的作品</strong>
+              <span>调整关键词或日期再试试。</span>
             </div>
           </section>
         </div>

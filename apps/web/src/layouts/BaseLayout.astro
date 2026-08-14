@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import '../styles/theme.css';
 import SeoHead from '../components/astro/SeoHead.astro';
 import SiteFooter from '../components/astro/SiteFooter.astro';
 import SiteHeader from '../components/astro/SiteHeader.astro';
@@ -15,8 +16,13 @@ interface Props {
 }
 
 const { title, description, keywords, eyebrow, pageClass, robots, structuredData } = Astro.props;
-const isLandingPage = pageClass === 'landing-page';
+const pageClasses = new Set((pageClass ?? '').split(/\s+/).filter(Boolean));
+const hasPageClass = (value: string) => pageClasses.has(value);
+const isLandingPage = hasPageClass('landing-page');
+const isStoryCatalogPage = hasPageClass('story-catalog-page');
+const isWorkspaceThemePage = hasPageClass('workspace-theme');
 const brandName = isLandingPage ? '多多文创' : '多多剧场';
+const headerBrandName = hasPageClass('story-page') ? '多多故事台' : brandName;
 const copyrightName = isLandingPage ? 'Duoduo Wenchuang' : 'Duoduo Drama';
 const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，也被看见。' : '让灵感变成故事，让故事被听见，也被看见。';
 ---
@@ -29,23 +35,17 @@ const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，�
       title={title}
       description={description}
       keywords={keywords}
-      themeColor={
-        pageClass === 'landing-page' ||
-        pageClass === 'login-page' ||
-        pageClass === 'onboarding-page' ||
-          pageClass === 'workspace-theme' ||
-          pageClass === 'story-page' ||
-          pageClass === 'collaboration-page'
-          ? '#EE752F'
-          : pageClass === 'drama-page'
-            ? '#C8FF43'
-            : pageClass === 'works-page'
-              ? '#0A0D0C'
-          : undefined
-      }
+      themeColor={hasPageClass('drama-page') ? '#C8FF43' : '#080808'}
       robots={robots}
       structuredData={structuredData}
     />
+    <style is:inline>
+      astro-island,
+      astro-slot,
+      astro-static-slot {
+        display: contents;
+      }
+    </style>
     <script is:inline>
       (() => {
         const root = document.documentElement;
@@ -54,19 +54,66 @@ const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，�
             if (event.persisted) window.location.reload();
           });
         }
-        if (root.dataset.page !== 'landing-page' && root.dataset.page !== 'login-page') return;
-        const storageKey = 'duoduo-public-theme';
-        const savedTheme = window.localStorage.getItem(storageKey);
-        root.dataset.theme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'dark';
+        const pageClassList = root.dataset.page?.split(/\s+/) ?? [];
+        if (pageClassList.includes('drama-page')) return;
+
+        const storageKey = 'duoduo-theme';
+        let savedTheme = null;
+        let legacyPublicTheme = null;
+        let legacyStoryTheme = null;
+        try {
+          savedTheme = window.localStorage.getItem(storageKey);
+          legacyPublicTheme = window.localStorage.getItem('duoduo-public-theme');
+          legacyStoryTheme = window.localStorage.getItem('duoduo-story-theme');
+        } catch {
+          // Use the default theme when storage is unavailable.
+        }
+        const theme =
+          savedTheme === 'light' || savedTheme === 'dark'
+            ? savedTheme
+            : legacyPublicTheme === 'light' || legacyPublicTheme === 'dark'
+              ? legacyPublicTheme
+              : legacyStoryTheme === 'light' || legacyStoryTheme === 'dark'
+                ? legacyStoryTheme
+                : 'dark';
+        root.dataset.theme = theme;
+        if (pageClassList.includes('story-catalog-page') || pageClassList.includes('workspace-theme')) {
+          root.dataset.storyTheme = theme;
+          try {
+            window.localStorage.setItem(storageKey, theme);
+          } catch {
+            // Continue with the in-memory theme when storage is unavailable.
+          }
+          if (pageClassList.includes('story-catalog-page')) {
+            let savedSidebarState = null;
+            try {
+              savedSidebarState = window.localStorage.getItem('duoduo-story-sidebar');
+            } catch {
+              // Use the expanded layout when storage is unavailable.
+            }
+            root.dataset.storySidebar = savedSidebarState === 'collapsed'
+              ? 'collapsed'
+              : 'expanded';
+          }
+          const metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) {
+            metaTheme.setAttribute('content', theme === 'light' ? '#F5F5F3' : '#080808');
+          }
+          return;
+        }
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#F5F5F3' : '#080808');
       })();
     </script>
   </head>
   <body class={pageClass}>
     <SiteHeader
-      brandName={brandName}
+      brandName={headerBrandName}
       showThemeToggle={isLandingPage}
-      showPublicNav={pageClass !== 'login-page' && pageClass !== 'onboarding-page'}
-      showBackLink={pageClass === 'login-page' || pageClass === 'onboarding-page'}
+      showStoryTools={isStoryCatalogPage}
+      showWorkspaceTools={isWorkspaceThemePage}
+      showPublicNav={!hasPageClass('login-page') && !hasPageClass('onboarding-page')}
+      showBackLink={hasPageClass('login-page') || hasPageClass('onboarding-page')}
     />
     {eyebrow && <span class="sr-only">{eyebrow}</span>}
     <main>
@@ -78,7 +125,11 @@ const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，�
         const root = document.documentElement;
         const toggle = document.querySelector('[data-theme-toggle]');
         if (!toggle || root.dataset.page !== 'landing-page') return;
-        const storageKey = 'duoduo-public-theme';
+        const storageKey = 'duoduo-theme';
+        const updateThemeMeta = (theme) => {
+          const metaTheme = document.querySelector('meta[name="theme-color"]');
+          if (metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#F5F5F3' : '#080808');
+        };
         const updateToggle = () => {
           const isLight = root.dataset.theme === 'light';
           toggle.setAttribute('aria-pressed', String(!isLight));
@@ -89,6 +140,7 @@ const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，�
         updateToggle();
         toggle.addEventListener('click', () => {
           root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+          updateThemeMeta(root.dataset.theme);
           window.localStorage.setItem(storageKey, root.dataset.theme);
           updateToggle();
         });

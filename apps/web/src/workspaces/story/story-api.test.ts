@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  appendStoryMessage,
   confirmStoryDraft,
+  createStoryConversation,
   createStoryProject,
   listStoryProjects,
 } from './story-api';
@@ -48,7 +50,7 @@ describe('story API adapter', () => {
     );
   });
 
-  it('adds idempotency to project creation and draft confirmation', async () => {
+  it('adds idempotency to project, conversation, and draft mutations', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(
@@ -65,6 +67,19 @@ describe('story API adapter', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await createStoryProject('team-1', { title: '新故事' }, 'create-key');
+    await createStoryConversation(
+      'team-1',
+      'project-1',
+      { title: '第一次创作对话' },
+      'conversation-key',
+    );
+    await appendStoryMessage(
+      'team-1',
+      'project-1',
+      'conversation-1',
+      '一个发生在旧车站的故事',
+      'message-key',
+    );
     await confirmStoryDraft(
       'team-1',
       'project-1',
@@ -89,6 +104,32 @@ describe('story API adapter', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      '/api/v1/teams/team-1/story-projects/project-1/conversations',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'conversation-key',
+        },
+        body: JSON.stringify({ title: '第一次创作对话' }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/teams/team-1/story-projects/project-1/conversations/conversation-1/messages',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'message-key',
+        },
+        body: JSON.stringify({ body: '一个发生在旧车站的故事' }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       '/api/v1/teams/team-1/story-projects/project-1/artifacts/artifact-1/drafts/version-1/confirm',
       expect.objectContaining({
         method: 'POST',

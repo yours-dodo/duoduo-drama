@@ -13,7 +13,7 @@ const { projectId } = Astro.params;
   description="继续你的短剧项目创作。"
   pageClass="drama-page"
 >
-  <AuthGate requireTeam>
+  <AuthGate>
     <DramaApp client:only="react" projectId={projectId} />
   </AuthGate>
 </BaseLayout>

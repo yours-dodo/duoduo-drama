@@ -11,7 +11,7 @@ export const prerender = false;
   description="在多多剧场中推进创意、剧本和制作流程。"
   pageClass="drama-page"
 >
-  <AuthGate requireTeam>
+  <AuthGate>
     <DramaApp client:only="react" />
   </AuthGate>
 </BaseLayout>

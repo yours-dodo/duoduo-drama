@@ -14,6 +14,18 @@ describe('workspace theme interactions', () => {
     );
   });
 
+  it('provides workspace header controls and a shared light theme', () => {
+    expect(workspaceStyles).toContain('body.workspace-theme .workspace-header-tools');
+    expect(workspaceStyles).toContain('body.workspace-theme .workspace-header-tool');
+    expect(workspaceStyles).toContain(
+      "html[data-story-theme='light'] body.workspace-theme",
+    );
+    expect(workspaceStyles).toContain('--workspace-canvas: #f1efe9;');
+    expect(workspaceStyles).toContain('--workspace-panel: #fffdfa;');
+    expect(workspaceStyles).toContain('@keyframes workspace-story-breathe-light');
+    expect(workspaceStyles).toContain('@keyframes workspace-drama-breathe-light');
+  });
+
   it('uses fluorescent accents and a breathing glow on hovered workspace cards', () => {
     expect(workspaceStyles).toContain('--workspace-story-hover: #ff6a00;');
     expect(workspaceStyles).toContain(

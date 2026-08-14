@@ -13,7 +13,7 @@ const { projectId } = Astro.params;
   description="继续你的故事项目创作。"
   pageClass="story-page story-detail-page"
 >
-  <AuthGate requireTeam>
+  <AuthGate>
     <StoryApp client:only="vue" projectId={projectId} />
   </AuthGate>
 </BaseLayout>

@@ -1,0 +1,221 @@
+/* Shared non-drama theme contract. Domain-specific signal colors may still
+ * opt out, but canvas, surfaces, copy, borders, and brand accents come from
+ * this single source of truth. */
+:root {
+  --theme-canvas: #080808;
+  --theme-surface: #0d0d0f;
+  --theme-raised: #151517;
+  --theme-elevated: #202023;
+  --theme-copy: #f5f3ef;
+  --theme-body: #f5f3ef;
+  --theme-muted: #99999f;
+  --theme-muted-soft: #6f7078;
+  --theme-line: rgba(245, 243, 239, 0.14);
+  --theme-line-strong: rgba(245, 243, 239, 0.24);
+  --theme-brand: #ee752f;
+  --theme-brand-hover: #ff8c4d;
+  --theme-brand-soft: rgba(238, 117, 47, 0.14);
+  --theme-brand-glow: rgba(238, 117, 47, 0.22);
+  --theme-signal: #c8ff43;
+  --theme-signal-soft: rgba(200, 255, 67, 0.14);
+  --theme-focus: var(--theme-brand);
+  --theme-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+  --theme-canvas: #f5f5f3;
+  --theme-surface: #fffdfa;
+  --theme-raised: #e9e7e2;
+  --theme-elevated: #ffffff;
+  --theme-copy: #1a1a1a;
+  --theme-body: #2f3432;
+  --theme-muted: #666666;
+  --theme-muted-soft: #7b837e;
+  --theme-line: rgba(26, 26, 26, 0.16);
+  --theme-line-strong: rgba(26, 26, 26, 0.26);
+  --theme-brand: #c66525;
+  --theme-brand-hover: #b4551c;
+  --theme-brand-soft: rgba(198, 101, 37, 0.12);
+  --theme-brand-glow: rgba(198, 101, 37, 0.2);
+  --theme-signal: #6c8e0a;
+  --theme-signal-soft: rgba(108, 142, 10, 0.12);
+  --theme-focus: var(--theme-brand);
+  --theme-shadow: 0 14px 36px rgba(26, 26, 26, 0.1);
+}
+
+/* The short-drama workspace owns its own visual language. */
+html[data-theme] body:not(.drama-page) {
+  --primary: var(--theme-brand);
+  --secondary: var(--theme-brand);
+  --success: var(--theme-brand);
+  --surface: var(--theme-surface);
+  --text: var(--theme-copy);
+  --neutral: var(--theme-surface);
+  --surface-base: var(--theme-canvas);
+  --surface-raised: var(--theme-surface);
+  --surface-inset: var(--theme-raised);
+  --text-primary: var(--theme-copy);
+  --text-secondary: var(--theme-body);
+  --text-muted: var(--theme-muted);
+  --border-hairline: var(--theme-line);
+  --border-strong: var(--theme-line-strong);
+  --accent: var(--theme-brand);
+  --accent-soft: var(--theme-brand-soft);
+  --secondary-soft: var(--theme-brand-soft);
+  --focus-ring: var(--theme-focus);
+  --canvas: var(--theme-canvas);
+  --canvas-raised: var(--theme-surface);
+  --canvas-deep: var(--theme-raised);
+  --panel: var(--theme-surface);
+  --panel-active: var(--theme-raised);
+  --text-bright: var(--theme-copy);
+  --text-dim: var(--theme-muted);
+  --line: var(--theme-line);
+  --line-strong: var(--theme-line-strong);
+  --green-soft: var(--theme-brand-soft);
+  --green-glow: var(--theme-brand-glow);
+  --shadow-soft: var(--theme-shadow);
+  --shadow-color: var(--theme-brand-glow);
+  color: var(--theme-copy);
+  background: var(--theme-canvas);
+}
+
+html[data-theme] body:not(.drama-page) main {
+  background: var(--theme-canvas);
+}
+
+html[data-theme] body.landing-page,
+html[data-theme] body.login-page,
+html[data-theme] body.onboarding-page {
+  --public-base: var(--theme-canvas);
+  --public-surface: var(--theme-surface);
+  --public-surface-raised: var(--theme-raised);
+  --public-surface-card: var(--theme-elevated);
+  --public-text: var(--theme-copy);
+  --public-muted: var(--theme-muted);
+  --public-soft: var(--theme-body);
+  --public-border: var(--theme-line);
+  --public-green: var(--theme-brand);
+  --public-green-bright: var(--theme-brand-hover);
+  --public-accent: var(--theme-brand);
+  --public-accent-bright: var(--theme-brand-hover);
+  --public-red: var(--theme-brand-hover);
+  --public-canvas: var(--theme-canvas);
+  --public-panel: var(--theme-surface);
+  --public-raised: var(--theme-raised);
+  --public-copy: var(--theme-copy);
+  --public-muted-copy: var(--theme-muted);
+  --public-line: var(--theme-line);
+  --public-brand: var(--theme-brand);
+  --public-brand-hover: var(--theme-brand-hover);
+  --public-team-brand: var(--theme-signal);
+  --auth-base: var(--theme-canvas);
+  --auth-surface: var(--theme-surface);
+  --auth-surface-raised: var(--theme-raised);
+  --auth-text: var(--theme-copy);
+  --auth-muted: var(--theme-muted);
+  --auth-border: var(--theme-line);
+  --auth-border-strong: var(--theme-brand-glow);
+  --auth-accent: var(--theme-brand);
+  --auth-accent-bright: var(--theme-brand-hover);
+  --auth-accent-ink: var(--theme-brand-hover);
+  --auth-rewrite-bg: var(--theme-canvas);
+  --auth-rewrite-panel: var(--theme-surface);
+  --auth-rewrite-raised: var(--theme-raised);
+  --auth-rewrite-text: var(--theme-copy);
+  --auth-rewrite-muted: var(--theme-muted);
+  --auth-rewrite-border: var(--theme-line);
+  --auth-rewrite-accent: var(--theme-brand);
+  --auth-rewrite-accent-hover: var(--theme-brand-hover);
+  --auth-rewrite-success: var(--theme-brand-hover);
+  --onboarding-bg: var(--theme-canvas);
+  --onboarding-surface: var(--theme-surface);
+  --onboarding-ink: var(--theme-copy);
+  --onboarding-muted: var(--theme-muted);
+  --onboarding-border: var(--theme-line);
+  --onboarding-border-soft: var(--theme-line);
+  --onboarding-accent: var(--theme-brand);
+  --onboarding-accent-soft: var(--theme-brand-soft);
+}
+
+html[data-theme] body.landing-page,
+html[data-theme] body.login-page {
+  --levels-surface: var(--theme-canvas);
+  --levels-text: var(--theme-copy);
+  --levels-muted: var(--theme-muted);
+  --levels-border: var(--theme-line);
+  --levels-soft: var(--theme-raised);
+  --levels-dark-surface: var(--theme-surface);
+  --levels-dark-raised: var(--theme-raised);
+  --levels-dark-text: var(--theme-copy);
+  --levels-dark-muted: var(--theme-muted);
+  --levels-primary: var(--theme-brand);
+  --levels-secondary: var(--theme-brand);
+  --levels-primary-hover: var(--theme-brand-hover);
+  --levels-accent-ink: var(--theme-brand-hover);
+}
+
+html[data-theme] body.workspace-theme {
+  --workspace-canvas: var(--theme-canvas);
+  --workspace-panel: var(--theme-surface);
+  --workspace-raised: var(--theme-raised);
+  --workspace-copy: var(--theme-copy);
+  --workspace-muted: var(--theme-muted);
+  --workspace-line: var(--theme-line);
+  --workspace-brand: var(--theme-brand);
+  --workspace-brand-hover: var(--theme-brand-hover);
+  --workspace-brand-glow: var(--theme-brand-glow);
+  --workspace-story-hover: var(--theme-brand-hover);
+  --workspace-story-hover-glow: var(--theme-brand-glow);
+  --workspace-neon: var(--theme-signal);
+  --workspace-neon-glow: var(--theme-signal-soft);
+}
+
+html[data-theme] body.story-page {
+  --story-canvas: var(--theme-canvas);
+  --story-surface-soft: var(--theme-surface);
+  --story-surface-card: var(--theme-raised);
+  --story-surface-elevated: var(--theme-elevated);
+  --story-ink: var(--theme-copy);
+  --story-body: var(--theme-body);
+  --story-body-strong: var(--theme-copy);
+  --story-muted: var(--theme-muted);
+  --story-muted-soft: var(--theme-muted-soft);
+  --story-accent: var(--theme-brand);
+  --story-accent-hover: var(--theme-brand-hover);
+  --story-accent-soft: var(--theme-brand-soft);
+  --story-accent-glow: var(--theme-brand-glow);
+  --story-accent-glow-soft: var(--theme-brand-soft);
+  --story-hairline: var(--theme-line);
+  --story-hairline-strong: var(--theme-line-strong);
+  --story-link: var(--theme-brand-hover);
+  --story-drama-signal: var(--theme-signal);
+}
+
+html[data-theme] body.story-catalog-page {
+  --story-entry-canvas: var(--theme-canvas);
+  --story-entry-paper: var(--theme-surface);
+  --story-entry-ink: var(--theme-copy);
+  --story-entry-muted: var(--theme-muted);
+  --story-entry-line: var(--theme-line);
+  --story-entry-blue: var(--theme-brand);
+  --story-entry-green: var(--theme-signal);
+}
+
+html[data-theme] body.works-page {
+  --works-canvas: var(--theme-canvas);
+  --works-surface: var(--theme-surface);
+  --works-surface-raised: var(--theme-raised);
+  --works-line: var(--theme-line);
+  --works-line-strong: var(--theme-line-strong);
+  --works-ink: var(--theme-copy);
+  --works-body: var(--theme-body);
+  --works-muted: var(--theme-muted);
+  --works-accent: var(--theme-brand);
+  --works-warm: var(--theme-brand-hover);
+}

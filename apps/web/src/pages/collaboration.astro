@@ -12,7 +12,7 @@ export const prerender = false;
   pageClass="collaboration-page"
   robots="noindex,nofollow"
 >
-  <AuthGate requireTeam>
+  <AuthGate>
     <CollaborationApp client:only="vue" />
   </AuthGate>
 </BaseLayout>

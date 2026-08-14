@@ -1,5 +1,6 @@
 ---
 import AuthGate from '../../components/astro/AuthGate.astro';
+import StorySidebar from '../../components/astro/StorySidebar.astro';
 import StoryApp from '../../workspaces/story/StoryApp.vue';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
@@ -9,9 +10,10 @@ export const prerender = false;
 <BaseLayout
   title="故事创作｜多多剧场"
   description="在多多剧场中发展故事、对话和剧本。"
-  pageClass="story-page story-entry-page story-catalog-page"
+  pageClass="story-page story-catalog-page"
 >
-  <AuthGate requireTeam>
-    <StoryApp client:only="vue" />
+  <AuthGate>
+    <StorySidebar activePath="/stories" />
+    <StoryApp client:load />
   </AuthGate>
 </BaseLayout>

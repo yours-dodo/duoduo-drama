@@ -1,0 +1,88 @@
+---
+import AuthGate from '../../components/astro/AuthGate.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="团队创作空间｜多多剧场"
+  description="加入或创建你的多多剧场团队创作空间。"
+  pageClass="onboarding-page"
+  robots="noindex,nofollow"
+>
+  <AuthGate>
+    <section class="onboarding-shell onboarding-choice-shell" aria-labelledby="team-onboarding-title">
+      <div class="onboarding-choice-layout">
+        <div class="onboarding-choice-intro">
+          <div class="onboarding-choice-visual onboarding-choice-visual-team" aria-hidden="true">
+            <div class="onboarding-choice-visual-topline">
+              <span>DUODUO / TEAM SPACE</span>
+              <span>SETUP 02 / READY</span>
+            </div>
+            <div class="onboarding-choice-visual-center">
+              <span class="onboarding-choice-visual-mark">T</span>
+              <strong>团队创作</strong>
+              <small>和伙伴一起，把想法推进成作品。</small>
+            </div>
+            <span class="onboarding-choice-visual-node onboarding-choice-visual-node-join">JOIN</span>
+            <span class="onboarding-choice-visual-node onboarding-choice-visual-node-create">CREATE</span>
+            <i class="onboarding-choice-visual-line onboarding-choice-visual-line-join"></i>
+            <i class="onboarding-choice-visual-line onboarding-choice-visual-line-create"></i>
+            <span class="onboarding-choice-visual-stamp">TEAM / READY TO START</span>
+            <div class="onboarding-choice-visual-footer">
+              <span>MAKE IT TOGETHER</span>
+              <span><i></i> TEAM SPACE READY</span>
+            </div>
+          </div>
+          <div class="onboarding-choice-copy">
+            <p class="onboarding-panel-kicker">TEAM SPACE</p>
+            <h1 id="team-onboarding-title">一起把故事<br /><em>继续下去。</em></h1>
+            <p>加入已有团队，或创建一个新的空间，和伙伴共享创作进度。</p>
+          </div>
+        </div>
+
+        <div class="onboarding-choice-panel">
+          <div class="onboarding-panel-header">
+            <span>TEAM SPACE / ENTRY</span>
+            <span>02 / 02</span>
+          </div>
+          <div class="onboarding-panel-rule" aria-hidden="true"></div>
+          <div class="onboarding-choice-panel-copy">
+            <p class="onboarding-panel-kicker">CHOOSE YOUR PATH</p>
+            <h2>如何进入团队？</h2>
+            <p>选择加入已有的创作协作，或从零开始建立自己的团队空间。</p>
+          </div>
+
+          <div class="onboarding-choice-list">
+            <article class="onboarding-choice-card onboarding-choice-card-disabled" aria-disabled="true">
+              <div class="onboarding-choice-card-topline">
+                <span>01 / JOIN</span>
+                <span class="onboarding-choice-card-status">即将开放</span>
+              </div>
+              <div class="onboarding-choice-card-icon" aria-hidden="true">J</div>
+              <div class="onboarding-choice-card-copy">
+                <h2>加入团队</h2>
+                <p>使用团队邀请加入已有的创作空间，与伙伴一起协作。</p>
+              </div>
+              <span class="onboarding-choice-card-action">即将开放</span>
+            </article>
+
+            <a class="onboarding-choice-card onboarding-choice-card-create" href="/onboarding/create-team">
+              <div class="onboarding-choice-card-topline">
+                <span>02 / CREATE</span>
+                <span aria-hidden="true">↗</span>
+              </div>
+              <div class="onboarding-choice-card-icon" aria-hidden="true">C</div>
+              <div class="onboarding-choice-card-copy">
+                <h2>创建团队</h2>
+                <p>建立一个新的团队空间，邀请伙伴共同推进故事与短剧。</p>
+              </div>
+              <span class="onboarding-choice-card-action">创建团队空间</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </AuthGate>
+</BaseLayout>
