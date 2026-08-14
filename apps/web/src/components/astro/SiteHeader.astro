@@ -1,23 +1,24 @@
 ---
 interface Props {
+  brandName?: string;
   showThemeToggle?: boolean;
   showPublicNav?: boolean;
   showBackLink?: boolean;
 }
 
-const { showThemeToggle = false, showPublicNav = true, showBackLink = false } = Astro.props;
+const { brandName = '多多剧场', showThemeToggle = false, showPublicNav = true, showBackLink = false } = Astro.props;
 ---
 
 <header class="site-header">
-  <a class="brand" href="/" aria-label="多多剧场首页">
+  <a class="brand" href="/" aria-label={`${brandName}首页`}>
     <span class="brand-mark" aria-hidden="true">多</span>
-    <span>多多剧场</span>
+    <span>{brandName}</span>
   </a>
   <nav aria-label="主导航">
     {showPublicNav && <a href="/stories">故事创作</a>}
     {showPublicNav && <a href="/dramas">短剧创作</a>}
-    {showPublicNav && <a href="/#workspaces">作品广场</a>}
-    {showPublicNav && <a href="/#contact">联合创作</a>}
+    {showPublicNav && <a href="/works">作品广场</a>}
+    {showPublicNav && <a href="/collaboration">联合创作</a>}
     {showPublicNav && <a class="header-contact" href="/#contact">联系我们</a>}
     {showThemeToggle && (
       <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false">

@@ -1,55 +1,169 @@
 ---
-name: Levels
-colors:
-  primary: "#EE752F"
-  secondary: "#EE752F"
-  success: "#16A34A"
-  warning: "#D97706"
-  danger: "#DC2626"
-  surface: "#FFFFFF"
-  text: "#111827"
-  neutral: "#FFFFFF"
-typography:
-  h1:
-    fontFamily: "Noto Serif SC"
-    fontSize: 2rem
-  body-md:
-    fontFamily: "Noto Sans SC"
-    fontSize: 1rem
-  label-caps:
-    fontFamily: "JetBrains Mono"
-    fontSize: 0.75rem
-  sourceScale: "12/14/16/20/24/32"
-  weights: "100, 200, 300, 400, 500, 600, 700, 800, 900"
-rounded:
-  sm: 4px
-  md: 8px
-spacing:
-  sm: 4px
-  md: 8px
-  sourceScale: "4/8/12/16/24/32"
+name: Duoduo Wenchuang Homepage
+version: current
+description: A dark editorial story-universe homepage for turning cultural ideas and IP into multiple content outputs.
 ---
 
-## Overview
+# 首页视觉规范
 
-Conversion-focused design that removes friction and guides users toward action through clarity, trust, and speed.
+## 设计定位
 
-## Style Foundations
+首页是多多文创的公共品牌入口，不是后台控制台，也不是普通 SaaS 落地页。
 
-- **Visual style:** modern, clean
-- **Typography scale:** 12/14/16/20/24/32
-- **Typography fonts:** primary=Noto Sans SC, display=Noto Serif SC, mono=IBM Plex Mono
-- **Typography weights:** 100, 200, 300, 400, 500, 600, 700, 800, 900
-- **Color palette:** primary, neutral, success, warning, danger
-- **Spacing scale:** 4/8/12/16/24/32
+它要让用户感受到：一个内容内核可以从灵感、人物和世界观，持续推进到有声内容、剧本和短剧。整体气质是“故事编辑室 + 内容生产系统”——有编辑感、秩序感和生产感，但不使用冷冰冰的企业后台语言。
 
-## Colors
+默认使用深色剧场主题；浅色主题是同一套视觉系统的明亮变体。首页所有新组件都必须同时考虑两种主题。
 
-- **Primary (#EE752F):** Token from style foundations.
-- **Secondary (#EE752F):** Token from style foundations.
-- **Success (#16A34A):** Token from style foundations.
-- **Warning (#D97706):** Token from style foundations.
-- **Danger (#DC2626):** Token from style foundations.
-- **Surface (#FFFFFF):** Token from style foundations.
-- **Text (#111827):** Token from style foundations.
-- **Neutral (#FFFFFF):** Derived from the surface token for official format compatibility.
+## 视觉关键词
+
+- 深色剧场、编辑室、内容地图、生产轨道
+- 克制、安静、专业，但保留一个明确的橙色行动信号
+- 大标题负责叙事，等宽标签负责系统感，正文负责阅读舒适度
+- 用结构、连线、节点和留白表达内容关系，不依赖装饰性图片
+- 页面应像一部正在推进的作品，而不是功能列表
+
+## 色彩系统
+
+### 深色主题（默认）
+
+| Token / Role | Value | 用途 |
+| --- | --- | --- |
+| `--public-canvas` | `#080808` | 页面主画布、全宽内容区 |
+| `--public-panel` | `#0D0D0F` | 深色面板、工作流板、CTA 区 |
+| `--public-raised` | `#151517` | 节点卡片、抬升层、输入提示 |
+| `--public-copy` | `#F5F3EF` | 主标题、核心正文 |
+| `--public-muted-copy` | `#99999F` | 次要正文、说明文字、状态信息 |
+| `--public-line` | `rgba(245, 243, 239, 0.14)` | 分隔线、卡片边框、关系线 |
+| `--public-brand` | `#EE752F` | 主品牌色、主要动作、当前节点 |
+| `--public-brand-hover` | `#FF8C4D` | 主品牌色 hover/focus 状态 |
+| 短剧信号 | `#C8FF43` | 当前仅用于短剧输出触点和短剧 CTA |
+
+### 浅色主题
+
+| Token | Value | 用途 |
+| --- | --- | --- |
+| `--public-canvas` | `#F4F7F3` | 页面主画布 |
+| `--public-panel` | `#FFFFFF` | 卡片、导航、内容面板 |
+| `--public-raised` | `#E8EFE9` | 节点和抬升层 |
+| `--public-copy` | `#162B1F` | 主标题、核心正文 |
+| `--public-muted-copy` | `#617368` | 次要正文、说明文字 |
+| `--public-line` | `rgba(22, 43, 31, 0.16)` | 分隔线和边框 |
+| `--public-brand` | `#C66525` | 主品牌色、主要动作 |
+| `--public-brand-hover` | `#B4551C` | 主品牌色 hover/focus 状态 |
+
+### 使用规则
+
+- 橙色是“正在发生的动作”，不用于大面积铺色。
+- 荧光绿只代表短剧输出，不得扩散成首页主色。
+- 深色区使用米白文字，不使用纯白大面积正文；浅色区使用深绿黑文字。
+- 边框优先使用半透明 hairline，不使用厚重阴影和高光渐变。
+- 不引入紫色渐变、玻璃拟态堆叠、彩色霓虹背景或无语义装饰。
+
+## 字体与排版
+
+### 字体角色
+
+| 角色 | 字体 | 用途 |
+| --- | --- | --- |
+| 内容正文 | `Noto Sans SC`, `PingFang SC`, `Microsoft YaHei`, sans-serif | 段落、导航、按钮、卡片说明 |
+| 编辑标题 | `Noto Serif SC`, `Songti SC`, `STSong`, serif | Hero 标题、章节标题、内容型大标题 |
+| 系统标签 | `IBM Plex Mono`, `SFMono-Regular`, Consolas, monospace | eyebrow、编号、状态、英文阶段名 |
+
+### 排版原则
+
+- Hero 标题是页面最大视觉锚点，使用紧凑行高和轻微负字距；中文标题保持完整语义，不强行拆成碎片。
+- 页面章节标题通常使用 `clamp(34px, 4vw, 40px)`；Hero 标题使用更大的响应式范围。
+- 正文默认约 `1rem / 1.6`；Hero 描述约 `1.05rem / 1.8`。
+- 等宽标签使用小字号和克制字距，承担“系统状态”而不是正文阅读。
+- 强调词使用 `<em>`，颜色跟随主题品牌色；不要同时叠加粗体、下划线和大字号。
+
+## 布局与空间
+
+### 全局
+
+- 内容最大宽度为 `1180px`；需要沉浸感的内容区可以全宽，但内部内容仍对齐到同一列。
+- 默认内容区使用 `144px` 上下留白；移动端收缩到 `88px`，极窄屏收缩到 `64px`。
+- 页面采用 full-bleed section bands：画布、深色生产区和浅色内容区可以整幅切换，但内容列保持一致。
+- 卡片只在需要建立层级时使用圆角；常规圆角约 `8px`，大块 CTA/面板约 `12–16px`。
+
+### 浮动导航
+
+- 桌面端固定在顶部，宽度 `min(1180px, calc(100% - 40px))`，最小高度约 `60px`。
+- 使用半透明深色面板、`14px` 圆角、轻微阴影和背景模糊；浅色主题使用半透明白色面板。
+- 左侧保留品牌，导航居中偏左，主要动作放在右侧；主题切换是圆形轻量按钮。
+- 移动端隐藏非关键导航，只保留品牌和主要动作。
+
+## 首页结构
+
+首页内容顺序固定为“先建立内容世界，再展示生产方式，最后给出行动入口”:
+
+1. **Story-map Hero**：一句品牌主张、开始创作 CTA、内容项目关系图。
+2. **内容基础**：展示灵感、人物、世界观、结构和剧本如何沉淀成内容资产。
+3. **Idea prompt**：用一句灵感示例说明内容如何从模糊想法开始。
+4. **人物 / 世界观编辑区**：用档案卡、地图、时间线等视觉隐喻解释内容开发。
+5. **内容形态**：并列展示 AI 有声小说和 AI 短剧；两者共享内容内核，但使用不同的输出信号。
+6. **生产轨道**：用 STORY → SCRIPT → EPISODES → SCENES → SHOTS → DRAMA 表达生产推进。
+7. **Creation Workflow**：以三阶段工作流板展示内容基础、叙事结构和最终输出。
+8. **创作原则**：强调灵感留存、过程可追踪和多元表达。
+9. **Final CTA**：回到“开始内容创作”和“把内容变成短剧”。
+
+## 组件规范
+
+### Hero
+
+- 默认深色、全视口或接近全视口高度。
+- 文案区和关系图都必须可读；关系图不能只作为背景装饰。
+- 关系图使用一个中心项目节点、四个内容节点和明确的连接线；节点文案应能独立解释其含义。
+- Hero 主 CTA 使用品牌橙；次 CTA 使用文字链接，不制造第二个同等重量的按钮。
+
+### 内容卡片
+
+- 卡片内容采用“阶段标签 → 标题 → 一句说明 → 动作/状态”的顺序。
+- 默认使用细边框、深色抬升层和少量阴影；hover 只改变边框、背景或轻微位移。
+- 交互卡片必须是语义化链接或按钮，并提供清晰 focus ring。
+
+### 工作流板
+
+- 使用等宽标签表达阶段，使用编辑标题表达阶段名称。
+- 节点之间用线、箭头或顺序标识表达因果关系；不要用大量图标替代文字。
+- 输出节点可以使用品牌橙作为强状态；短剧输出节点和 CTA 才可以使用荧光绿。
+- 在窄屏下从三列折叠为纵向阶段流，保持顺序和连接关系可读。
+
+### CTA
+
+- 主动作文案保持直接：`开始创作`、`开始内容创作`、`进入内容制作`。
+- 主按钮不使用渐变；默认保持足够的点击高度，桌面约 `44–52px`。
+- CTA 只承诺明确的下一步，不使用“立即解锁”“开启无限可能”等空泛表达。
+
+## 动效与状态
+
+- 页面加载使用轻量的 `public-page-enter` 淡入上移，避免整页同时弹跳。
+- 节点 hover 使用约 `180ms` 的边框变化和最多 `2–4px` 位移。
+- 按钮按下可以轻微缩放或下移，但不能改变布局。
+- 所有动效必须遵守 `prefers-reduced-motion: reduce`；减少为无位移、无持续动画的静态状态。
+- 状态点、当前阶段和输出方向使用品牌色表达，不为每个状态引入新颜色。
+
+## 响应式规则
+
+- `1100px`：Hero 逐步收紧列宽和水平内边距。
+- `980px`：Hero、编辑区和工作流说明区可以切为单列；工作流输出区移到下方。
+- `860px`：Hero 变为上下结构，关系图保持独立可读。
+- `680px`：section 内容宽度收窄，按钮变为纵向全宽，内容卡片改为单列。
+- `620px`：工作流板由网格变为纵向阶段流。
+- `520px`：导航隐藏非关键链接、节点缩小、CTA 保持可点击宽度，避免横向滚动。
+
+## 可访问性
+
+- 每个主要 section 使用语义化标题和 `aria-labelledby`；视觉关系图需要 `role="img"` 与可理解的 `aria-label`。
+- 颜色不能是唯一状态线索；当前、输出、错误状态同时使用文字或结构差异表达。
+- 所有链接、按钮、主题切换和工作流节点都必须有可见的键盘 focus 状态。
+- 动态视觉关系不应阻塞正文阅读；装饰性的 SVG、连线和光点使用 `aria-hidden="true"`。
+- 主题切换需要同步 `aria-pressed` 和可读的 `aria-label`。
+
+## 不可违背的设计决策
+
+- 首页讲的是“内容如何生长和生产”，不是“我们有多少功能”。
+- 保持深色剧场作为默认体验，浅色主题只做同一系统的变体。
+- 新增视觉元素前，先确认它是否解释了内容关系、生产阶段或下一步动作。
+- 新增颜色、字体、圆角或阴影前，优先复用本规范中的 token；不得在单个组件中创建孤立品牌系统。
+- 首页样式发生有意变化时，必须在同一变更中更新本规范；若只是局部实现细节，不要扩大 token 范围。

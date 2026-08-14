@@ -1,4 +1,14 @@
+---
+interface Props {
+  brandName?: string;
+  copyrightName?: string;
+  tagline?: string;
+}
+
+const { brandName = '多多剧场', copyrightName = 'Duoduo Drama', tagline = '让灵感变成故事，让故事被听见，也被看见。' } = Astro.props;
+---
+
 <footer id="contact" class="site-footer">
-  <span>多多剧场 · 让灵感变成故事，让故事被听见，也被看见。</span>
-  <span>© 2026 Duoduo Drama</span>
+  <span>{brandName} · {tagline}</span>
+  <span>© 2026 {copyrightName}</span>
 </footer>

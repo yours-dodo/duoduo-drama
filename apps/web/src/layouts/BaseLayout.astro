@@ -15,6 +15,10 @@ interface Props {
 }
 
 const { title, description, keywords, eyebrow, pageClass, robots, structuredData } = Astro.props;
+const isLandingPage = pageClass === 'landing-page';
+const brandName = isLandingPage ? '多多文创' : '多多剧场';
+const copyrightName = isLandingPage ? 'Duoduo Wenchuang' : 'Duoduo Drama';
+const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，也被看见。' : '让灵感变成故事，让故事被听见，也被看见。';
 ---
 
 <!doctype html>
@@ -29,11 +33,14 @@ const { title, description, keywords, eyebrow, pageClass, robots, structuredData
         pageClass === 'landing-page' ||
         pageClass === 'login-page' ||
         pageClass === 'onboarding-page' ||
-        pageClass === 'workspace-theme' ||
-        pageClass === 'story-page'
+          pageClass === 'workspace-theme' ||
+          pageClass === 'story-page' ||
+          pageClass === 'collaboration-page'
           ? '#EE752F'
           : pageClass === 'drama-page'
             ? '#C8FF43'
+            : pageClass === 'works-page'
+              ? '#0A0D0C'
           : undefined
       }
       robots={robots}
@@ -56,7 +63,8 @@ const { title, description, keywords, eyebrow, pageClass, robots, structuredData
   </head>
   <body class={pageClass}>
     <SiteHeader
-      showThemeToggle={pageClass === 'landing-page'}
+      brandName={brandName}
+      showThemeToggle={isLandingPage}
       showPublicNav={pageClass !== 'login-page' && pageClass !== 'onboarding-page'}
       showBackLink={pageClass === 'login-page' || pageClass === 'onboarding-page'}
     />
@@ -64,7 +72,7 @@ const { title, description, keywords, eyebrow, pageClass, robots, structuredData
     <main>
       <slot />
     </main>
-    <SiteFooter />
+    <SiteFooter brandName={brandName} copyrightName={copyrightName} tagline={tagline} />
     <script is:inline>
       (() => {
         const root = document.documentElement;
