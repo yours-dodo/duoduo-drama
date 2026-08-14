@@ -1,0 +1,18 @@
+---
+import AuthGate from '../components/astro/AuthGate.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CollaborationApp from '../workspaces/collaboration/CollaborationApp.vue';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="联合创作｜多多剧场"
+  description="在多多剧场联合创作空间里，和创作者一起发展故事、人物和世界。"
+  pageClass="collaboration-page"
+  robots="noindex,nofollow"
+>
+  <AuthGate requireTeam>
+    <CollaborationApp client:only="vue" />
+  </AuthGate>
+</BaseLayout>
