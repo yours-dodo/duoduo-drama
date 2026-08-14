@@ -14,7 +14,9 @@ describe('StoryProject', () => {
     const project = StoryProject.create({
       id: 'project-id',
       tenantId: 'team-id',
+      spaceId: 'team-space-id',
       createdByUserId: 'creator-id',
+      ownerUserId: 'creator-id',
       title: '  我的故事  ',
       visibility: 'team',
       createdAt: CREATED_AT,
@@ -23,7 +25,9 @@ describe('StoryProject', () => {
     expect(project.toSnapshot()).toEqual({
       id: 'project-id',
       tenantId: 'team-id',
+      spaceId: 'team-space-id',
       createdByUserId: 'creator-id',
+      ownerUserId: 'creator-id',
       title: '我的故事',
       visibility: 'team',
       status: 'active',
@@ -37,7 +41,9 @@ describe('StoryProject', () => {
     const project = StoryProject.restore({
       id: 'project-id',
       tenantId: 'team-id',
+      spaceId: 'team-space-id',
       createdByUserId: 'creator-id',
+      ownerUserId: 'creator-id',
       title: '旧标题',
       visibility: 'team',
       status: 'active',
@@ -65,7 +71,9 @@ describe('StoryProject', () => {
     const project = StoryProject.restore({
       id: 'project-id',
       tenantId: 'team-id',
+      spaceId: 'team-space-id',
       createdByUserId: 'creator-id',
+      ownerUserId: 'creator-id',
       title: '故事',
       visibility: 'team',
       status: 'active',

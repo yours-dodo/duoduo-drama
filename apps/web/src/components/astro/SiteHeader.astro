@@ -1,11 +1,30 @@
+---
+interface Props {
+  showThemeToggle?: boolean;
+  showPublicNav?: boolean;
+  showBackLink?: boolean;
+}
+
+const { showThemeToggle = false, showPublicNav = true, showBackLink = false } = Astro.props;
+---
+
 <header class="site-header">
   <a class="brand" href="/" aria-label="多多剧场首页">
     <span class="brand-mark" aria-hidden="true">多</span>
     <span>多多剧场</span>
   </a>
   <nav aria-label="主导航">
-    <a href="#workflow">创作流程</a>
-    <a href="#workspaces">工作台</a>
-    <a class="header-login" href="/login">登录</a>
+    {showPublicNav && <a href="/stories">故事创作</a>}
+    {showPublicNav && <a href="/dramas">短剧创作</a>}
+    {showPublicNav && <a href="/#workspaces">作品广场</a>}
+    {showPublicNav && <a href="/#contact">联合创作</a>}
+    {showPublicNav && <a class="header-contact" href="/#contact">联系我们</a>}
+    {showThemeToggle && (
+      <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false">
+        <span data-theme-icon aria-hidden="true">☼</span>
+        <span class="sr-only">切换主题</span>
+      </button>
+    )}
+    {showBackLink ? <a class="header-back" href="/">返回首页</a> : <a class="header-login" href="/login">开始创作</a>}
   </nav>
 </header>

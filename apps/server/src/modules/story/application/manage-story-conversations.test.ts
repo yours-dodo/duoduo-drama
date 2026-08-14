@@ -329,7 +329,9 @@ function projectSnapshot(
   return {
     id: 'project-id',
     tenantId: 'team-id',
+    spaceId: 'team-space-id',
     createdByUserId: 'creator-id',
+    ownerUserId: 'creator-id',
     title: '故事',
     visibility: 'team' as const,
     status: 'active' as const,
@@ -406,7 +408,10 @@ function collaboratorSnapshot() {
     tenantId: 'team-id',
     projectId: 'project-id',
     userId: 'writer-id',
+    role: 'editor' as const,
     createdAt: NOW,
+    updatedAt: NOW,
+    revokedAt: null,
   };
 }
 

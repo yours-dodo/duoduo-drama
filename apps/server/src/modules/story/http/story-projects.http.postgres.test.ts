@@ -63,7 +63,7 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     await insertUser(CREATOR_ID, 'creator@example.com');
     await insertUser(ADMIN_ID, 'admin@example.com');
@@ -71,6 +71,10 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
     await pool.query(
       'INSERT INTO teams (id, name, created_by_user_id, created_at, updated_at) VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())',
       [TEAM_ID, '故事团队', CREATOR_ID],
+    );
+    await pool.query(
+      'INSERT INTO spaces (id, kind, owner_team_id, created_at, updated_at) VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())',
+      [TEAM_ID, 'team', TEAM_ID],
     );
     await insertMembership(CREATOR_ID, 'admin');
     await insertMembership(ADMIN_ID, 'admin');
@@ -164,14 +168,20 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
       [otherTeamId, '另一个团队', otherCreatorId],
     );
     await pool.query(
+      'INSERT INTO spaces (id, kind, owner_team_id, created_at, updated_at) VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())',
+      [otherTeamId, 'team', otherTeamId],
+    );
+    await pool.query(
       'INSERT INTO team_memberships (id, tenant_id, user_id, role) VALUES ($1, $2, $3, $4)',
       [randomUUID(), otherTeamId, otherCreatorId, 'admin'],
     );
     await pool.query(
-      'INSERT INTO story_projects (id, tenant_id, created_by_user_id, title, visibility, status, revision) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      'INSERT INTO story_projects (id, tenant_id, space_id, created_by_user_id, owner_user_id, title, visibility, status, revision) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
       [
         PROJECT_ID,
         otherTeamId,
+        otherTeamId,
+        otherCreatorId,
         otherCreatorId,
         '别人的项目',
         'team',

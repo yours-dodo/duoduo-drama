@@ -369,7 +369,9 @@ function project() {
   return {
     id: 'project-id',
     tenantId: 'team-id',
+    spaceId: 'team-space-id',
     createdByUserId: 'creator-id',
+    ownerUserId: 'creator-id',
     title: '故事',
     visibility: 'team' as const,
     status: 'active' as const,

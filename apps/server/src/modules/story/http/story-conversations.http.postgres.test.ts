@@ -61,13 +61,17 @@ describe.skipIf(!databaseUrl)('story conversation HTTP PostgreSQL flow', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     await insertUser(CREATOR_ID, 'creator@example.com');
     await insertUser(READER_ID, 'reader@example.com');
     await pool.query(
       'INSERT INTO teams (id, name, created_by_user_id, created_at, updated_at) VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())',
       [TEAM_ID, '故事团队', CREATOR_ID],
+    );
+    await pool.query(
+      'INSERT INTO spaces (id, kind, owner_team_id, created_at, updated_at) VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())',
+      [TEAM_ID, 'team', TEAM_ID],
     );
     await insertMembership(CREATOR_ID, 'admin');
     await insertMembership(READER_ID, 'member');

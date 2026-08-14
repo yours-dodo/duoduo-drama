@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { CreateTeam, IdempotencyConflictError } from './create-team.js';
+import type { SpaceRepository } from '../../spaces/ports/space-repository.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import type { IdempotencyRepository } from '../ports/idempotency-repository.js';
 import type { TeamMembershipRepository } from '../ports/team-membership-repository.js';
@@ -11,6 +12,7 @@ const NOW = new Date('2026-08-10T00:00:00.000Z');
 describe('CreateTeam', () => {
   it('atomically creates a tenant, its first administrator, idempotency result, and audit record', async () => {
     const teams = teamRepository();
+    const spaces = spaceRepository();
     const memberships = membershipRepository();
     const idempotency = idempotencyRepository(null);
     const audit = auditRepository();
@@ -19,13 +21,20 @@ describe('CreateTeam', () => {
     };
     const createTeam = new CreateTeam(
       teams,
+      spaces,
       memberships,
       idempotency,
       audit,
       transaction,
       { now: async () => NOW },
       { hash: (value) => `hash:${value}` },
-      sequentialIds('team-id', 'membership-id', 'idempotency-id', 'audit-id'),
+      sequentialIds(
+        'team-id',
+        'space-id',
+        'membership-id',
+        'idempotency-id',
+        'audit-id',
+      ),
     );
 
     const result = await createTeam.execute({
@@ -45,6 +54,14 @@ describe('CreateTeam', () => {
       id: 'team-id',
       name: '多多 编剧组',
       createdByUserId: 'user-id',
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(spaces.create).toHaveBeenCalledWith({
+      id: 'space-id',
+      kind: 'team',
+      ownerUserId: null,
+      ownerTeamId: 'team-id',
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -97,6 +114,7 @@ describe('CreateTeam', () => {
       updatedAt: NOW,
     };
     const teams = teamRepository(existingTeam);
+    const spaces = spaceRepository();
     const memberships = membershipRepository();
     const idempotency = idempotencyRepository({
       id: 'idempotency-id',
@@ -111,6 +129,7 @@ describe('CreateTeam', () => {
     const audit = auditRepository();
     const createTeam = new CreateTeam(
       teams,
+      spaces,
       memberships,
       idempotency,
       audit,
@@ -136,6 +155,7 @@ describe('CreateTeam', () => {
       },
     });
     expect(teams.create).not.toHaveBeenCalled();
+    expect(spaces.create).not.toHaveBeenCalled();
     expect(memberships.create).not.toHaveBeenCalled();
     expect(idempotency.create).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
@@ -155,6 +175,7 @@ describe('CreateTeam', () => {
     });
     const createTeam = new CreateTeam(
       teams,
+      spaceRepository(),
       membershipRepository(),
       idempotency,
       auditRepository(),
@@ -186,6 +207,17 @@ function teamRepository(
     create: vi.fn(async (team) => team),
     findById: vi.fn(async () => found),
     listForUser: vi.fn(),
+  };
+}
+
+function spaceRepository(): SpaceRepository & {
+  create: ReturnType<typeof vi.fn>;
+} {
+  return {
+    create: vi.fn(async (space) => space),
+    findPersonalByUserId: vi.fn(),
+    findTeamByTeamId: vi.fn(),
+    ensurePersonalForUser: vi.fn(),
   };
 }
 

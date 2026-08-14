@@ -3,8 +3,11 @@ export type StoryProjectStatus = 'active' | 'archived';
 
 export interface StoryProjectSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
+  spaceId: string;
+  spaceKind?: 'personal' | 'team';
   createdByUserId: string;
+  ownerUserId: string;
   title: string;
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
@@ -39,8 +42,11 @@ export class StoryProject {
 
   static create(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
+    spaceId: string;
+    spaceKind?: 'personal' | 'team';
     createdByUserId: string;
+    ownerUserId: string;
     title: string;
     visibility: StoryProjectVisibility;
     createdAt: Date;
@@ -48,7 +54,10 @@ export class StoryProject {
     return new StoryProject({
       id: input.id,
       tenantId: input.tenantId,
+      spaceId: input.spaceId,
+      spaceKind: input.spaceKind,
       createdByUserId: input.createdByUserId,
+      ownerUserId: input.ownerUserId,
       title: normalizeTitle(input.title),
       visibility: input.visibility,
       status: 'active',

@@ -50,4 +50,21 @@ export class ArchiveStoryProjectDto {
 export class AddProjectCollaboratorDto {
   @IsUUID('4')
   userId!: string;
+
+  @IsOptional()
+  @IsIn(['viewer', 'editor', 'manager'])
+  role: 'viewer' | 'editor' | 'manager' = 'editor';
+}
+
+export class UpdateProjectCollaboratorRoleDto {
+  @IsIn(['viewer', 'editor', 'manager'])
+  role!: 'viewer' | 'editor' | 'manager';
+}
+
+export class SetProjectCollaboratorPermissionOverrideDto {
+  @IsIn(['project.archive'])
+  permissionKey!: 'project.archive';
+
+  @IsIn(['allow', 'deny'])
+  effect!: 'allow' | 'deny';
 }

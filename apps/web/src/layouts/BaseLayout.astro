@@ -7,24 +7,84 @@ import SiteHeader from '../components/astro/SiteHeader.astro';
 interface Props {
   title: string;
   description: string;
+  keywords?: string;
   eyebrow?: string;
+  pageClass?: string;
+  robots?: string;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
-const { title, description, eyebrow } = Astro.props;
+const { title, description, keywords, eyebrow, pageClass, robots, structuredData } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-page={pageClass}>
   <head>
     <meta charset="UTF-8" />
-    <SeoHead title={title} description={description} />
+    <SeoHead
+      title={title}
+      description={description}
+      keywords={keywords}
+      themeColor={
+        pageClass === 'landing-page' ||
+        pageClass === 'login-page' ||
+        pageClass === 'onboarding-page' ||
+        pageClass === 'workspace-theme' ||
+        pageClass === 'story-page'
+          ? '#EE752F'
+          : pageClass === 'drama-page'
+            ? '#C8FF43'
+          : undefined
+      }
+      robots={robots}
+      structuredData={structuredData}
+    />
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        if (root.dataset.page === 'login-page') {
+          window.addEventListener('pageshow', (event) => {
+            if (event.persisted) window.location.reload();
+          });
+        }
+        if (root.dataset.page !== 'landing-page' && root.dataset.page !== 'login-page') return;
+        const storageKey = 'duoduo-public-theme';
+        const savedTheme = window.localStorage.getItem(storageKey);
+        root.dataset.theme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'dark';
+      })();
+    </script>
   </head>
-  <body>
-    <SiteHeader />
+  <body class={pageClass}>
+    <SiteHeader
+      showThemeToggle={pageClass === 'landing-page'}
+      showPublicNav={pageClass !== 'login-page' && pageClass !== 'onboarding-page'}
+      showBackLink={pageClass === 'login-page' || pageClass === 'onboarding-page'}
+    />
     {eyebrow && <span class="sr-only">{eyebrow}</span>}
     <main>
       <slot />
     </main>
     <SiteFooter />
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        const toggle = document.querySelector('[data-theme-toggle]');
+        if (!toggle || root.dataset.page !== 'landing-page') return;
+        const storageKey = 'duoduo-public-theme';
+        const updateToggle = () => {
+          const isLight = root.dataset.theme === 'light';
+          toggle.setAttribute('aria-pressed', String(!isLight));
+          toggle.setAttribute('aria-label', isLight ? '切换到暗色主题' : '切换到浅色主题');
+          const icon = toggle.querySelector('[data-theme-icon]');
+          if (icon) icon.textContent = isLight ? '☾' : '☼';
+        };
+        updateToggle();
+        toggle.addEventListener('click', () => {
+          root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+          window.localStorage.setItem(storageKey, root.dataset.theme);
+          updateToggle();
+        });
+      })();
+    </script>
   </body>
 </html>

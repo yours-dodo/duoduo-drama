@@ -1,0 +1,142 @@
+---
+import AuthGate from '../components/astro/AuthGate.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="创建工作空间｜多多剧场"
+  description="创建你的多多剧场工作空间。"
+  pageClass="onboarding-page"
+  robots="noindex,nofollow"
+>
+  <AuthGate>
+    <section class="onboarding-shell" aria-labelledby="onboarding-title">
+      <div class="onboarding-layout">
+        <div
+          class="onboarding-story-preview"
+          role="img"
+          aria-label="创作空间预览：中心空间连接故事创作、短剧制作和协作成员"
+        >
+          <div class="onboarding-story-header">
+            <span>DUODUO / CREATIVE SPACE</span>
+            <span>SETUP 01 / IN PROGRESS</span>
+          </div>
+          <div class="onboarding-story-canvas">
+            <i class="onboarding-story-orbit onboarding-story-orbit-outer" aria-hidden="true"></i>
+            <i class="onboarding-story-orbit onboarding-story-orbit-inner" aria-hidden="true"></i>
+            <i class="onboarding-story-line onboarding-story-line-story" aria-hidden="true"></i>
+            <i class="onboarding-story-line onboarding-story-line-drama" aria-hidden="true"></i>
+            <i class="onboarding-story-line onboarding-story-line-team" aria-hidden="true"></i>
+
+            <div class="onboarding-story-core">
+              <span>WORKSPACE</span>
+              <strong>你的创作空间</strong>
+              <small>从一个空间开始，继续你的故事。</small>
+            </div>
+            <div class="onboarding-story-node onboarding-story-node-story">
+              <span>STORY</span>
+              <strong>故事创作</strong>
+              <small>人物、世界与剧情</small>
+            </div>
+            <div class="onboarding-story-node onboarding-story-node-drama">
+              <span>DRAMA</span>
+              <strong>短剧制作</strong>
+              <small>剧本、分镜与内容</small>
+            </div>
+            <div class="onboarding-story-node onboarding-story-node-team">
+              <span>COLLABORATE</span>
+              <strong>协作成员</strong>
+              <small>一起完善作品</small>
+            </div>
+            <span class="onboarding-story-stamp">SPACE / READY TO START</span>
+          </div>
+          <div class="onboarding-story-footer">
+            <span>BUILD YOUR STORY UNIVERSE</span>
+            <span><i aria-hidden="true"></i> CREATIVE SPACE READY</span>
+          </div>
+        </div>
+
+        <div class="onboarding-form-panel">
+          <div class="onboarding-panel-header">
+            <span>WORKSPACE / SETUP</span>
+            <span>01 / 01</span>
+          </div>
+          <div class="onboarding-panel-rule" aria-hidden="true"></div>
+          <div class="onboarding-panel-copy">
+            <p class="onboarding-panel-kicker">START HERE</p>
+            <h1 id="onboarding-title">建立你的<br /><em>创作空间。</em></h1>
+            <p>一个空间，装下你的故事、短剧和下一步创作。</p>
+          </div>
+
+          <form class="onboarding-form" id="create-team-form">
+            <label for="team-name">
+              <span>工作空间名称</span>
+              <span class="onboarding-required">必填</span>
+            </label>
+            <input
+              id="team-name"
+              name="name"
+              type="text"
+              autocomplete="organization"
+              maxlength="100"
+              placeholder="例如：我的故事工作室"
+              aria-describedby="team-name-hint"
+              required
+            />
+            <p class="onboarding-field-hint" id="team-name-hint">名称会显示在你的创作工作台和协作入口中。</p>
+            <button class="button onboarding-submit" type="submit">
+              <span>创建并继续</span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <p class="onboarding-status" id="create-team-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+  </AuthGate>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#create-team-form');
+  const status = document.querySelector<HTMLElement>('#create-team-status');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = document.querySelector<HTMLInputElement>('#team-name');
+    if (!name || !status || !form.checkValidity()) return;
+    const button = form.querySelector('button');
+    if (button) {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+    }
+    status.dataset.state = 'pending';
+    status.textContent = '正在创建工作空间…';
+    try {
+      const response = await fetch('/api/v1/teams', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ name: name.value }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error?.message ?? '暂时无法创建，请稍后重试。');
+      }
+      window.location.assign('/workspace');
+    } catch (error) {
+      status.dataset.state = 'error';
+      status.textContent = error instanceof Error ? error.message : '暂时无法创建，请稍后重试。';
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    }
+  });
+</script>

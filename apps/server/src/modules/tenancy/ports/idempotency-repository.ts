@@ -14,7 +14,7 @@ export interface IdempotencyLookup {
 
 export interface IdempotencyRecordSnapshot extends IdempotencyLookup {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   requestHash: string;
   resultId: string;
   createdAt: Date;

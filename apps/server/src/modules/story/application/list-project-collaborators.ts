@@ -4,7 +4,10 @@ import {
   readProjectAccess,
   requireProjectView,
 } from './project-authorization.js';
-import { StoryProjectAccessDeniedError } from './story-errors.js';
+import {
+  ProjectCollaboratorsNotAllowedError,
+  StoryProjectAccessDeniedError,
+} from './story-errors.js';
 import type { ProjectCollaboratorRepository } from '../ports/project-collaborator-repository.js';
 import type { StoryProjectRepository } from '../ports/story-project-repository.js';
 
@@ -35,6 +38,9 @@ export class ListProjectCollaborators {
       lock: false,
     });
     requireProjectView(access.project, access.subject);
+    if (access.project.spaceKind === 'personal') {
+      throw new ProjectCollaboratorsNotAllowedError();
+    }
     return this.collaborators.listForProject({
       tenantId: input.tenantId,
       projectId: input.projectId,

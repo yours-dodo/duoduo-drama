@@ -2,18 +2,32 @@
 interface Props {
   title: string;
   description: string;
+  keywords?: string;
   image?: string;
+  themeColor?: string;
+  robots?: string;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
-const { title, description, image = '/favicon.svg' } = Astro.props;
+const {
+  title,
+  description,
+  keywords,
+  image = '/favicon.svg',
+  themeColor = '#f5f0e8',
+  robots,
+  structuredData,
+} = Astro.props;
 const siteOrigin = import.meta.env.PUBLIC_SITE_URL ?? Astro.site?.origin ?? Astro.url.origin;
 const canonicalUrl = new URL(Astro.url.pathname, siteOrigin);
 ---
 
 <title>{title}</title>
 <meta name="description" content={description} />
+{keywords && <meta name="keywords" content={keywords} />}
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#f5f0e8" />
+<meta name="theme-color" content={themeColor} />
+{robots && <meta name="robots" content={robots} />}
 <link rel="canonical" href={canonicalUrl} />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="zh_CN" />
@@ -25,3 +39,4 @@ const canonicalUrl = new URL(Astro.url.pathname, siteOrigin);
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+{structuredData && <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />}

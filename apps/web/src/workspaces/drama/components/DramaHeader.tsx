@@ -16,7 +16,7 @@ const DramaHeader: FC<DramaHeaderProps> = ({ projectId }) => (
     </div>
     <div className="drama-header-actions">
       <span className="team-chip">当前团队</span>
-      <a className="text-link" href="/app/dramas">
+      <a className="text-link" href="/dramas">
         全部短剧 ↗
       </a>
     </div>

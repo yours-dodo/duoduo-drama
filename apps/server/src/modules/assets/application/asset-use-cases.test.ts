@@ -298,6 +298,8 @@ function projectAccess() {
       findById: vi.fn().mockResolvedValue({
         id: PROJECT_ID,
         tenantId: TENANT_ID,
+        spaceId: 'space-1',
+        ownerUserId: ACTOR_ID,
         createdByUserId: ACTOR_ID,
         title: 'Project',
         visibility: 'private',

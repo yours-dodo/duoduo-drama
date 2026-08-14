@@ -16,6 +16,11 @@ import {
   type AuditRepository,
 } from '../audit/ports/audit-repository.js';
 import { IdentityModule } from '../identity/identity.module.js';
+import { SpacesModule } from '../spaces/spaces.module.js';
+import {
+  SPACE_REPOSITORY,
+  type SpaceRepository,
+} from '../spaces/ports/space-repository.js';
 import { TenantContextGuard } from '../tenancy/http/tenant-context.guard.js';
 import { NodeRequestFingerprint } from '../tenancy/infrastructure/node-request-fingerprint.js';
 import { PrismaIdempotencyRepository } from '../tenancy/infrastructure/prisma-idempotency.repository.js';
@@ -48,6 +53,8 @@ import { ListConversationMessages } from './application/list-conversation-messag
 import { ListStoryConversations } from './application/list-story-conversations.js';
 import { ListStoryProjects } from './application/list-story-projects.js';
 import { RemoveProjectCollaborator } from './application/remove-project-collaborator.js';
+import { SetProjectCollaboratorPermissionOverride } from './application/set-project-collaborator-permission-override.js';
+import { UpdateProjectCollaboratorRole } from './application/update-project-collaborator-role.js';
 import { RollbackStoryArtifact } from './application/rollback-story-artifact.js';
 import { RetryStoryGeneration } from './application/retry-story-generation.js';
 import { UpdateStoryProject } from './application/update-story-project.js';
@@ -58,6 +65,7 @@ import { MessagesController } from './http/messages.controller.js';
 import { StoryArtifactsController } from './http/story-artifacts.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
+import { MeStoryProjectsController } from './http/me-story-projects.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
 import { PrismaConversationRepository } from './infrastructure/prisma-conversation.repository.js';
 import { PrismaMessageRepository } from './infrastructure/prisma-message.repository.js';
@@ -95,9 +103,10 @@ import {
 } from './ports/story-artifact-version-repository.js';
 
 @Module({
-  imports: [DatabaseModule, AuditModule, IdentityModule],
+  imports: [DatabaseModule, AuditModule, IdentityModule, SpacesModule],
   controllers: [
     StoryProjectsController,
+    MeStoryProjectsController,
     ProjectCollaboratorsController,
     ConversationsController,
     GenerationRequestsController,
@@ -225,6 +234,7 @@ import {
       provide: CreateStoryProject,
       inject: [
         STORY_PROJECT_REPOSITORY,
+        SPACE_REPOSITORY,
         TEAM_MEMBERSHIP_REPOSITORY,
         IDEMPOTENCY_REPOSITORY,
         AUDIT_REPOSITORY,
@@ -234,6 +244,7 @@ import {
       ],
       useFactory: (
         projects: StoryProjectRepository,
+        spaces: SpaceRepository,
         memberships: TeamMembershipRepository,
         idempotency: IdempotencyRepository,
         audit: AuditRepository,
@@ -243,6 +254,7 @@ import {
       ) =>
         new CreateStoryProject(
           projects,
+          spaces,
           memberships,
           idempotency,
           audit,
@@ -259,12 +271,14 @@ import {
         TEAM_MEMBERSHIP_REPOSITORY,
         AUDIT_REPOSITORY,
         DatabaseClock,
+        SPACE_REPOSITORY,
       ],
       useFactory: (
         projects: StoryProjectRepository,
         memberships: TeamMembershipRepository,
         audit: AuditRepository,
         databaseClock: DatabaseClock,
+        spaces: SpaceRepository,
       ) =>
         new ListStoryProjects(
           projects,
@@ -272,6 +286,7 @@ import {
           audit,
           databaseClock,
           ids(),
+          spaces,
         ),
     },
     {
@@ -374,6 +389,62 @@ import {
         databaseClock: DatabaseClock,
       ) =>
         new AddProjectCollaborator(
+          projects,
+          memberships,
+          collaborators,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: UpdateProjectCollaboratorRole,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new UpdateProjectCollaboratorRole(
+          projects,
+          memberships,
+          collaborators,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: SetProjectCollaboratorPermissionOverride,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new SetProjectCollaboratorPermissionOverride(
           projects,
           memberships,
           collaborators,

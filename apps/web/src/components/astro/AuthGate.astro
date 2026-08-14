@@ -26,9 +26,9 @@ const { requireTeam = false } = Astro.props;
       if (
         element.dataset.requireTeam === 'true' &&
         session.teams?.length === 0 &&
-        window.location.pathname !== '/app/onboarding'
+        window.location.pathname !== '/onboarding'
       ) {
-        window.location.assign('/app/onboarding');
+        window.location.assign('/onboarding');
       }
     } catch {
       const next = `${window.location.pathname}${window.location.search}`;

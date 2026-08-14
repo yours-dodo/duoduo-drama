@@ -27,7 +27,15 @@ export class PrismaAuditRepository
     await this.database.withClient((client) =>
       client.auditRecord.create({
         data: {
-          ...record,
+          id: record.id,
+          tenantId: record.tenantId,
+          spaceId: record.spaceId ?? null,
+          actorUserId: record.actorUserId,
+          action: record.action,
+          targetType: record.targetType,
+          targetId: record.targetId,
+          requestId: record.requestId,
+          occurredAt: record.occurredAt,
           beforeSummary:
             record.beforeSummary === null
               ? Prisma.JsonNull
@@ -53,6 +61,7 @@ export class PrismaAuditRepository
         SELECT
           id,
           tenant_id AS "tenantId",
+          space_id AS "spaceId",
           actor_user_id AS "actorUserId",
           action,
           target_type AS "targetType",
@@ -80,7 +89,8 @@ export class PrismaAuditRepository
   }
 
   listForTarget(request: {
-    tenantId: string;
+    tenantId?: string | null;
+    spaceId?: string | null;
     targetType: AuditRecordSnapshot['targetType'];
     targetId: string;
     page: KeysetPageRequest;
@@ -93,6 +103,7 @@ export class PrismaAuditRepository
         SELECT
           id,
           tenant_id AS "tenantId",
+          space_id AS "spaceId",
           actor_user_id AS "actorUserId",
           action,
           target_type AS "targetType",
@@ -102,7 +113,11 @@ export class PrismaAuditRepository
           request_id AS "requestId",
           occurred_at AS "occurredAt"
         FROM audit_records
-        WHERE tenant_id = ${request.tenantId}::uuid
+        WHERE (
+          (${request.tenantId ?? null}::uuid IS NOT NULL AND tenant_id = ${request.tenantId ?? null}::uuid)
+          OR
+          (${request.spaceId ?? null}::uuid IS NOT NULL AND space_id = ${request.spaceId ?? null}::uuid)
+        )
           AND target_type = ${request.targetType}
           AND target_id = ${request.targetId}::uuid
           ${after}

@@ -1,5 +1,7 @@
 import { useState, type FC } from 'react';
 
+import './drama.css';
+
 import DramaCanvas from './components/DramaCanvas';
 import DramaHeader from './components/DramaHeader';
 import DramaProjectCatalog from './components/DramaProjectCatalog';
@@ -13,7 +15,7 @@ interface DramaAppProps {
 }
 
 const DramaApp: FC<DramaAppProps> = ({ projectId }) => {
-  const [activeStep, setActiveStep] = useState<DramaWorkflowStep>('episodes');
+  const [activeStep, setActiveStep] = useState<DramaWorkflowStep>('creation');
 
   if (!projectId) {
     return <DramaProjectCatalog />;

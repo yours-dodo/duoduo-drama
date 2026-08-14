@@ -1,0 +1,22 @@
+model AuditRecord {
+  id              String          @id @default(uuid()) @db.Uuid
+  tenantId        String?         @map("tenant_id") @db.Uuid
+  spaceId         String?         @map("space_id") @db.Uuid
+  actorUserId     String          @map("actor_user_id") @db.Uuid
+  action          String          @db.VarChar(64)
+  targetType      String          @map("target_type") @db.VarChar(64)
+  targetId        String          @map("target_id") @db.Uuid
+  beforeSummary   Json?           @map("before_summary") @db.JsonB
+  afterSummary    Json?           @map("after_summary") @db.JsonB
+  requestId       String          @map("request_id") @db.VarChar(128)
+  occurredAt      DateTime        @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  team            Team?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  space           Space?          @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  actor           User            @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actorMembership TeamMembership? @relation("AuditActorMembership", fields: [tenantId, actorUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@index([tenantId, occurredAt(sort: Desc), id], map: "audit_records_tenant_id_occurred_at_id_idx")
+  @@index([spaceId, occurredAt(sort: Desc), id], map: "audit_records_space_id_occurred_at_id_idx")
+  @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_records_actor_user_id_occurred_at_idx")
+  @@map("audit_records")
+}

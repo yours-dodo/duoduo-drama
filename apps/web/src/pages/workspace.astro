@@ -1,0 +1,83 @@
+---
+import AuthGate from '../components/astro/AuthGate.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="工作台｜多多剧场"
+  description="多多剧场创作工作台。"
+  pageClass="workspace-theme"
+  robots="noindex,nofollow"
+>
+  <AuthGate requireTeam>
+    <section class="workspace-page-shell" aria-labelledby="workspace-page-title">
+      <div class="workspace-heading">
+        <div>
+          <p class="workspace-kicker">CREATIVE WORKSPACE / CHOOSE YOUR PATH</p>
+          <h1 id="workspace-page-title">
+            选择你的<span class="workspace-heading-accent-orange">创作</span><span
+              class="workspace-heading-accent-neon"
+              >方向</span
+            ><span class="workspace-heading-punctuation-orange">。</span>
+          </h1>
+          <p class="workspace-intro">从一个清晰的创作入口开始，继续发展故事，或把它推进成一部短剧。</p>
+        </div>
+      </div>
+
+      <div class="workspace-entry-grid">
+        <a class="workspace-entry story-entry" href="/stories">
+          <div class="workspace-entry-topline">
+            <span class="workspace-card-index">A / STORY</span>
+            <span class="workspace-card-count">01</span>
+          </div>
+          <div class="workspace-story-visual" aria-hidden="true">
+            <i class="workspace-visual-orbit workspace-visual-orbit-large"></i>
+            <i class="workspace-visual-orbit workspace-visual-orbit-small"></i>
+            <i class="workspace-visual-line workspace-visual-line-character"></i>
+            <i class="workspace-visual-line workspace-visual-line-world"></i>
+            <i class="workspace-visual-line workspace-visual-line-episode"></i>
+            <span class="workspace-visual-core">STORY</span>
+            <span class="workspace-visual-node workspace-visual-node-character">CHARACTER</span>
+            <span class="workspace-visual-node workspace-visual-node-world">WORLD</span>
+            <span class="workspace-visual-node workspace-visual-node-episode">EPISODE</span>
+          </div>
+          <div class="workspace-entry-copy">
+            <strong>故事创作</strong>
+            <span>用 Vue 工作台发展人物、世界、对话和剧本。</span>
+          </div>
+          <div class="workspace-entry-footer">
+            <span>进入故事工作台</span>
+            <span aria-hidden="true">↗</span>
+          </div>
+        </a>
+        <a class="workspace-entry drama-entry" href="/dramas">
+          <div class="workspace-entry-topline">
+            <span class="workspace-card-index">B / DRAMA</span>
+            <span class="workspace-card-count">02</span>
+          </div>
+          <div class="workspace-drama-visual" aria-hidden="true">
+            <div class="workspace-drama-frame">
+              <span>SCENE 01</span>
+              <strong>故事<br />正在成片。</strong>
+              <i></i>
+            </div>
+            <div class="workspace-drama-timeline">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <span class="workspace-drama-marker">SCRIPT / FRAME / CUT</span>
+          </div>
+          <div class="workspace-entry-copy">
+            <strong>短剧创作</strong>
+            <span>用 React 工作台推进创意、剧本、分镜和制作流程。</span>
+          </div>
+          <div class="workspace-entry-footer">
+            <span>进入短剧工作台</span>
+            <span aria-hidden="true">↗</span>
+          </div>
+        </a>
+      </div>
+    </section>
+  </AuthGate>
+</BaseLayout>

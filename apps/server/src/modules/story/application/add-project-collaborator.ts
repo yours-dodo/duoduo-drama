@@ -1,4 +1,5 @@
 import { canManageProjectCollaborators } from '../../../domain/story/project-access-policy.js';
+import type { ProjectCollaboratorRole } from '../../../domain/story/project-collaborator.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import {
   ProjectCollaboratorAlreadyExistsError,
@@ -33,6 +34,7 @@ export class AddProjectCollaborator {
     actorUserId: string;
     projectId: string;
     userId: string;
+    role?: ProjectCollaboratorRole;
     requestId: string;
   }) {
     return this.transactions.run(async () => {
@@ -55,13 +57,14 @@ export class AddProjectCollaborator {
       if (!canManageProjectCollaborators(access.project, access.subject)) {
         if (
           access.project.visibility === 'private' ||
+          access.project.spaceKind === 'personal' ||
           access.project.status === 'archived'
         ) {
           throw new ProjectCollaboratorsNotAllowedError();
         }
         throw new ProjectCollaboratorManagementRequiredError();
       }
-      if (input.userId === access.project.createdByUserId) {
+      if (input.userId === access.project.ownerUserId) {
         throw new ProjectCollaboratorTargetIsCreatorError();
       }
       const target = await this.memberships.findActive({
@@ -82,7 +85,10 @@ export class AddProjectCollaborator {
         tenantId: input.tenantId,
         projectId: input.projectId,
         userId: input.userId,
+        role: input.role ?? 'editor',
         createdAt: now,
+        updatedAt: now,
+        revokedAt: null,
       };
       await this.collaborators.create(collaborator);
       await this.audit.record({
@@ -96,6 +102,7 @@ export class AddProjectCollaborator {
         afterSummary: {
           projectId: collaborator.projectId,
           userId: collaborator.userId,
+          role: collaborator.role,
         },
         requestId: input.requestId,
         occurredAt: now,

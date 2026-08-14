@@ -52,7 +52,7 @@ describe.skipIf(!databaseUrl)('story conversation PostgreSQL boundary', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     teamId = randomUUID();
     otherTeamId = randomUUID();
@@ -66,8 +66,19 @@ describe.skipIf(!databaseUrl)('story conversation PostgreSQL boundary', () => {
     await insertMembership(teamId, creatorId, 'admin');
     await insertMembership(otherTeamId, otherCreatorId, 'admin');
     await pool.query(
-      'INSERT INTO story_projects (id, tenant_id, created_by_user_id, title, visibility, status, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)',
-      [projectId, teamId, creatorId, '故事项目', 'team', 'active', 1, NOW],
+      'INSERT INTO story_projects (id, tenant_id, space_id, created_by_user_id, owner_user_id, title, visibility, status, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)',
+      [
+        projectId,
+        teamId,
+        teamId,
+        creatorId,
+        creatorId,
+        '故事项目',
+        'team',
+        'active',
+        1,
+        NOW,
+      ],
     );
   });
 
@@ -332,6 +343,10 @@ describe.skipIf(!databaseUrl)('story conversation PostgreSQL boundary', () => {
     await pool.query(
       'INSERT INTO teams (id, name, created_by_user_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $4)',
       [id, name, createdByUserId, NOW],
+    );
+    await pool.query(
+      'INSERT INTO spaces (id, kind, owner_team_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $4)',
+      [id, 'team', id, NOW],
     );
   }
 

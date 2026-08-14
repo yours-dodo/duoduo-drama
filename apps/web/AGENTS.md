@@ -33,6 +33,11 @@ Place Astro application code under `src/`:
 - `src/styles/` for shared tokens, accessible base styles, and public-page styles.
 - `public/` for static assets that do not require Astro processing.
 
+Creator routes use direct root paths: `/workspace` for the workspace chooser,
+`/stories` and `/dramas` for creation workspaces, and `/onboarding` for team
+setup. The former `/app/*` paths remain compatibility redirects only; new
+links and redirects must target the root paths.
+
 Do not import Server source files, Prisma types, Agent source files, database clients, or object-storage SDKs into Web code.
 
 ## Commands

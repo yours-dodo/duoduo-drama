@@ -1,52 +1,52 @@
 ---
-name: Expressive
+name: Levels
 colors:
-  primary: '#db2777'
-  secondary: '#2563eb'
-  success: '#16A34A'
-  warning: '#D97706'
-  danger: '#DC2626'
-  surface: '#FFFFFF'
-  text: '#111827'
-  neutral: '#FFFFFF'
+  primary: "#EE752F"
+  secondary: "#EE752F"
+  success: "#16A34A"
+  warning: "#D97706"
+  danger: "#DC2626"
+  surface: "#FFFFFF"
+  text: "#111827"
+  neutral: "#FFFFFF"
 typography:
   h1:
-    fontFamily: 'IBM Plex Mono'
-    fontSize: 2.5rem
+    fontFamily: "Noto Serif SC"
+    fontSize: 2rem
   body-md:
-    fontFamily: 'IBM Plex Mono'
+    fontFamily: "Noto Sans SC"
     fontSize: 1rem
   label-caps:
-    fontFamily: 'IBM Plex Mono'
-    fontSize: 0.875rem
-  sourceScale: '14/16/18/24/32/40'
-  weights: '100, 200, 300, 400, 500, 600, 700, 800, 900'
+    fontFamily: "JetBrains Mono"
+    fontSize: 0.75rem
+  sourceScale: "12/14/16/20/24/32"
+  weights: "100, 200, 300, 400, 500, 600, 700, 800, 900"
 rounded:
   sm: 4px
   md: 8px
 spacing:
   sm: 4px
   md: 8px
-  sourceScale: '4/8/12/16/24/32'
+  sourceScale: "4/8/12/16/24/32"
 ---
 
 ## Overview
 
-Vibrant, personality-driven design with bold colors, playful graphics, and dynamic layouts that balance creativity with structure.
+Conversion-focused design that removes friction and guides users toward action through clarity, trust, and speed.
 
 ## Style Foundations
 
-- **Visual style:** modern, playful
-- **Typography scale:** 14/16/18/24/32/40
-- **Typography fonts:** primary=IBM Plex Mono, display=IBM Plex Mono, mono=IBM Plex Mono
+- **Visual style:** modern, clean
+- **Typography scale:** 12/14/16/20/24/32
+- **Typography fonts:** primary=Noto Sans SC, display=Noto Serif SC, mono=IBM Plex Mono
 - **Typography weights:** 100, 200, 300, 400, 500, 600, 700, 800, 900
-- **Color palette:** primary, secondary, neutral, success, warning, danger
+- **Color palette:** primary, neutral, success, warning, danger
 - **Spacing scale:** 4/8/12/16/24/32
 
 ## Colors
 
-- **Primary (#db2777):** Token from style foundations.
-- **Secondary (#2563eb):** Token from style foundations.
+- **Primary (#EE752F):** Token from style foundations.
+- **Secondary (#EE752F):** Token from style foundations.
 - **Success (#16A34A):** Token from style foundations.
 - **Warning (#D97706):** Token from style foundations.
 - **Danger (#DC2626):** Token from style foundations.

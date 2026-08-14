@@ -73,6 +73,13 @@ export class StoryProjectAccessDeniedError extends Error {
   }
 }
 
+export class StoryProjectSpaceMoveRequiredError extends Error {
+  constructor() {
+    super('Changing project visibility requires an explicit space move');
+    this.name = 'StoryProjectSpaceMoveRequiredError';
+  }
+}
+
 export class ProjectCollaboratorNotFoundError extends Error {
   constructor() {
     super('Project collaborator was not found');
@@ -112,5 +119,19 @@ export class ProjectCollaboratorTargetIsCreatorError extends Error {
   constructor() {
     super('The project creator does not need a collaborator grant');
     this.name = 'ProjectCollaboratorTargetIsCreatorError';
+  }
+}
+
+export class ProjectCollaboratorPermissionOverrideNotAllowedError extends Error {
+  constructor() {
+    super('The project collaborator permission override is not allowed');
+    this.name = 'ProjectCollaboratorPermissionOverrideNotAllowedError';
+  }
+}
+
+export class ProjectCollaboratorRoleInvalidError extends Error {
+  constructor() {
+    super('The project collaborator role is invalid');
+    this.name = 'ProjectCollaboratorRoleInvalidError';
   }
 }

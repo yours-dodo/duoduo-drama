@@ -8,6 +8,7 @@ import type {
 } from '../../../platform/observability/request-logging.interceptor.js';
 import { createTestApp } from '../../../test/create-test-app.js';
 import { RequestEmailCode } from '../application/request-email-code.js';
+import { DevelopmentLogin } from '../application/development-login.js';
 import { LocalEmailDelivery } from '../infrastructure/local-email-delivery.js';
 import { EMAIL_DELIVERY } from '../ports/email-delivery.js';
 import {
@@ -142,5 +143,59 @@ describe('AuthController', () => {
       sourceAddress: expect.any(String),
       purpose: 'password_reset',
     });
+  });
+
+  it('keeps development login unavailable outside the development environment', async () => {
+    const developmentLogin = { execute: vi.fn() };
+    const response = await request(app.getHttpServer())
+      .post('/v1/auth/development-logins')
+      .send({ email: 'writer@example.com' })
+      .expect(404);
+
+    expect(response.body.error.code).toBe('NOT_FOUND');
+    expect(developmentLogin.execute).not.toHaveBeenCalled();
+  });
+
+  it('issues a real session for development login', async () => {
+    await app.close();
+    const developmentLogin = {
+      execute: vi.fn(async () => ({
+        user: { id: 'user-id', email: 'writer@example.com' },
+        sessionToken: 'session-token',
+        sessionExpiresAt: new Date('2026-09-08T00:00:00.000Z'),
+        hasPassword: true as const,
+      })),
+    };
+    app = await createTestApp({
+      serverConfig: {
+        environment: 'development',
+        port: 3001,
+        cookieSecret: 'local-development-cookie-secret-change-me',
+        trustedOrigins: ['http://localhost:3000'],
+        databaseUrl:
+          'postgresql://duoduo_server:test@127.0.0.1:55433/duoduo_server_test',
+        publicWebUrl: 'http://localhost:3000',
+        loginTokenPepper: 'local-development-login-token-pepper-change-me',
+        trustedProxyHops: 1,
+      },
+      providerOverrides: [{ token: DevelopmentLogin, value: developmentLogin }],
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/v1/auth/development-logins')
+      .send({ email: 'writer@example.com' })
+      .expect(200);
+
+    expect(developmentLogin.execute).toHaveBeenCalledWith({
+      email: 'writer@example.com',
+    });
+    expect(response.body).toEqual({
+      user: { id: 'user-id', email: 'writer@example.com' },
+      session: { expiresAt: '2026-09-08T00:00:00.000Z' },
+      hasPassword: true,
+    });
+    expect(response.headers['set-cookie']?.[0] ?? '').toContain(
+      'duoduo_session=session-token',
+    );
   });
 });

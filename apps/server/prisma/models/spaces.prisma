@@ -1,0 +1,17 @@
+model Space {
+  id            String         @id @default(uuid()) @db.Uuid
+  kind          String         @db.VarChar(16)
+  ownerUserId   String?        @map("owner_user_id") @db.Uuid
+  ownerTeamId   String?        @map("owner_team_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  ownerUser     User?          @relation("SpaceOwnerUser", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  ownerTeam     Team?          @relation("SpaceOwnerTeam", fields: [ownerTeamId], references: [id], onDelete: Restrict)
+  storyProjects StoryProject[]
+  auditRecords  AuditRecord[]
+
+  @@index([ownerUserId], map: "spaces_owner_user_id_idx")
+  @@index([ownerTeamId], map: "spaces_owner_team_id_idx")
+  @@index([kind, createdAt(sort: Desc)], map: "spaces_kind_created_at_idx")
+  @@map("spaces")
+}

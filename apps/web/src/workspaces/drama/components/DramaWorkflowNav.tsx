@@ -1,6 +1,11 @@
 import type { FC } from 'react';
 
 export const dramaWorkflowSteps = [
+  {
+    id: 'creation',
+    label: '创作',
+    description: '从一句话创意发展成短剧方案。',
+  },
   { id: 'episodes', label: '剧集', description: '组织故事的集数和节奏。' },
   { id: 'scenes', label: '场景', description: '拆分每一集的场景关系。' },
   { id: 'shots', label: '镜头', description: '把场景推进到可执行镜头。' },

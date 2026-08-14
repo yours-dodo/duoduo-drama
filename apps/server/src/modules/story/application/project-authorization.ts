@@ -17,9 +17,10 @@ export async function readProjectAccess(
   projects: StoryProjectRepository,
   collaborators: ProjectCollaboratorRepository,
   input: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
-    membership: TeamMembershipSnapshot;
+    actorUserId?: string;
+    membership: TeamMembershipSnapshot | null;
     lock: boolean;
   },
 ): Promise<{
@@ -36,21 +37,46 @@ export async function readProjectAccess(
         projectId: input.projectId,
       });
   if (project === null) throw new StoryProjectNotFoundError();
+  if (
+    project.spaceKind === 'team' &&
+    input.membership !== null &&
+    project.tenantId !== input.membership.tenantId
+  ) {
+    throw new StoryProjectNotFoundError();
+  }
 
   const collaborator =
-    project.visibility === 'team'
-      ? (await collaborators.findByProjectAndUserLocked({
+    input.tenantId !== null &&
+    (project.spaceKind === 'team' ||
+      (project.spaceKind === undefined &&
+        project.tenantId !== null &&
+        project.visibility === 'team')) &&
+    input.membership !== null
+      ? await collaborators.findByProjectAndUserLocked({
           tenantId: input.tenantId,
           projectId: input.projectId,
           userId: input.membership.userId,
-        })) !== null
+        })
       : false;
+  const permissionOverrides =
+    collaborator !== null &&
+    collaborator !== false &&
+    collaborators.listPermissionOverrides
+      ? await collaborators.listPermissionOverrides({
+          collaboratorId: collaborator.id,
+        })
+      : [];
   return {
     project,
     subject: {
-      userId: input.membership.userId,
-      role: input.membership.role,
-      collaborator,
+      userId: input.actorUserId ?? input.membership?.userId ?? '',
+      role: input.membership?.role ?? null,
+      collaborator: collaborator !== null && collaborator !== false,
+      collaboratorRole:
+        collaborator !== null && collaborator !== false
+          ? collaborator.role
+          : null,
+      permissionOverrides,
     },
   };
 }

@@ -1,7 +1,9 @@
+import { Space } from '../../../domain/space/space.js';
 import { normalizeTeamName, Team } from '../../../domain/tenancy/team.js';
 import { TeamMembership } from '../../../domain/tenancy/team-membership.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import type { IdempotencyRepository } from '../ports/idempotency-repository.js';
+import type { SpaceRepository } from '../../spaces/ports/space-repository.js';
 import type { TeamMembershipRepository } from '../ports/team-membership-repository.js';
 import type { TeamRepository } from '../ports/team-repository.js';
 
@@ -33,6 +35,7 @@ export class IdempotencyConflictError extends Error {
 export class CreateTeam {
   constructor(
     private readonly teams: TeamRepository,
+    private readonly spaces: SpaceRepository,
     private readonly memberships: TeamMembershipRepository,
     private readonly idempotency: IdempotencyRepository,
     private readonly audit: AuditRepository,
@@ -75,6 +78,11 @@ export class CreateTeam {
         createdByUserId: input.actorUserId,
         createdAt: now,
       }).toSnapshot();
+      const space = Space.createTeam({
+        id: this.ids.create(),
+        ownerTeamId: team.id,
+        createdAt: now,
+      }).toSnapshot();
       const membership = TeamMembership.createAdministrator({
         id: this.ids.create(),
         tenantId: team.id,
@@ -83,6 +91,7 @@ export class CreateTeam {
       }).toSnapshot();
 
       await this.teams.create(team);
+      await this.spaces.create(space);
       await this.memberships.create(membership);
       await this.idempotency.create({
         id: this.ids.create(),

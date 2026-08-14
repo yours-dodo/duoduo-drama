@@ -21,6 +21,7 @@ import { InvalidEmailAddressError } from '../../../domain/identity/email-address
 import { ApplicationError } from '../../../platform/http/application-error.js';
 import { readRequestId } from '../../../platform/http/request-id.middleware.js';
 import { LoginWithPassword } from '../application/login-with-password.js';
+import { DevelopmentLogin } from '../application/development-login.js';
 import { Logout } from '../application/logout.js';
 import {
   InvalidEmailVerificationCodeError,
@@ -66,6 +67,8 @@ export class AuthController {
     private readonly verifyEmailCodeLogin: VerifyEmailCodeLogin,
     @Inject(LoginWithPassword)
     private readonly loginWithPassword: LoginWithPassword,
+    @Inject(DevelopmentLogin)
+    private readonly developmentLogin: DevelopmentLogin,
     @Inject(SetPassword) private readonly setPassword: SetPassword,
     @Inject(ResetPasswordWithCode)
     private readonly resetPasswordWithCode: ResetPasswordWithCode,
@@ -153,6 +156,47 @@ export class AuthController {
         user: verified.user,
         session: { expiresAt: verified.sessionExpiresAt },
         hasPassword: verified.hasPassword,
+      };
+    } catch (error) {
+      throw mapAuthenticationError(error);
+    }
+  }
+
+  @Post('development-logins')
+  @HttpCode(HttpStatus.OK)
+  async developmentLoginByEmail(
+    @Body(
+      new ValidationPipe({
+        expectedType: RequestEmailCodeDto,
+        transform: true,
+        whitelist: true,
+      }),
+    )
+    body: RequestEmailCodeDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    if (this.config.environment !== 'development') {
+      throw new ApplicationError({
+        code: 'NOT_FOUND',
+        message: 'Not found',
+        statusCode: HttpStatus.NOT_FOUND,
+      });
+    }
+
+    try {
+      const loggedIn = await this.developmentLogin.execute({
+        email: body.email,
+      });
+      this.writeSessionCookie(
+        response,
+        loggedIn.sessionToken,
+        loggedIn.sessionExpiresAt,
+      );
+
+      return {
+        user: loggedIn.user,
+        session: { expiresAt: loggedIn.sessionExpiresAt },
+        hasPassword: true,
       };
     } catch (error) {
       throw mapAuthenticationError(error);

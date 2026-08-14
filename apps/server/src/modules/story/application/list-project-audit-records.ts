@@ -13,15 +13,18 @@ export class ListProjectAuditRecords {
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     page: KeysetPageRequest;
   }) {
-    const membership = await this.memberships.findActive({
-      tenantId: input.tenantId,
-      userId: input.actorUserId,
-    });
+    const membership =
+      input.tenantId === null
+        ? null
+        : await this.memberships.findActive({
+            tenantId: input.tenantId,
+            userId: input.actorUserId,
+          });
     const project = await this.projects.findById({
       tenantId: input.tenantId,
       projectId: input.projectId,
@@ -31,16 +34,16 @@ export class ListProjectAuditRecords {
       project === null ||
       !canViewProject(project, {
         userId: input.actorUserId,
-        role: membership.role,
+        role: membership?.role ?? null,
         collaborator: false,
       }) ||
-      (membership.role !== 'admin' &&
-        project.createdByUserId !== input.actorUserId)
+      (membership?.role !== 'admin' && project.ownerUserId !== input.actorUserId)
     ) {
       throw new StoryProjectNotFoundError();
     }
     return this.audit.listForTarget({
       tenantId: input.tenantId,
+      spaceId: project.spaceId,
       targetType: 'STORY_PROJECT',
       targetId: input.projectId,
       page: input.page,

@@ -1,5 +1,6 @@
 import { StoryProject } from '../../../domain/story/story-project.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
+import type { SpaceRepository } from '../../spaces/ports/space-repository.js';
 import { IdempotencyConflictError } from '../../tenancy/application/create-team.js';
 import type { IdempotencyRepository } from '../../tenancy/ports/idempotency-repository.js';
 import type { TeamMembershipRepository } from '../../tenancy/ports/team-membership-repository.js';
@@ -12,6 +13,7 @@ const OPERATION_TYPE = 'CREATE_STORY_PROJECT';
 export class CreateStoryProject {
   constructor(
     private readonly projects: StoryProjectRepository,
+    private readonly spaces: SpaceRepository,
     private readonly memberships: TeamMembershipRepository,
     private readonly idempotency: IdempotencyRepository,
     private readonly audit: AuditRepository,
@@ -24,27 +26,48 @@ export class CreateStoryProject {
   ) {}
 
   execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     title: string;
     visibility: 'team' | 'private';
+    spaceKind?: 'personal' | 'team';
+    spaceId?: string;
     idempotencyKey: string;
     requestId: string;
   }) {
+    const personal =
+      input.spaceKind === 'personal' ||
+      input.tenantId === null ||
+      input.visibility === 'private';
+    const effectiveVisibility = personal ? 'private' : 'team';
     const requestHash = this.fingerprint.hash(
       JSON.stringify({
         title: input.title.trim(),
-        visibility: input.visibility,
+        visibility: effectiveVisibility,
+        spaceKind: personal ? 'personal' : 'team',
       }),
     );
-    const scopeKey = `tenant:${input.tenantId}:user:${input.actorUserId}`;
 
     return this.transactions.run(async () => {
-      const actor = await this.memberships.findActive({
-        tenantId: input.tenantId,
-        userId: input.actorUserId,
-      });
-      if (actor === null) throw new StoryProjectAccessDeniedError();
+      if (input.tenantId !== null) {
+        const actor = await this.memberships.findActive({
+          tenantId: input.tenantId,
+          userId: input.actorUserId,
+        });
+        if (actor === null) throw new StoryProjectAccessDeniedError();
+      }
+
+      const space = personal
+        ? await this.spaces.findPersonalByUserId(input.actorUserId)
+        : input.tenantId === null
+          ? null
+          : await this.spaces.findTeamByTeamId(input.tenantId);
+      if (space === null || space.id !== (input.spaceId ?? space.id)) {
+        throw new StoryProjectAccessDeniedError();
+      }
+      const scopeKey = personal
+        ? `space:${space.id}:user:${input.actorUserId}`
+        : `tenant:${input.tenantId}:user:${input.actorUserId}`;
 
       const existing = await this.idempotency.findLocked({
         scopeKey,
@@ -56,7 +79,7 @@ export class CreateStoryProject {
           throw new IdempotencyConflictError();
         }
         const project = await this.projects.findById({
-          tenantId: input.tenantId,
+          tenantId: personal ? null : input.tenantId,
           projectId: existing.resultId,
         });
         if (project === null)
@@ -65,7 +88,8 @@ export class CreateStoryProject {
           project: projectOutput(project, {
             collaborator: false,
             canEdit: true,
-            canManageCollaborators: project.visibility === 'team',
+            canManageCollaborators:
+              project.spaceKind === 'team' && project.visibility === 'team',
           }),
         };
       }
@@ -73,16 +97,19 @@ export class CreateStoryProject {
       const now = await this.databaseClock.now();
       const project = StoryProject.create({
         id: this.ids.create(),
-        tenantId: input.tenantId,
+        tenantId: personal ? null : input.tenantId,
+        spaceId: space.id,
+        spaceKind: personal ? 'personal' : 'team',
         createdByUserId: input.actorUserId,
+        ownerUserId: input.actorUserId,
         title: input.title,
-        visibility: input.visibility,
+        visibility: effectiveVisibility,
         createdAt: now,
       }).toSnapshot();
       await this.projects.create(project);
       await this.idempotency.create({
         id: this.ids.create(),
-        tenantId: input.tenantId,
+        tenantId: project.tenantId,
         scopeKey,
         operationType: OPERATION_TYPE,
         idempotencyKey: input.idempotencyKey,
@@ -92,7 +119,8 @@ export class CreateStoryProject {
       });
       await this.audit.record({
         id: this.ids.create(),
-        tenantId: input.tenantId,
+        tenantId: project.tenantId,
+        spaceId: project.spaceId,
         actorUserId: input.actorUserId,
         action: 'STORY_PROJECT_CREATED',
         targetType: 'STORY_PROJECT',
@@ -101,6 +129,7 @@ export class CreateStoryProject {
         afterSummary: {
           title: project.title,
           visibility: project.visibility,
+          spaceKind: project.spaceKind,
         },
         requestId: input.requestId,
         occurredAt: now,
@@ -110,7 +139,8 @@ export class CreateStoryProject {
         project: projectOutput(project, {
           collaborator: false,
           canEdit: true,
-          canManageCollaborators: project.visibility === 'team',
+          canManageCollaborators:
+            project.spaceKind === 'team' && project.visibility === 'team',
         }),
       };
     });

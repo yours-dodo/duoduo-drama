@@ -11,17 +11,19 @@ import {
   ProjectCollaboratorNotFoundError,
   StoryProjectNotFoundError,
   StoryProjectRevisionConflictError,
+  StoryProjectSpaceMoveRequiredError,
 } from './story-errors.js';
 
 const NOW = new Date('2026-08-10T02:00:00.000Z');
 
 describe('story project application', () => {
-  it('creates an idempotent project and records its tenant audit', async () => {
+  it('creates an idempotent team project and records its tenant audit', async () => {
     const fixture = buildFixture();
 
     await expect(
       new CreateStoryProject(
         fixture.projects,
+        fixture.spaces,
         fixture.memberships,
         fixture.idempotency,
         fixture.audit,
@@ -33,7 +35,7 @@ describe('story project application', () => {
         tenantId: 'team-id',
         actorUserId: 'creator-id',
         title: '  我的故事  ',
-        visibility: 'private',
+        visibility: 'team',
         idempotencyKey: 'project-key',
         requestId: 'request-id',
       }),
@@ -41,7 +43,7 @@ describe('story project application', () => {
       project: {
         id: 'project-id',
         title: '我的故事',
-        visibility: 'private',
+        visibility: 'team',
         status: 'active',
         revision: 1,
       },
@@ -49,9 +51,11 @@ describe('story project application', () => {
     expect(fixture.projects.create).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: 'team-id',
+        spaceId: 'team-space-id',
         createdByUserId: 'creator-id',
+        ownerUserId: 'creator-id',
         title: '我的故事',
-        visibility: 'private',
+        visibility: 'team',
       }),
     );
     expect(fixture.audit.record).toHaveBeenCalledWith(
@@ -61,6 +65,40 @@ describe('story project application', () => {
         targetId: 'project-id',
       }),
     );
+  });
+
+  it('creates a personal project without a team or collaborators', async () => {
+    const fixture = buildFixture();
+
+    await expect(
+      new CreateStoryProject(
+        fixture.projects,
+        fixture.spaces,
+        fixture.memberships,
+        fixture.idempotency,
+        fixture.audit,
+        fixture.transactions,
+        fixture.clock,
+        fixture.fingerprint,
+        fixture.ids,
+      ).execute({
+        tenantId: null,
+        actorUserId: 'creator-id',
+        title: '个人故事',
+        visibility: 'private',
+        spaceKind: 'personal',
+        idempotencyKey: 'personal-project-key',
+        requestId: 'personal-request',
+      }),
+    ).resolves.toMatchObject({
+      project: {
+        tenantId: null,
+        spaceId: 'personal-space-id',
+        spaceKind: 'personal',
+        visibility: 'private',
+      },
+    });
+    expect(fixture.memberships.findActive).not.toHaveBeenCalled();
   });
 
   it('lists projects through the repository visibility boundary', async () => {
@@ -85,6 +123,7 @@ describe('story project application', () => {
     });
     expect(fixture.projects.listVisible).toHaveBeenCalledWith({
       tenantId: 'team-id',
+      spaceId: 'team-id',
       actorUserId: 'reader-id',
       actorRole: 'member',
       page: { limit: 25, after: null },
@@ -131,7 +170,7 @@ describe('story project application', () => {
     ).rejects.toBeInstanceOf(StoryProjectRevisionConflictError);
   });
 
-  it('makes a project private by revoking collaborators atomically', async () => {
+  it('requires an explicit space move before changing project visibility', async () => {
     const fixture = buildFixture({
       project: projectSnapshot({}),
       collaborator: collaboratorSnapshot({ userId: 'writer-id' }),
@@ -155,18 +194,8 @@ describe('story project application', () => {
         expectedRevision: 1,
         requestId: 'private-request',
       }),
-    ).resolves.toMatchObject({ project: { visibility: 'private' } });
-    expect(fixture.collaborators.removeAll).toHaveBeenCalledWith({
-      tenantId: 'team-id',
-      projectId: 'project-id',
-    });
-    expect(fixture.audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'STORY_PROJECT_VISIBILITY_CHANGED',
-        beforeSummary: expect.objectContaining({ visibility: 'team' }),
-        afterSummary: expect.objectContaining({ visibility: 'private' }),
-      }),
-    );
+    ).rejects.toBeInstanceOf(StoryProjectSpaceMoveRequiredError);
+    expect(fixture.collaborators.removeAll).not.toHaveBeenCalled();
   });
 
   it('archives a project only for an editor and hides missing projects', async () => {
@@ -293,7 +322,9 @@ function projectSnapshot(
   return {
     id: 'project-id',
     tenantId: 'team-id',
+    spaceId: 'team-space-id',
     createdByUserId: 'creator-id',
+    ownerUserId: 'creator-id',
     title: '故事',
     visibility: 'team' as const,
     status: 'active' as const,
@@ -310,7 +341,10 @@ function collaboratorSnapshot(overrides: Record<string, unknown> = {}) {
     tenantId: 'team-id',
     projectId: 'project-id',
     userId: 'writer-id',
+    role: 'editor' as const,
     createdAt: NOW,
+    updatedAt: NOW,
+    revokedAt: null,
     ...overrides,
   };
 }
@@ -350,6 +384,24 @@ function buildFixture(
         async () =>
           options.projectPage ?? { items: [projectSnapshot()], next: null },
       ),
+    },
+    spaces: {
+      findPersonalByUserId: vi.fn(async () => ({
+        id: 'personal-space-id',
+        kind: 'personal' as const,
+        ownerUserId: 'creator-id',
+        ownerTeamId: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })),
+      findTeamByTeamId: vi.fn(async () => ({
+        id: 'team-space-id',
+        kind: 'team' as const,
+        ownerUserId: null,
+        ownerTeamId: 'team-id',
+        createdAt: NOW,
+        updatedAt: NOW,
+      })),
     },
     memberships: {
       findActive: vi.fn(async () => options.actor ?? membership()),

@@ -5,6 +5,7 @@ import {
 } from '../../../domain/story/project-access-policy.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import type { TeamMembershipRepository } from '../../tenancy/ports/team-membership-repository.js';
+import type { SpaceRepository } from '../../spaces/ports/space-repository.js';
 import { projectOutput } from './project-output.js';
 import { StoryProjectAccessDeniedError } from './story-errors.js';
 import type { StoryProjectRepository } from '../ports/story-project-repository.js';
@@ -16,28 +17,46 @@ export class ListStoryProjects {
     private readonly audit?: AuditRepository,
     private readonly databaseClock?: { now(): Promise<Date> },
     private readonly ids?: { create(): string },
+    private readonly spaces?: SpaceRepository,
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
+    spaceId?: string;
     actorUserId: string;
     page: { limit: number; after: { at: Date; id: string } | null };
     requestId?: string;
   }) {
-    const membership = await this.memberships.findActive({
-      tenantId: input.tenantId,
-      userId: input.actorUserId,
-    });
-    if (membership === null) throw new StoryProjectAccessDeniedError();
+    const membership =
+      input.tenantId === null
+        ? null
+        : await this.memberships.findActive({
+            tenantId: input.tenantId,
+            userId: input.actorUserId,
+          });
+    if (input.tenantId !== null && membership === null) {
+      throw new StoryProjectAccessDeniedError();
+    }
+    const spaceId =
+      input.spaceId ??
+      (input.tenantId === null
+        ? (await this.spaces?.findPersonalByUserId(input.actorUserId))?.id
+        : (await this.spaces?.findTeamByTeamId(input.tenantId))?.id) ??
+      input.tenantId;
+    if (spaceId === undefined || spaceId === null) {
+      throw new StoryProjectAccessDeniedError();
+    }
 
     const page = await this.projects.listVisible({
       tenantId: input.tenantId,
+      spaceId,
       actorUserId: input.actorUserId,
-      actorRole: membership.role,
+      actorRole: membership?.role ?? null,
       page: input.page,
     });
     if (
-      membership.role === 'admin' &&
+      membership?.role === 'admin' &&
+      input.tenantId !== null &&
       input.requestId !== undefined &&
       this.audit !== undefined &&
       this.databaseClock !== undefined &&
@@ -46,7 +65,7 @@ export class ListStoryProjects {
       for (const project of page.items) {
         if (
           project.visibility === 'private' &&
-          project.createdByUserId !== input.actorUserId
+          project.ownerUserId !== input.actorUserId
         ) {
           await this.audit.record({
             id: this.ids.create(),
@@ -68,8 +87,10 @@ export class ListStoryProjects {
         .filter((project) =>
           canViewProject(project, {
             userId: input.actorUserId,
-            role: membership.role,
+            role: membership?.role ?? null,
             collaborator: project.collaborator,
+            collaboratorRole: project.collaboratorRole,
+            permissionOverrides: [],
           }),
         )
         .map((project) =>
@@ -77,13 +98,17 @@ export class ListStoryProjects {
             collaborator: project.collaborator,
             canEdit: canEditProject(project, {
               userId: input.actorUserId,
-              role: membership.role,
+              role: membership?.role ?? null,
               collaborator: project.collaborator,
+              collaboratorRole: project.collaboratorRole,
+              permissionOverrides: [],
             }),
             canManageCollaborators: canManageProjectCollaborators(project, {
               userId: input.actorUserId,
-              role: membership.role,
+              role: membership?.role ?? null,
               collaborator: project.collaborator,
+              collaboratorRole: project.collaboratorRole,
+              permissionOverrides: [],
             }),
           }),
         ),

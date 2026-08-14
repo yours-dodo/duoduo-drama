@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly PUBLIC_SITE_URL?: string;
+  readonly DEV_TEST_ACCOUNT_EMAIL?: string;
+  readonly DEV_TEST_ACCOUNT_PASSWORD?: string;
 }
 
 interface ImportMeta {

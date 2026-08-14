@@ -15,10 +15,13 @@ import {
   ProjectCollaboratorTargetIsCreatorError,
   ProjectCollaboratorTargetNotFoundError,
   ProjectCollaboratorsNotAllowedError,
+  ProjectCollaboratorPermissionOverrideNotAllowedError,
+  ProjectCollaboratorRoleInvalidError,
   StoryProjectAccessDeniedError,
   StoryProjectArchivedError,
   StoryProjectNotFoundError,
   StoryProjectRevisionConflictError,
+  StoryProjectSpaceMoveRequiredError,
   StoryProjectTitleInvalidError,
   StoryGenerationRequestNotFoundError,
   StoryGenerationResultUnavailableError,
@@ -134,6 +137,13 @@ export function throwStoryHttpError(error: unknown): never {
       HttpStatus.CONFLICT,
     );
   }
+  if (error instanceof StoryProjectSpaceMoveRequiredError) {
+    throw storyError(
+      'STORY_PROJECT_SPACE_MOVE_REQUIRED',
+      'Changing project visibility requires an explicit space move',
+      HttpStatus.CONFLICT,
+    );
+  }
   if (error instanceof StoryProjectArchivedError) {
     throw storyError(
       'STORY_PROJECT_ARCHIVED',
@@ -177,6 +187,20 @@ export function throwStoryHttpError(error: unknown): never {
       'PROJECT_COLLABORATOR_TARGET_IS_CREATOR',
       'The project creator does not need a collaborator grant',
       HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof ProjectCollaboratorRoleInvalidError) {
+    throw storyError(
+      'PROJECT_COLLABORATOR_ROLE_INVALID',
+      'Project collaborator role is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof ProjectCollaboratorPermissionOverrideNotAllowedError) {
+    throw storyError(
+      'PROJECT_COLLABORATOR_PERMISSION_OVERRIDE_NOT_ALLOWED',
+      'Project collaborator permission override is not allowed',
+      HttpStatus.BAD_REQUEST,
     );
   }
   if (error instanceof ProjectCollaboratorsNotAllowedError) {

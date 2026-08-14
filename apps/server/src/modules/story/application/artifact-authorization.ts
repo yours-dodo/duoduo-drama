@@ -2,8 +2,12 @@ import type { TeamMembershipSnapshot } from '../../../domain/tenancy/team-member
 import {
   requireProjectEdit,
   requireProjectView,
+  readProjectAccess,
 } from './project-authorization.js';
-import { StoryArtifactNotFoundError } from './story-errors.js';
+import {
+  StoryArtifactNotFoundError,
+  StoryProjectNotFoundError,
+} from './story-errors.js';
 import type { ProjectCollaboratorRepository } from '../ports/project-collaborator-repository.js';
 import type { StoryArtifactRepository } from '../ports/story-artifact-repository.js';
 import type { StoryProjectRepository } from '../ports/story-project-repository.js';
@@ -20,34 +24,17 @@ export async function readArtifactAccess(
     lock: boolean;
   },
 ) {
-  const projectAccess = await (async () => {
-    const project = input.lock
-      ? await projects.findByIdLocked({
-          tenantId: input.tenantId,
-          projectId: input.projectId,
-        })
-      : await projects.findById({
-          tenantId: input.tenantId,
-          projectId: input.projectId,
-        });
-    if (project === null) throw new StoryArtifactNotFoundError();
-    const collaborator =
-      project.visibility === 'team'
-        ? (await collaborators.findByProjectAndUserLocked({
-            tenantId: input.tenantId,
-            projectId: input.projectId,
-            userId: input.membership.userId,
-          })) !== null
-        : false;
-    return {
-      project,
-      subject: {
-        userId: input.membership.userId,
-        role: input.membership.role,
-        collaborator,
-      },
-    };
-  })();
+  const projectAccess = await readProjectAccess(projects, collaborators, {
+    tenantId: input.tenantId,
+    projectId: input.projectId,
+    membership: input.membership,
+    lock: input.lock,
+  }).catch((error: unknown) => {
+    if (error instanceof StoryProjectNotFoundError) {
+      throw new StoryArtifactNotFoundError();
+    }
+    throw error;
+  });
   const artifact = input.lock
     ? await artifacts.findByIdLocked({
         tenantId: input.tenantId,

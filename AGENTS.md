@@ -19,6 +19,8 @@ Use Node.js 22 or newer and the pnpm version declared in the root `package.json`
 
 Start the local PostgreSQL database with `docker compose -f compose.postgres.yml up -d`. Its persistent data is bind-mounted to `db/postgres/` and is ignored by Git.
 
+To start the complete local backend infrastructure, use `cp infra/.env.example .env && docker compose -f compose.dev.yml up -d`. This includes PostgreSQL, business MinIO, Milvus and its dependencies, Elasticsearch, and single-node Kafka KRaft. Keep `infra/` limited to local infrastructure helpers and sanitized environment examples.
+
 Use `pnpm --filter <workspace> <script>` for a single workspace. Before submitting changes, also run `git status`, `git diff`, and `git diff --check`. Do not require undocumented global tools.
 
 ## Coding Style & Naming Conventions

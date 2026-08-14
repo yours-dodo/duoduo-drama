@@ -19,6 +19,11 @@ import {
   type AuditRepository,
 } from '../audit/ports/audit-repository.js';
 import { IdentityModule } from '../identity/identity.module.js';
+import { SpacesModule } from '../spaces/spaces.module.js';
+import {
+  SPACE_REPOSITORY,
+  type SpaceRepository,
+} from '../spaces/ports/space-repository.js';
 import { AcceptTeamInvitation } from './application/accept-team-invitation.js';
 import { ChangeTeamMemberRole } from './application/change-team-member-role.js';
 import { CreateTeamInvitation } from './application/create-team-invitation.js';
@@ -67,7 +72,7 @@ import {
 } from './ports/team-repository.js';
 
 @Module({
-  imports: [DatabaseModule, IdentityModule, AuditModule],
+  imports: [DatabaseModule, IdentityModule, AuditModule, SpacesModule],
   controllers: [
     TeamsController,
     MeController,
@@ -122,6 +127,7 @@ import {
       provide: CreateTeam,
       inject: [
         TEAM_REPOSITORY,
+        SPACE_REPOSITORY,
         TEAM_MEMBERSHIP_REPOSITORY,
         IDEMPOTENCY_REPOSITORY,
         AUDIT_REPOSITORY,
@@ -131,6 +137,7 @@ import {
       ],
       useFactory: (
         teams: TeamRepository,
+        spaces: SpaceRepository,
         memberships: TeamMembershipRepository,
         idempotency: IdempotencyRepository,
         audit: AuditRepository,
@@ -140,6 +147,7 @@ import {
       ) =>
         new CreateTeam(
           teams,
+          spaces,
           memberships,
           idempotency,
           audit,

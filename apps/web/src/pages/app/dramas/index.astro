@@ -1,13 +1,5 @@
 ---
-import AuthGate from '../../../components/astro/AuthGate.astro';
-import DramaApp from '../../../workspaces/drama/DramaApp';
-import BaseLayout from '../../../layouts/BaseLayout.astro';
-
 export const prerender = false;
----
 
-<BaseLayout title="短剧制作｜多多剧场" description="在多多剧场中推进剧集、场景、镜头和素材。">
-  <AuthGate requireTeam>
-    <DramaApp client:only="react" />
-  </AuthGate>
-</BaseLayout>
+return Astro.redirect('/dramas', 308);
+---

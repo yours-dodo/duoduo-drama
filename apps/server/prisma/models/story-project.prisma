@@ -1,0 +1,28 @@
+model StoryProject {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String?               @map("tenant_id") @db.Uuid
+  spaceId         String                @map("space_id") @db.Uuid
+  createdByUserId String                @map("created_by_user_id") @db.Uuid
+  ownerUserId     String                @map("owner_user_id") @db.Uuid
+  title           String                @db.VarChar(200)
+  visibility      String                @db.VarChar(16)
+  status          String                @db.VarChar(16)
+  revision        Int                   @default(1)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team            Team?                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  space           Space                 @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  createdBy       User                  @relation("StoryProjectCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  owner           User                  @relation("StoryProjectOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  collaborators   ProjectCollaborator[]
+  conversations   Conversation[]
+  assets          Asset[]
+  artifacts       StoryArtifact[]
+
+  @@unique([tenantId, id], map: "story_projects_tenant_id_id_key")
+  @@index([spaceId, status, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_space_id_status_created_at_id_idx")
+  @@index([ownerUserId, status, updatedAt(sort: Desc)], map: "story_projects_owner_user_id_status_updated_at_idx")
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_tenant_id_created_at_id_idx")
+  @@index([tenantId, visibility, status, createdAt(sort: Desc)], map: "story_projects_tenant_id_visibility_status_idx")
+  @@map("story_projects")
+}

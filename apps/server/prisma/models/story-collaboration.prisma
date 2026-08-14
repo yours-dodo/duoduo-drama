@@ -1,0 +1,36 @@
+model ProjectCollaborator {
+  id                  String                                  @id @default(uuid()) @db.Uuid
+  tenantId            String                                  @map("tenant_id") @db.Uuid
+  projectId           String                                  @map("project_id") @db.Uuid
+  userId              String                                  @map("user_id") @db.Uuid
+  role                String                                  @db.VarChar(16)
+  createdAt           DateTime                                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  revokedAt           DateTime?                               @map("revoked_at") @db.Timestamptz(3)
+  team                Team                                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project             StoryProject                            @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Cascade)
+  user                User                                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  membership          TeamMembership                          @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Restrict)
+  permissionOverrides ProjectCollaboratorPermissionOverride[]
+
+  @@unique([tenantId, id], map: "project_collaborators_tenant_id_id_key")
+  @@index([tenantId, projectId, createdAt(sort: Desc), id(sort: Desc)], map: "project_collaborators_tenant_id_project_id_created_at_id_idx")
+  @@index([tenantId, projectId, revokedAt, createdAt(sort: Desc), id(sort: Desc)], map: "project_collaborators_project_revoked_created_idx")
+  @@map("project_collaborators")
+}
+
+model ProjectCollaboratorPermissionOverride {
+  id              String              @id @default(uuid()) @db.Uuid
+  collaboratorId  String              @map("collaborator_id") @db.Uuid
+  permissionKey   String              @map("permission_key") @db.VarChar(64)
+  effect          String              @db.VarChar(8)
+  grantedByUserId String              @map("granted_by_user_id") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  collaborator    ProjectCollaborator @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+  grantedBy       User                @relation("ProjectPermissionOverrideGranter", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([collaboratorId, permissionKey], map: "project_collab_permission_key_key")
+  @@index([permissionKey, effect], map: "project_collaborator_permission_overrides_permission_effect_idx")
+  @@map("project_collaborator_permission_overrides")
+}

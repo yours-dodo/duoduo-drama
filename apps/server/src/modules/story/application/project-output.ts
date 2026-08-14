@@ -4,10 +4,12 @@ export function projectOutput(
   project: StoryProjectSnapshot,
   access: {
     collaborator: boolean;
+    collaboratorRole?: string | null;
     canEdit: boolean;
     canManageCollaborators: boolean;
   } = {
     collaborator: false,
+    collaboratorRole: null,
     canEdit: false,
     canManageCollaborators: false,
   },
@@ -15,7 +17,10 @@ export function projectOutput(
   return {
     id: project.id,
     tenantId: project.tenantId,
+    spaceId: project.spaceId,
+    spaceKind: project.spaceKind ?? null,
     createdByUserId: project.createdByUserId,
+    ownerUserId: project.ownerUserId,
     title: project.title,
     visibility: project.visibility,
     status: project.status,

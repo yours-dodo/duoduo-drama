@@ -50,6 +50,7 @@ export class RemoveProjectCollaborator {
       if (!canManageProjectCollaborators(access.project, access.subject)) {
         if (
           access.project.visibility === 'private' ||
+          access.project.spaceKind === 'personal' ||
           access.project.status === 'archived'
         ) {
           throw new ProjectCollaboratorsNotAllowedError();
@@ -62,12 +63,13 @@ export class RemoveProjectCollaborator {
         userId: input.userId,
       });
       if (collaborator === null) throw new ProjectCollaboratorNotFoundError();
+      const now = await this.databaseClock.now();
       await this.collaborators.remove({
         tenantId: input.tenantId,
         projectId: input.projectId,
         userId: input.userId,
+        revokedAt: now,
       });
-      const now = await this.databaseClock.now();
       await this.audit.record({
         id: this.ids.create(),
         tenantId: input.tenantId,
@@ -78,6 +80,7 @@ export class RemoveProjectCollaborator {
         beforeSummary: {
           projectId: collaborator.projectId,
           userId: collaborator.userId,
+          role: collaborator.role,
         },
         afterSummary: null,
         requestId: input.requestId,

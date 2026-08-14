@@ -3,7 +3,8 @@ export const AUDIT_QUERY_REPOSITORY = Symbol('AUDIT_QUERY_REPOSITORY');
 
 export interface AuditRecordSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
+  spaceId?: string | null;
   actorUserId: string;
   action:
     | 'TEAM_CREATED'
@@ -18,6 +19,8 @@ export interface AuditRecordSnapshot {
     | 'STORY_PROJECT_ARCHIVED'
     | 'STORY_PROJECT_PRIVATE_VIEWED'
     | 'STORY_PROJECT_COLLABORATOR_ADDED'
+    | 'STORY_PROJECT_COLLABORATOR_ROLE_CHANGED'
+    | 'STORY_PROJECT_COLLABORATOR_PERMISSION_CHANGED'
     | 'STORY_PROJECT_COLLABORATOR_REMOVED'
     | 'STORY_ARTIFACT_DRAFT_EDITED'
     | 'STORY_ARTIFACT_DRAFT_DISCARDED'
@@ -48,7 +51,8 @@ export interface AuditQueryRepository {
     page: KeysetPageRequest,
   ): Promise<KeysetPage<AuditRecordSnapshot>>;
   listForTarget(request: {
-    tenantId: string;
+    tenantId?: string | null;
+    spaceId?: string | null;
     targetType: AuditRecordSnapshot['targetType'];
     targetId: string;
     page: KeysetPageRequest;

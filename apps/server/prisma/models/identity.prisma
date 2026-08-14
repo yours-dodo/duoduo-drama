@@ -1,0 +1,89 @@
+model User {
+  id                                String                                  @id @default(uuid()) @db.Uuid
+  email                             String                                  @unique(map: "users_email_key") @db.VarChar(254)
+  passwordHash                      String?                                 @map("password_hash") @db.VarChar(255)
+  createdAt                         DateTime                                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                         DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sessions                          Session[]
+  securityEvents                    IdentitySecurityEvent[]
+  createdTeams                      Team[]                                  @relation("TeamCreator")
+  teamMemberships                   TeamMembership[]
+  auditRecords                      AuditRecord[]                           @relation("AuditActor")
+  sentInvitations                   TeamInvitation[]                        @relation("TeamInvitationSender")
+  acceptedInvitations               TeamInvitation[]                        @relation("TeamInvitationAcceptor")
+  createdStoryProjects              StoryProject[]                          @relation("StoryProjectCreator")
+  ownedStoryProjects                StoryProject[]                          @relation("StoryProjectOwner")
+  projectCollaborations             ProjectCollaborator[]
+  grantedProjectPermissionOverrides ProjectCollaboratorPermissionOverride[] @relation("ProjectPermissionOverrideGranter")
+  authoredMessages                  Message[]                               @relation("MessageAuthor")
+  uploadedAssets                    Asset[]                                 @relation("AssetUploader")
+  createdStoryArtifactVersions      StoryArtifactVersion[]                  @relation("StoryArtifactVersionCreator")
+  ownedSpaces                       Space[]                                 @relation("SpaceOwnerUser")
+
+  @@map("users")
+}
+
+model Session {
+  id             String                  @id @default(uuid()) @db.Uuid
+  userId         String                  @map("user_id") @db.Uuid
+  tokenHash      String                  @unique(map: "sessions_token_hash_key") @map("token_hash") @db.Char(64)
+  expiresAt      DateTime                @map("expires_at") @db.Timestamptz(3)
+  revokedAt      DateTime?               @map("revoked_at") @db.Timestamptz(3)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  securityEvents IdentitySecurityEvent[]
+
+  @@index([userId, createdAt(sort: Desc)], map: "sessions_user_id_created_at_idx")
+  @@index([expiresAt], map: "sessions_expires_at_idx")
+  @@map("sessions")
+}
+
+model EmailLoginChallenge {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @db.VarChar(254)
+  tokenHash    String    @unique(map: "email_login_challenges_token_hash_key") @map("token_hash") @db.Char(64)
+  sourceDigest String    @map("source_digest") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  attemptCount Int       @default(0) @map("attempt_count") @db.SmallInt
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([email, createdAt(sort: Desc)], map: "email_login_challenges_email_created_at_idx")
+  @@index([sourceDigest, createdAt(sort: Desc)], map: "email_login_challenges_source_created_at_idx")
+  @@index([expiresAt], map: "email_login_challenges_expires_at_idx")
+  @@map("email_login_challenges")
+}
+
+model EmailVerificationCode {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @db.VarChar(254)
+  purpose      String    @db.VarChar(32)
+  codeHash     String    @map("code_hash") @db.Char(64)
+  sourceDigest String    @map("source_digest") @db.Char(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  attemptCount Int       @default(0) @map("attempt_count") @db.SmallInt
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([email, purpose, createdAt(sort: Desc)], map: "email_verification_codes_email_purpose_created_at_idx")
+  @@index([sourceDigest, purpose, createdAt(sort: Desc)], map: "email_verification_codes_source_purpose_created_at_idx")
+  @@index([expiresAt], map: "email_verification_codes_expires_at_idx")
+  @@map("email_verification_codes")
+}
+
+model IdentitySecurityEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  sessionId  String?  @map("session_id") @db.Uuid
+  action     String   @db.VarChar(64)
+  targetId   String   @map("target_id") @db.Uuid
+  requestId  String   @map("request_id") @db.VarChar(128)
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session    Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt(sort: Desc)], map: "identity_security_events_user_id_occurred_at_idx")
+  @@index([sessionId], map: "identity_security_events_session_id_idx")
+  @@index([action, occurredAt(sort: Desc)], map: "identity_security_events_action_occurred_at_idx")
+  @@map("identity_security_events")
+}

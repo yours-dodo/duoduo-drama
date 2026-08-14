@@ -1,0 +1,1292 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&family=STIX+Two+Text:wght@500;600;700&display=swap');
+
+/* Neon short-drama workspace
+ *
+ * The workspace owns its visual language here so the creator console can
+ * evolve independently from the story workspace and public pages.
+ */
+
+body.drama-page {
+  --drama-primary: #bbf351;
+  --drama-secondary: #00bcff;
+  --drama-success: #16a34a;
+  --drama-warning: #d97706;
+  --drama-danger: #dc2626;
+  --drama-surface: #ffffff;
+  --drama-text: #111827;
+  --drama-muted: #526071;
+  --drama-subtle: #687587;
+  --drama-canvas: #f7faef;
+  --drama-canvas-soft: #eef5e2;
+  --drama-line: rgba(17, 24, 39, 0.14);
+  --drama-line-strong: rgba(17, 24, 39, 0.26);
+  --drama-primary-soft: rgba(187, 243, 81, 0.18);
+  --drama-secondary-soft: rgba(0, 188, 255, 0.1);
+  --drama-shadow: 0 18px 42px rgba(44, 64, 20, 0.1);
+  --drama-space-1: 4px;
+  --drama-space-2: 8px;
+  --drama-space-3: 12px;
+  --drama-space-4: 16px;
+  --drama-space-6: 24px;
+  --drama-space-8: 32px;
+  --primary: var(--drama-primary);
+  --secondary: var(--drama-secondary);
+  --success: var(--drama-success);
+  --warning: var(--drama-warning);
+  --danger: var(--drama-danger);
+  --surface-base: var(--drama-canvas);
+  --surface-raised: var(--drama-surface);
+  --surface-inset: var(--drama-canvas-soft);
+  --text-primary: var(--drama-text);
+  --text-secondary: var(--drama-muted);
+  --text-muted: var(--drama-subtle);
+  --border-hairline: var(--drama-line);
+  --border-strong: var(--drama-line-strong);
+  --accent: var(--drama-primary);
+  --accent-soft: var(--drama-primary-soft);
+  --secondary-soft: var(--drama-secondary-soft);
+  --focus-ring: var(--drama-secondary);
+  color: var(--drama-text);
+  background:
+    linear-gradient(118deg, rgba(187, 243, 81, 0.12), transparent 30%),
+    linear-gradient(300deg, rgba(0, 188, 255, 0.06), transparent 36%),
+    var(--drama-canvas);
+  font-family: 'Roboto', 'Noto Sans SC', sans-serif;
+}
+
+body.drama-page main {
+  background:
+    linear-gradient(rgba(17, 24, 39, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 24, 39, 0.025) 1px, transparent 1px),
+    transparent;
+  background-size: 32px 32px;
+}
+
+body.drama-page .site-header,
+body.drama-page .site-footer,
+body.drama-page .drama-workspace,
+body.drama-page .drama-workspace input,
+body.drama-page .drama-workspace select,
+body.drama-page .drama-workspace textarea,
+body.drama-page .drama-workspace button {
+  font-family: 'Roboto', 'Noto Sans SC', sans-serif;
+}
+
+body.drama-page .site-header,
+body.drama-page .site-footer {
+  width: min(1240px, calc(100% - 48px));
+}
+
+body.drama-page .site-header {
+  border-bottom-color: var(--drama-line-strong);
+}
+
+body.drama-page .site-header::after {
+  width: 112px;
+  background: var(--drama-primary);
+  box-shadow: 0 0 14px rgba(187, 243, 81, 0.65);
+}
+
+body.drama-page .brand,
+body.drama-page .site-header nav a {
+  color: var(--drama-text);
+}
+
+body.drama-page .brand-mark {
+  border-color: var(--drama-text);
+  color: var(--drama-text);
+  background: var(--drama-primary);
+  box-shadow: 4px 4px 0 var(--drama-secondary);
+}
+
+body.drama-page .site-header nav a:hover,
+body.drama-page .site-header nav a:focus-visible,
+body.drama-page .header-login:hover,
+body.drama-page .header-login:focus-visible {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .header-login {
+  border-color: var(--drama-text);
+  color: var(--drama-text);
+  background: var(--drama-primary);
+}
+
+body.drama-page .site-footer {
+  border-top-color: var(--drama-line-strong);
+  color: var(--drama-muted);
+}
+
+body.drama-page .drama-workspace {
+  position: relative;
+  width: min(1240px, calc(100% - 48px));
+  min-height: 720px;
+  padding: 72px 0 48px;
+}
+
+body.drama-page .drama-workspace::before {
+  position: absolute;
+  top: 46px;
+  right: -26px;
+  width: 92px;
+  height: 92px;
+  border: 1px solid rgba(0, 188, 255, 0.3);
+  border-radius: 50%;
+  box-shadow: 0 0 0 12px rgba(0, 188, 255, 0.045);
+  content: '';
+  pointer-events: none;
+}
+
+body.drama-page .drama-workspace h1,
+body.drama-page .drama-workspace h2,
+body.drama-page .drama-workspace h3,
+body.drama-page .drama-workspace h4 {
+  color: var(--drama-text);
+  font-family: 'STIX Two Text', 'Noto Serif SC', serif;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+}
+
+body.drama-page .drama-workspace h1 {
+  max-width: 760px;
+  margin: 16px 0 12px;
+  font-size: clamp(2rem, 4.5vw, 2.5rem);
+  line-height: 1.06;
+}
+
+body.drama-page .drama-workspace h2 {
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.15;
+}
+
+body.drama-page .drama-workspace h3 {
+  line-height: 1.2;
+}
+
+body.drama-page .drama-workspace .eyebrow,
+body.drama-page .drama-workspace .panel-label,
+body.drama-page .drama-workspace .card-index,
+body.drama-page .drama-workspace .drama-brief-kicker,
+body.drama-page .drama-workspace .drama-scene-heading,
+body.drama-page .drama-workspace .drama-episode-list-heading,
+body.drama-page .drama-workspace .drama-status-kicker {
+  color: var(--drama-secondary);
+  font-family: 'Source Code Pro', 'IBM Plex Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+body.drama-page .drama-workspace .workspace-subtitle,
+body.drama-page .drama-workspace p {
+  color: var(--drama-muted);
+}
+
+body.drama-page .drama-workspace-header {
+  position: relative;
+  align-items: flex-end;
+  margin-bottom: var(--drama-space-6);
+  padding-bottom: var(--drama-space-6);
+  border-bottom-color: var(--drama-line-strong);
+}
+
+body.drama-page .drama-workspace-header::before {
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 72px;
+  height: 3px;
+  background: var(--drama-primary);
+  box-shadow: 0 0 14px rgba(187, 243, 81, 0.7);
+  content: '';
+}
+
+body.drama-page .drama-workspace-header::after {
+  width: 10px;
+  height: 10px;
+  border-color: var(--drama-secondary);
+  box-shadow: 0 0 10px rgba(0, 188, 255, 0.55);
+}
+
+body.drama-page .drama-header-actions {
+  padding-bottom: var(--drama-space-6);
+}
+
+body.drama-page .drama-project-id,
+body.drama-page .drama-workspace .text-link {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .drama-workspace .text-link:hover,
+body.drama-page .drama-workspace .text-link:focus-visible {
+  color: var(--drama-text);
+}
+
+body.drama-page .drama-workspace .team-chip,
+body.drama-page .drama-workspace .version-badge,
+body.drama-page .drama-workspace .artifact-heading-note {
+  border-color: var(--drama-line-strong);
+  border-radius: 4px;
+  color: var(--drama-muted);
+  background: var(--drama-surface);
+  font-family: 'Source Code Pro', 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-workspace .workspace-panel,
+body.drama-page .drama-workspace .drama-creation-entries,
+body.drama-page .drama-workspace .drama-creation-preview {
+  border-color: var(--drama-line-strong);
+  border-radius: 8px;
+  background: var(--drama-surface);
+  box-shadow: var(--drama-shadow);
+}
+
+body.drama-page .drama-workspace .workspace-panel::before,
+body.drama-page .drama-workspace .drama-creation-entries::before,
+body.drama-page .drama-workspace .drama-creation-preview::before {
+  background: var(--drama-primary);
+  box-shadow: 0 0 12px rgba(187, 243, 81, 0.7);
+}
+
+body.drama-page .drama-workspace .workspace-panel-main {
+  background:
+    linear-gradient(140deg, rgba(187, 243, 81, 0.08), transparent 32%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-workspace-layout {
+  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1.66fr);
+  gap: var(--drama-space-4);
+}
+
+body.drama-page .drama-workflow-panel {
+  min-height: 500px;
+  padding: var(--drama-space-6);
+  background:
+    linear-gradient(170deg, rgba(0, 188, 255, 0.09), transparent 36%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-workflow-nav {
+  gap: var(--drama-space-2);
+  margin-top: var(--drama-space-6);
+}
+
+body.drama-page .drama-workflow-step {
+  grid-template-columns: 32px 1fr;
+  min-height: 48px;
+  padding: 10px var(--drama-space-3);
+  border-color: transparent;
+  border-left: 2px solid var(--drama-line);
+  border-radius: 4px;
+  color: var(--drama-subtle);
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+body.drama-page .drama-workflow-step > span {
+  color: var(--drama-secondary);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-workflow-step strong {
+  color: inherit;
+  font-size: 1rem;
+}
+
+body.drama-page .drama-workflow-step:hover,
+body.drama-page .drama-workflow-step:focus-visible,
+body.drama-page .drama-workflow-step-active {
+  border-color: var(--drama-secondary);
+  color: var(--drama-text);
+  background: var(--drama-secondary-soft);
+  transform: translateX(4px);
+}
+
+body.drama-page .drama-workflow-step-active strong {
+  color: var(--drama-text);
+}
+
+body.drama-page .drama-workflow-step:focus-visible,
+body.drama-page .drama-workspace button:focus-visible,
+body.drama-page .drama-workspace a:focus-visible,
+body.drama-page .drama-workspace input:focus-visible,
+body.drama-page .drama-workspace select:focus-visible {
+  outline: 2px solid var(--drama-secondary);
+  outline-offset: 3px;
+}
+
+body.drama-page .drama-canvas {
+  min-height: 500px;
+  padding: var(--drama-space-6);
+}
+
+body.drama-page .panel-heading-row {
+  align-items: flex-start;
+}
+
+body.drama-page .panel-heading-row h2 {
+  margin: var(--drama-space-2) 0 0;
+}
+
+body.drama-page .drama-catalog-stack {
+  gap: var(--drama-space-6);
+}
+
+body.drama-page .drama-creation-entries,
+body.drama-page .drama-creation-preview {
+  padding: var(--drama-space-8);
+}
+
+body.drama-page .drama-entry-grid {
+  grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+  gap: var(--drama-space-4);
+  margin-top: var(--drama-space-6);
+}
+
+body.drama-page .drama-creation-card {
+  padding: var(--drama-space-6);
+  border-color: var(--drama-line-strong);
+  border-radius: 6px;
+}
+
+body.drama-page .drama-creation-card-primary {
+  background:
+    linear-gradient(135deg, rgba(187, 243, 81, 0.24), transparent 55%), #fbfff1;
+}
+
+body.drama-page .drama-creation-card-secondary {
+  background:
+    linear-gradient(135deg, rgba(0, 188, 255, 0.13), transparent 55%), #f7fcff;
+}
+
+body.drama-page .drama-entry-mark {
+  width: 32px;
+  height: 32px;
+  border-color: var(--drama-secondary);
+  color: var(--drama-secondary);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 4px rgba(0, 188, 255, 0.08);
+}
+
+body.drama-page .drama-creation-card h3 {
+  margin-top: var(--drama-space-8);
+  font-size: 1.5rem;
+}
+
+body.drama-page .drama-creation-card p {
+  min-height: 54px;
+  margin-bottom: var(--drama-space-6);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+body.drama-page .drama-mini-form {
+  gap: var(--drama-space-3);
+  padding-top: var(--drama-space-4);
+  border-top-color: rgba(17, 24, 39, 0.15);
+}
+
+body.drama-page .drama-mini-form label {
+  color: var(--drama-muted);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+body.drama-page .drama-mini-form input,
+body.drama-page .drama-mini-form select {
+  min-height: 40px;
+  border-color: var(--drama-line-strong);
+  border-radius: 4px;
+  color: var(--drama-text);
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-mini-form input:focus,
+body.drama-page .drama-mini-form select:focus {
+  border-color: var(--drama-secondary);
+  box-shadow: 0 0 0 3px rgba(0, 188, 255, 0.12);
+}
+
+body.drama-page .drama-workspace .button {
+  min-height: 42px;
+  border-radius: 4px;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-workspace .button-primary {
+  border-color: var(--drama-text);
+  color: var(--drama-text);
+  background: var(--drama-primary);
+  box-shadow: 4px 4px 0 var(--drama-secondary);
+}
+
+body.drama-page .drama-workspace .button-primary:hover,
+body.drama-page .drama-workspace .button-primary:focus-visible {
+  color: var(--drama-text);
+  background: #d1ff71;
+  box-shadow: 2px 2px 0 var(--drama-secondary);
+  transform: translate(2px, 2px);
+}
+
+body.drama-page .drama-workspace .button-quiet {
+  border-color: var(--drama-line-strong);
+  color: var(--drama-secondary);
+  background: var(--drama-surface);
+}
+
+body.drama-page .drama-workspace .button-quiet:hover,
+body.drama-page .drama-workspace .button-quiet:focus-visible {
+  border-color: var(--drama-secondary);
+  color: var(--drama-text);
+  background: var(--drama-secondary-soft);
+}
+
+body.drama-page .drama-disabled-action,
+body.drama-page .drama-workspace button:disabled {
+  cursor: not-allowed;
+}
+
+body.drama-page .drama-workspace .button:disabled {
+  color: var(--drama-subtle);
+  background: rgba(255, 255, 255, 0.56);
+  box-shadow: none;
+  opacity: 0.62;
+}
+
+body.drama-page .drama-action-note {
+  margin-top: var(--drama-space-2);
+  color: var(--drama-subtle);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-story-source {
+  margin-top: var(--drama-space-8);
+  padding: var(--drama-space-3);
+  border-color: rgba(0, 188, 255, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+body.drama-page .drama-story-source-icon {
+  border-color: var(--drama-secondary);
+  color: var(--drama-secondary);
+  background: var(--drama-secondary-soft);
+  font-family: 'Source Code Pro', monospace;
+}
+
+body.drama-page .drama-story-source strong {
+  color: var(--drama-text);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-story-source span,
+body.drama-page .drama-adapt-facts {
+  color: var(--drama-muted);
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-source-arrow,
+body.drama-page .drama-adapt-facts strong {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .drama-adapt-facts strong {
+  font-family: 'Source Code Pro', monospace;
+}
+
+body.drama-page .drama-creation-preview {
+  grid-template-columns: minmax(240px, 0.64fr) minmax(0, 1.36fr);
+  gap: var(--drama-space-8);
+  background:
+    linear-gradient(115deg, rgba(0, 188, 255, 0.08), transparent 44%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-preview-intro h2 {
+  max-width: 340px;
+  margin: var(--drama-space-3) 0 0;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+}
+
+body.drama-page .drama-preview-intro h2 em {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .drama-preview-intro p {
+  max-width: 340px;
+  margin: var(--drama-space-4) 0 var(--drama-space-6);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+body.drama-page .drama-preview-route {
+  gap: var(--drama-space-2);
+  color: var(--drama-subtle);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-preview-route i {
+  color: var(--drama-line-strong);
+}
+
+body.drama-page .drama-preview-route .is-active {
+  color: var(--drama-primary);
+  text-shadow: 0 0 8px rgba(116, 161, 21, 0.35);
+}
+
+body.drama-page .drama-brief-sheet {
+  padding: var(--drama-space-6);
+  border-color: var(--drama-line-strong);
+  border-radius: 6px;
+  box-shadow: 8px 8px 0 rgba(0, 188, 255, 0.12);
+}
+
+body.drama-page .drama-brief-kicker {
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-brief-sheet h3 {
+  margin-top: var(--drama-space-2);
+  font-size: 2rem;
+}
+
+body.drama-page .drama-brief-hook {
+  gap: var(--drama-space-2);
+  margin-top: var(--drama-space-6);
+  padding: var(--drama-space-4);
+  border-left: 3px solid var(--drama-primary);
+  background: var(--drama-primary-soft);
+}
+
+body.drama-page .drama-brief-hook span,
+body.drama-page .drama-brief-grid span,
+body.drama-page .drama-brief-beats > span {
+  color: var(--drama-subtle);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-brief-hook strong {
+  color: var(--drama-text);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+body.drama-page .drama-brief-grid {
+  gap: var(--drama-space-4) var(--drama-space-6);
+  margin-top: var(--drama-space-6);
+}
+
+body.drama-page .drama-brief-grid div {
+  gap: var(--drama-space-1);
+}
+
+body.drama-page .drama-brief-grid strong {
+  color: var(--drama-text);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-brief-beats {
+  gap: var(--drama-space-3);
+  margin-top: var(--drama-space-6);
+  padding-top: var(--drama-space-4);
+  border-top-color: var(--drama-line);
+}
+
+body.drama-page .drama-beat-track {
+  min-height: 48px;
+  border-radius: 4px;
+  background: var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-beat-track span {
+  border-right-color: var(--drama-surface);
+  color: var(--drama-muted);
+  background: rgba(187, 243, 81, 0.18);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.68rem;
+}
+
+body.drama-page .drama-beat-track span:first-child {
+  color: var(--drama-text);
+  background: rgba(187, 243, 81, 0.62);
+}
+
+body.drama-page .drama-script-editor {
+  margin-top: var(--drama-space-6);
+  padding-top: var(--drama-space-6);
+  border-top-color: var(--drama-line);
+}
+
+body.drama-page .drama-script-toolbar h3 {
+  margin-top: var(--drama-space-2);
+  font-size: 1.5rem;
+}
+
+body.drama-page .drama-script-toolbar-actions {
+  gap: var(--drama-space-2);
+}
+
+body.drama-page .drama-script-layout {
+  grid-template-columns: minmax(160px, 0.48fr) minmax(0, 1.52fr) minmax(
+      190px,
+      0.62fr
+    );
+  gap: var(--drama-space-4);
+  margin-top: var(--drama-space-6);
+}
+
+body.drama-page .drama-episode-list,
+body.drama-page .drama-script-inspector {
+  padding: var(--drama-space-3);
+  border-color: var(--drama-line);
+  border-radius: 4px;
+  background: var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-episode-list-heading {
+  padding: var(--drama-space-1) var(--drama-space-1) var(--drama-space-3);
+  border-bottom-color: var(--drama-line-strong);
+  color: var(--drama-muted);
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-episode-list-heading strong {
+  color: var(--drama-secondary);
+  font-family: 'Source Code Pro', monospace;
+}
+
+body.drama-page .drama-episode-item {
+  grid-template-columns: 30px minmax(0, 1fr) 9px;
+  gap: var(--drama-space-2);
+  margin-top: var(--drama-space-2);
+  padding: var(--drama-space-3) var(--drama-space-2);
+  border-radius: 4px;
+  color: var(--drama-subtle);
+}
+
+body.drama-page .drama-episode-item:not(:disabled):hover,
+body.drama-page .drama-episode-item:not(:disabled):focus-visible {
+  border-color: rgba(0, 188, 255, 0.35);
+  background: var(--drama-secondary-soft);
+}
+
+body.drama-page .drama-episode-item.is-active {
+  border-color: rgba(187, 243, 81, 0.75);
+  background: var(--drama-surface);
+  box-shadow: 3px 3px 0 rgba(187, 243, 81, 0.3);
+}
+
+body.drama-page .drama-episode-item > span:first-child {
+  color: var(--drama-secondary);
+  font-family: 'Source Code Pro', monospace;
+}
+
+body.drama-page .drama-episode-item strong {
+  color: var(--drama-text);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-episode-item small,
+body.drama-page .drama-episode-more {
+  color: var(--drama-subtle);
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-episode-item i {
+  color: var(--drama-success);
+}
+
+body.drama-page .drama-script-page {
+  padding: var(--drama-space-1) var(--drama-space-1) 0;
+}
+
+body.drama-page .drama-script-page-header {
+  padding-bottom: var(--drama-space-4);
+  border-bottom-color: var(--drama-line-strong);
+}
+
+body.drama-page .drama-script-page-header h4,
+body.drama-page .drama-script-inspector h4 {
+  margin-top: var(--drama-space-2);
+  font-size: 1.25rem;
+}
+
+body.drama-page .drama-scene-count {
+  color: var(--drama-subtle);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-scene-block {
+  margin-top: var(--drama-space-4);
+  padding: var(--drama-space-4);
+  border-color: var(--drama-line);
+  border-radius: 4px;
+  background: var(--drama-surface);
+}
+
+body.drama-page .drama-scene-heading {
+  gap: var(--drama-space-2);
+  color: var(--drama-secondary);
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-scene-heading strong {
+  color: var(--drama-muted);
+  font-family: 'Roboto', 'Noto Sans SC', sans-serif;
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-action-line {
+  margin: var(--drama-space-4) 0;
+  color: var(--drama-muted);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+body.drama-page .drama-dialogue {
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: var(--drama-space-3);
+  padding: var(--drama-space-3) 0;
+  border-top-color: var(--drama-line);
+}
+
+body.drama-page .drama-dialogue strong {
+  color: var(--drama-primary);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-dialogue p {
+  color: var(--drama-text);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+body.drama-page .drama-dialogue-accent strong {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .drama-scene-block-muted {
+  background: var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-script-placeholder {
+  min-height: 108px;
+  border-color: var(--drama-line-strong);
+  color: var(--drama-subtle);
+}
+
+body.drama-page .drama-script-placeholder span {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .drama-script-placeholder strong {
+  color: var(--drama-muted);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-script-placeholder small {
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-script-inspector {
+  background:
+    linear-gradient(160deg, rgba(187, 243, 81, 0.14), transparent 46%),
+    var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-script-inspector dl {
+  gap: var(--drama-space-3);
+  margin: var(--drama-space-6) 0;
+}
+
+body.drama-page .drama-script-inspector dl div {
+  gap: var(--drama-space-1);
+  padding-bottom: var(--drama-space-3);
+  border-bottom-color: var(--drama-line);
+}
+
+body.drama-page .drama-script-inspector dt {
+  color: var(--drama-subtle);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+}
+
+body.drama-page .drama-script-inspector dd {
+  color: var(--drama-text);
+  font-size: 0.875rem;
+}
+
+body.drama-page .drama-inspector-note {
+  padding: var(--drama-space-3);
+  border-left-color: var(--drama-primary);
+  background: var(--drama-primary-soft);
+}
+
+body.drama-page .drama-inspector-note span {
+  color: var(--drama-text);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+body.drama-page .drama-inspector-note p {
+  margin-top: var(--drama-space-2);
+  color: var(--drama-muted);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+body.drama-page .drama-script-inspector .button {
+  margin-top: var(--drama-space-4);
+}
+
+body.drama-page .workspace-status-bar {
+  min-height: 44px;
+  margin-top: var(--drama-space-4);
+  padding: var(--drama-space-3) var(--drama-space-4);
+  border-color: var(--drama-line-strong);
+  border-radius: 4px;
+  color: var(--drama-muted);
+  background: var(--drama-surface);
+  font-family: 'Source Code Pro', monospace;
+  font-size: 0.75rem;
+  box-shadow: 0 8px 22px rgba(44, 64, 20, 0.06);
+}
+
+body.drama-page .workspace-status-divider,
+body.drama-page .workspace-status-value {
+  color: var(--drama-secondary);
+}
+
+body.drama-page .workspace-status-product {
+  color: var(--drama-subtle);
+}
+
+@media (max-width: 820px) {
+  body.drama-page .site-header,
+  body.drama-page .site-footer,
+  body.drama-page .drama-workspace {
+    width: min(100% - 36px, 620px);
+  }
+
+  body.drama-page .drama-workspace {
+    min-height: auto;
+    padding: 56px 0 40px;
+  }
+
+  body.drama-page .drama-workspace::before {
+    display: none;
+  }
+
+  body.drama-page .drama-workspace-layout,
+  body.drama-page .drama-entry-grid,
+  body.drama-page .drama-creation-preview {
+    grid-template-columns: 1fr;
+  }
+
+  body.drama-page .drama-workflow-panel {
+    min-height: auto;
+  }
+
+  body.drama-page .drama-workflow-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--drama-space-2);
+  }
+
+  body.drama-page .drama-workflow-step {
+    grid-template-columns: 1fr;
+    gap: var(--drama-space-1);
+    min-height: 64px;
+    padding: var(--drama-space-2);
+  }
+
+  body.drama-page .drama-workflow-step:hover,
+  body.drama-page .drama-workflow-step:focus-visible,
+  body.drama-page .drama-workflow-step-active {
+    transform: translateY(-2px);
+  }
+
+  body.drama-page .drama-creation-entries,
+  body.drama-page .drama-creation-preview,
+  body.drama-page .drama-canvas {
+    padding: var(--drama-space-6);
+  }
+
+  body.drama-page .drama-script-layout {
+    grid-template-columns: minmax(150px, 0.58fr) minmax(0, 1.42fr);
+  }
+
+  body.drama-page .drama-script-inspector {
+    grid-column: 1 / -1;
+  }
+
+  body.drama-page .drama-script-inspector dl {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  body.drama-page .site-header,
+  body.drama-page .site-footer,
+  body.drama-page .drama-workspace {
+    width: min(100% - 28px, 480px);
+  }
+
+  body.drama-page .drama-workspace {
+    padding-top: 40px;
+  }
+
+  body.drama-page .drama-workspace-header,
+  body.drama-page .drama-header-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.drama-page .drama-header-actions {
+    gap: var(--drama-space-3);
+    padding-bottom: 0;
+  }
+
+  body.drama-page .drama-workspace-header {
+    gap: var(--drama-space-4);
+  }
+
+  body.drama-page .drama-workspace-header::after {
+    display: none;
+  }
+
+  body.drama-page .drama-workflow-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.drama-page .drama-workflow-step:last-child {
+    grid-column: 1 / -1;
+  }
+
+  body.drama-page .drama-creation-entries,
+  body.drama-page .drama-creation-preview,
+  body.drama-page .drama-canvas {
+    padding: var(--drama-space-4);
+  }
+
+  body.drama-page .drama-creation-card {
+    padding: var(--drama-space-4);
+  }
+
+  body.drama-page .drama-creation-card h3 {
+    margin-top: var(--drama-space-6);
+  }
+
+  body.drama-page .drama-mini-form-row,
+  body.drama-page .drama-brief-grid,
+  body.drama-page .drama-script-layout,
+  body.drama-page .drama-script-inspector dl {
+    grid-template-columns: 1fr;
+  }
+
+  body.drama-page .drama-script-toolbar,
+  body.drama-page .drama-script-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.drama-page .drama-script-toolbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  body.drama-page .drama-dialogue {
+    grid-template-columns: 1fr;
+    gap: var(--drama-space-1);
+  }
+
+  body.drama-page .workspace-status-bar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  body.drama-page .workspace-status-spacer {
+    display: none;
+  }
+
+  body.drama-page .workspace-status-product {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.drama-page .drama-workspace *,
+  body.drama-page .drama-workspace *::before,
+  body.drama-page .drama-workspace *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Dark-base treatment: the fluorescent signal needs a deep field to read as
+ * the product's primary visual language rather than a pale accent. */
+
+body.drama-page {
+  color-scheme: dark;
+  --drama-canvas: #070a09;
+  --drama-canvas-soft: #0f1512;
+  --drama-surface: #121a16;
+  --drama-text: #f3f8ee;
+  --drama-muted: #b8c5b9;
+  --drama-subtle: #819188;
+  --drama-line: rgba(228, 242, 226, 0.14);
+  --drama-line-strong: rgba(228, 242, 226, 0.26);
+  --drama-primary-soft: rgba(187, 243, 81, 0.13);
+  --drama-secondary-soft: rgba(0, 188, 255, 0.12);
+  --drama-shadow: 0 22px 54px rgba(0, 0, 0, 0.38);
+  background:
+    radial-gradient(
+      circle at 86% 8%,
+      rgba(187, 243, 81, 0.1),
+      transparent 24rem
+    ),
+    radial-gradient(
+      circle at 8% 42%,
+      rgba(0, 188, 255, 0.07),
+      transparent 28rem
+    ),
+    var(--drama-canvas);
+}
+
+body.drama-page main {
+  background:
+    linear-gradient(rgba(243, 248, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 248, 238, 0.035) 1px, transparent 1px),
+    transparent;
+  background-size: 32px 32px;
+}
+
+body.drama-page .site-header,
+body.drama-page .site-footer {
+  background: transparent;
+}
+
+body.drama-page .site-header {
+  border-bottom-color: var(--drama-line);
+}
+
+body.drama-page .site-header::after {
+  box-shadow: 0 0 18px rgba(187, 243, 81, 0.85);
+}
+
+body.drama-page .brand,
+body.drama-page .site-header nav a,
+body.drama-page .site-footer {
+  color: var(--drama-text);
+}
+
+body.drama-page .site-header nav {
+  color: var(--drama-muted);
+}
+
+body.drama-page .site-header nav a:hover,
+body.drama-page .site-header nav a:focus-visible,
+body.drama-page .drama-workspace .text-link:hover,
+body.drama-page .drama-workspace .text-link:focus-visible {
+  color: var(--drama-primary);
+}
+
+body.drama-page .header-login {
+  border-color: var(--drama-primary);
+  color: #0a100b;
+  background: var(--drama-primary);
+  box-shadow: 0 0 16px rgba(187, 243, 81, 0.25);
+}
+
+body.drama-page .header-login:hover,
+body.drama-page .header-login:focus-visible {
+  color: #0a100b;
+  background: #d1ff71;
+}
+
+body.drama-page .drama-workspace .team-chip,
+body.drama-page .drama-workspace .version-badge,
+body.drama-page .drama-workspace .artifact-heading-note {
+  border-color: var(--drama-line-strong);
+  color: var(--drama-muted);
+  background: var(--drama-surface);
+}
+
+body.drama-page .drama-workspace .workspace-panel,
+body.drama-page .drama-workspace .drama-creation-entries,
+body.drama-page .drama-workspace .drama-creation-preview {
+  border-color: var(--drama-line-strong);
+  background: var(--drama-surface);
+  box-shadow: var(--drama-shadow);
+}
+
+body.drama-page .drama-workspace .workspace-panel-main {
+  background:
+    linear-gradient(140deg, rgba(187, 243, 81, 0.08), transparent 32%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-workflow-panel {
+  background:
+    linear-gradient(170deg, rgba(0, 188, 255, 0.1), transparent 36%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-workflow-step {
+  border-left-color: var(--drama-line);
+  color: var(--drama-subtle);
+}
+
+body.drama-page .drama-workflow-step:hover,
+body.drama-page .drama-workflow-step:focus-visible,
+body.drama-page .drama-workflow-step-active {
+  border-color: var(--drama-secondary);
+  color: var(--drama-text);
+  background: var(--drama-secondary-soft);
+  box-shadow: 0 0 18px rgba(0, 188, 255, 0.09);
+}
+
+body.drama-page .drama-creation-card-primary {
+  border-color: rgba(187, 243, 81, 0.34);
+  background:
+    linear-gradient(135deg, rgba(187, 243, 81, 0.16), transparent 55%), #101a12;
+}
+
+body.drama-page .drama-creation-card-secondary {
+  border-color: rgba(0, 188, 255, 0.3);
+  background:
+    linear-gradient(135deg, rgba(0, 188, 255, 0.12), transparent 55%), #0e171a;
+}
+
+body.drama-page .drama-entry-mark {
+  background: rgba(7, 10, 9, 0.72);
+}
+
+body.drama-page .drama-mini-form {
+  border-top-color: var(--drama-line);
+}
+
+body.drama-page .drama-mini-form input,
+body.drama-page .drama-mini-form select {
+  border-color: var(--drama-line-strong);
+  color: var(--drama-text);
+  background: #0b110e;
+}
+
+body.drama-page .drama-mini-form input::placeholder {
+  color: var(--drama-subtle);
+}
+
+body.drama-page .drama-workspace .button-quiet,
+body.drama-page .drama-workspace .button-quiet:hover,
+body.drama-page .drama-workspace .button-quiet:focus-visible {
+  background: var(--drama-surface);
+}
+
+body.drama-page .drama-workspace .button:disabled {
+  color: var(--drama-subtle);
+  border-color: var(--drama-line);
+  background: #0d120f;
+}
+
+body.drama-page .drama-story-source {
+  border-color: rgba(0, 188, 255, 0.3);
+  background: rgba(7, 10, 9, 0.6);
+}
+
+body.drama-page .drama-creation-preview {
+  background:
+    linear-gradient(115deg, rgba(0, 188, 255, 0.08), transparent 44%),
+    var(--drama-surface);
+}
+
+body.drama-page .drama-brief-sheet {
+  border-color: var(--drama-line-strong);
+  background: #151e19;
+  box-shadow: 8px 8px 0 rgba(0, 188, 255, 0.16);
+}
+
+body.drama-page .drama-brief-hook {
+  background: rgba(187, 243, 81, 0.11);
+}
+
+body.drama-page .drama-beat-track {
+  background: #0b110e;
+}
+
+body.drama-page .drama-beat-track span {
+  border-right-color: var(--drama-surface);
+  color: var(--drama-muted);
+  background: rgba(187, 243, 81, 0.12);
+}
+
+body.drama-page .drama-beat-track span:first-child {
+  color: #0a100b;
+  background: var(--drama-primary);
+}
+
+body.drama-page .drama-episode-list,
+body.drama-page .drama-script-inspector {
+  border-color: var(--drama-line);
+  background: var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-episode-item.is-active {
+  border-color: rgba(187, 243, 81, 0.7);
+  background: var(--drama-surface);
+  box-shadow: 3px 3px 0 rgba(187, 243, 81, 0.24);
+}
+
+body.drama-page .drama-scene-block {
+  border-color: var(--drama-line);
+  background: var(--drama-surface);
+}
+
+body.drama-page .drama-scene-block-muted {
+  background: var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-script-placeholder {
+  border-color: var(--drama-line-strong);
+  background: rgba(7, 10, 9, 0.28);
+}
+
+body.drama-page .drama-script-inspector {
+  background:
+    linear-gradient(160deg, rgba(187, 243, 81, 0.1), transparent 46%),
+    var(--drama-canvas-soft);
+}
+
+body.drama-page .drama-inspector-note {
+  background: rgba(187, 243, 81, 0.11);
+}
+
+body.drama-page .workspace-status-bar {
+  border-color: var(--drama-line-strong);
+  color: var(--drama-muted);
+  background: var(--drama-surface);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+}
+
+@media (max-width: 560px) {
+  body.drama-page .site-header nav {
+    color: var(--drama-text);
+  }
+}

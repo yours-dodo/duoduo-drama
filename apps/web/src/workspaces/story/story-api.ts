@@ -14,6 +14,7 @@ export interface StoryProject {
   tenantId: string;
   createdByUserId: string;
   title: string;
+  coverUrl?: string | null;
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
   revision: number;

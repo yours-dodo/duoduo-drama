@@ -14,14 +14,30 @@ describe('story API adapter', () => {
   it('keeps project listing behind the Web server-api boundary', async () => {
     const fetchMock = vi.fn(
       async () =>
-        new Response(JSON.stringify({ items: [], nextCursor: null }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'project-1',
+                title: '有封面的故事',
+                coverUrl: 'https://cdn.example.test/cover.jpg',
+              },
+            ],
+            nextCursor: null,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await listStoryProjects('team-1', 25);
+    const result = await listStoryProjects('team-1', 25);
+
+    expect(result.items[0]?.coverUrl).toBe(
+      'https://cdn.example.test/cover.jpg',
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/teams/team-1/story-projects?limit=25',

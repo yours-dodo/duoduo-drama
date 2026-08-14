@@ -18,6 +18,7 @@ import { ListMyTeams } from '../application/list-my-teams.js';
 import { PrismaIdempotencyRepository } from './prisma-idempotency.repository.js';
 import { PrismaTeamMembershipRepository } from './prisma-team-membership.repository.js';
 import { PrismaTeamRepository } from './prisma-team.repository.js';
+import { PrismaSpaceRepository } from '../../spaces/infrastructure/prisma-space.repository.js';
 
 const databaseUrl = readServerTestDatabaseUrl();
 
@@ -26,6 +27,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
   let prisma: PrismaService;
   let transactions: TransactionRunner;
   let teams: PrismaTeamRepository;
+  let spaces: PrismaSpaceRepository;
   let memberships: PrismaTeamMembershipRepository;
   let idempotency: PrismaIdempotencyRepository;
   let audit: PrismaAuditRepository;
@@ -49,6 +51,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
     prisma = new PrismaService(config);
     transactions = new TransactionRunner(prisma);
     teams = new PrismaTeamRepository(prisma);
+    spaces = new PrismaSpaceRepository(prisma);
     memberships = new PrismaTeamMembershipRepository(prisma);
     idempotency = new PrismaIdempotencyRepository(prisma);
     audit = new PrismaAuditRepository(prisma);
@@ -57,7 +60,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     userId = randomUUID();
     await insertUser(pool, userId, 'tenant.creator@example.com');
@@ -78,6 +81,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
 
     expect(result.team).toMatchObject({ name: '多多编剧组', role: 'admin' });
     await expect(countRows(pool, 'teams')).resolves.toBe(1);
+    await expect(countRows(pool, 'spaces')).resolves.toBe(1);
     await expect(countRows(pool, 'team_memberships')).resolves.toBe(1);
     await expect(countRows(pool, 'idempotency_records')).resolves.toBe(1);
     await expect(countRows(pool, 'audit_records')).resolves.toBe(1);
@@ -100,6 +104,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
 
     expect(new Set(results.map((result) => result.team.id)).size).toBe(1);
     await expect(countRows(pool, 'teams')).resolves.toBe(1);
+    await expect(countRows(pool, 'spaces')).resolves.toBe(1);
     await expect(countRows(pool, 'team_memberships')).resolves.toBe(1);
     await expect(countRows(pool, 'audit_records')).resolves.toBe(1);
   });
@@ -159,6 +164,7 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
       }),
     ).rejects.toThrow('audit unavailable');
     await expect(countRows(pool, 'teams')).resolves.toBe(0);
+    await expect(countRows(pool, 'spaces')).resolves.toBe(0);
     await expect(countRows(pool, 'team_memberships')).resolves.toBe(0);
     await expect(countRows(pool, 'idempotency_records')).resolves.toBe(0);
   });
@@ -189,11 +195,53 @@ describe.skipIf(!databaseUrl)('Prisma tenancy boundary', () => {
     ).rejects.toMatchObject({ code: '23514' });
   });
 
+  it('enforces one space per owner and the kind-owner check', async () => {
+    const team = await buildCreateTeam().execute({
+      actorUserId: userId,
+      name: '空间约束团队',
+      idempotencyKey: 'space-constraint-team',
+      requestId: 'space-constraint-request',
+    });
+    await spaces.ensurePersonalForUser({
+      id: randomUUID(),
+      ownerUserId: userId,
+      createdAt: new Date(),
+    });
+
+    await expect(
+      pool.query(
+        `INSERT INTO spaces
+          (id, kind, owner_user_id, created_at, updated_at)
+         VALUES ($1, 'personal', $2, clock_timestamp(), clock_timestamp())`,
+        [randomUUID(), userId],
+      ),
+    ).rejects.toMatchObject({ code: '23505' });
+
+    await expect(
+      pool.query(
+        `INSERT INTO spaces
+          (id, kind, owner_team_id, created_at, updated_at)
+         VALUES ($1, 'team', $2, clock_timestamp(), clock_timestamp())`,
+        [randomUUID(), team.team.id],
+      ),
+    ).rejects.toMatchObject({ code: '23505' });
+
+    await expect(
+      pool.query(
+        `INSERT INTO spaces
+          (id, kind, owner_user_id, created_at, updated_at)
+         VALUES ($1, 'team', $2, clock_timestamp(), clock_timestamp())`,
+        [randomUUID(), userId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+
   function buildCreateTeam(
     auditRepository: AuditRepository = audit,
   ): CreateTeam {
     return new CreateTeam(
       teams,
+      spaces,
       memberships,
       idempotency,
       auditRepository,
@@ -232,6 +280,7 @@ async function countRows(pool: Pool, table: string): Promise<number> {
   if (
     ![
       'teams',
+      'spaces',
       'team_memberships',
       'idempotency_records',
       'audit_records',

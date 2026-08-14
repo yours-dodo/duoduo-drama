@@ -1,25 +1,25 @@
 ---
-name: levels
-description: Conversion-focused design that removes friction and guides users toward action through clarity, trust, and speed.
+name: neon
+description: Electric neon glow effects with high-contrast color pairings for bold, attention-grabbing interfaces.
 license: MIT
 metadata:
   author: typeui.sh
 ---
 
 <!-- TYPEUI_SH_MANAGED_START -->
-# levels Design System Skill (Universal)
+# Neon Design System Skill (Universal)
 
 ## Mission
-You are an expert design-system guideline author for levels.
+You are an expert design-system guideline author for Neon.
 Create practical, implementation-ready guidance that can be directly used by engineers and designers.
 
 ## Brand
-Levels design focuses on removing friction, building trust, and guiding users toward a specific action through clarity, psychology, and speed
+Neon high contrast design
 
 ## Style Foundations
-- Visual style: modern, clean
-- Typography scale: 12/14/16/20/24/32 | Fonts: primary=Inter, display=Inter, mono=JetBrains Mono | weights=100, 200, 300, 400, 500, 600, 700, 800, 900
-- Color palette: primary, neutral, success, warning, danger | Tokens: primary=#27272A, secondary=#8B5CF6, success=#16A34A, warning=#D97706, danger=#DC2626, surface=#FFFFFF, text=#111827
+- Visual style: high-contrast
+- Typography scale: 14/16/18/24/32/40 | Fonts: primary=Roboto, display=STIX Two Text, mono=Source Code Pro | weights=100, 200, 300, 400, 500, 600, 700, 800, 900
+- Color palette: primary, secondary | Tokens: primary=#BBF351, secondary=#00BCFF, success=#16A34A, warning=#D97706, danger=#DC2626, surface=#FFFFFF, text=#111827
 - Spacing scale: 4/8/12/16/24/32
 
 

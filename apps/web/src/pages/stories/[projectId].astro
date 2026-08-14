@@ -1,0 +1,19 @@
+---
+import AuthGate from '../../components/astro/AuthGate.astro';
+import StoryApp from '../../workspaces/story/StoryApp.vue';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export const prerender = false;
+
+const { projectId } = Astro.params;
+---
+
+<BaseLayout
+  title="故事项目｜多多剧场"
+  description="继续你的故事项目创作。"
+  pageClass="story-page"
+>
+  <AuthGate requireTeam>
+    <StoryApp client:only="vue" projectId={projectId} />
+  </AuthGate>
+</BaseLayout>

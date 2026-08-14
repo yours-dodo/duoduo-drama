@@ -9,7 +9,9 @@ import {
 } from '../../config/server-config.js';
 import { DatabaseModule } from '../../platform/database/database.module.js';
 import { TransactionRunner } from '../../platform/database/transaction-runner.js';
+import { SpacesModule } from '../spaces/spaces.module.js';
 import { CreateIdentitySession } from './application/create-identity-session.js';
+import { DevelopmentLogin } from './application/development-login.js';
 import { LoginWithPassword } from './application/login-with-password.js';
 import { Logout } from './application/logout.js';
 import { RequestEmailCode } from './application/request-email-code.js';
@@ -60,7 +62,7 @@ import {
 } from './ports/user-repository.js';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, SpacesModule],
   controllers: [AuthController],
   providers: [
     PrismaLoginChallengeRepository,
@@ -175,6 +177,7 @@ import {
         ),
     },
     CreateIdentitySession,
+    DevelopmentLogin,
     RequestEmailCode,
     VerifyEmailCodeLogin,
     LoginWithPassword,

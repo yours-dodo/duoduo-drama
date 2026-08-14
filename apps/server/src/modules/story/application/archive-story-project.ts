@@ -1,4 +1,4 @@
-import { canEditProject } from '../../../domain/story/project-access-policy.js';
+import { canArchiveProject } from '../../../domain/story/project-access-policy.js';
 import { StoryProject } from '../../../domain/story/story-project.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import {
@@ -28,24 +28,30 @@ export class ArchiveStoryProject {
   ) {}
 
   execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     expectedRevision: number;
     requestId: string;
   }) {
     return this.transactions.run(async () => {
-      const membership = await this.memberships.findActive({
-        tenantId: input.tenantId,
-        userId: input.actorUserId,
-      });
-      if (membership === null) throw new StoryProjectAccessDeniedError();
+      const membership =
+        input.tenantId === null
+          ? null
+          : await this.memberships.findActive({
+              tenantId: input.tenantId,
+              userId: input.actorUserId,
+            });
+      if (input.tenantId !== null && membership === null) {
+        throw new StoryProjectAccessDeniedError();
+      }
       const access = await readProjectAccess(
         this.projects,
         this.collaborators,
         {
           tenantId: input.tenantId,
           projectId: input.projectId,
+          actorUserId: input.actorUserId,
           membership,
           lock: true,
         },
@@ -53,7 +59,7 @@ export class ArchiveStoryProject {
       requireProjectView(access.project, access.subject);
       if (
         access.project.status === 'active' &&
-        !canEditProject(access.project, access.subject)
+        !canArchiveProject(access.project, access.subject)
       ) {
         throw new StoryProjectNotFoundError();
       }
@@ -71,6 +77,7 @@ export class ArchiveStoryProject {
       await this.audit.record({
         id: this.ids.create(),
         tenantId: input.tenantId,
+        spaceId: archived.spaceId,
         actorUserId: input.actorUserId,
         action: 'STORY_PROJECT_ARCHIVED',
         targetType: 'STORY_PROJECT',
@@ -86,19 +93,21 @@ export class ArchiveStoryProject {
 }
 
 function accessOutput(access: {
-  project: { visibility: 'team' | 'private'; createdByUserId: string };
-  subject: {
-    collaborator: boolean;
-    role: 'admin' | 'member';
+    project: { visibility: 'team' | 'private'; ownerUserId: string };
+    subject: {
+      collaborator: boolean;
+      collaboratorRole?: string | null;
+      role: 'admin' | 'member' | null;
     userId: string;
   };
 }) {
   return {
     collaborator: access.subject.collaborator,
+    collaboratorRole: access.subject.collaboratorRole ?? null,
     canEdit: false,
     canManageCollaborators:
       access.project.visibility === 'team' &&
       (access.subject.role === 'admin' ||
-        access.project.createdByUserId === access.subject.userId),
+        access.project.ownerUserId === access.subject.userId),
   };
 }

@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ServerConfig } from '../../../config/server-config.js';
+import { DatabaseClock } from '../../../platform/database/database-clock.js';
 import { PrismaService } from '../../../platform/database/prisma.service.js';
 import { TransactionRunner } from '../../../platform/database/transaction-runner.js';
 import { readServerTestDatabaseUrl } from '../../../test/postgres-test-context.js';
@@ -17,6 +18,7 @@ import { NodeLoginChallengeSecurity } from './node-login-challenge-security.js';
 import { PrismaIdentitySecurityEventRepository } from './prisma-identity-security-event.repository.js';
 import { PrismaLoginChallengeRepository } from './prisma-login-challenge.repository.js';
 import { PrismaSessionRepository } from './prisma-session.repository.js';
+import { PrismaSpaceRepository } from '../../spaces/infrastructure/prisma-space.repository.js';
 import { PrismaUserRepository } from './prisma-user.repository.js';
 
 const databaseUrl = readServerTestDatabaseUrl();
@@ -28,7 +30,9 @@ describe.skipIf(!databaseUrl)('passwordless session persistence', () => {
   let transactions: TransactionRunner;
   let challenges: PrismaLoginChallengeRepository;
   let sessions: PrismaSessionRepository;
+  let spaces: PrismaSpaceRepository;
   let users: PrismaUserRepository;
+  let databaseClock: DatabaseClock;
   let events: PrismaIdentitySecurityEventRepository;
   let security: NodeLoginChallengeSecurity;
 
@@ -50,14 +54,16 @@ describe.skipIf(!databaseUrl)('passwordless session persistence', () => {
     transactions = new TransactionRunner(prisma);
     challenges = new PrismaLoginChallengeRepository(prisma, transactions);
     sessions = new PrismaSessionRepository(prisma);
-    users = new PrismaUserRepository(prisma);
+    spaces = new PrismaSpaceRepository(prisma);
+    databaseClock = new DatabaseClock(prisma);
+    users = new PrismaUserRepository(prisma, spaces, databaseClock);
     events = new PrismaIdentitySecurityEventRepository(prisma);
     security = new NodeLoginChallengeSecurity(PEPPER);
   });
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
   });
 
@@ -84,6 +90,11 @@ describe.skipIf(!databaseUrl)('passwordless session persistence', () => {
     expect(JSON.stringify(persisted.rows)).not.toContain(loginToken);
     expect(JSON.stringify(persisted.rows)).not.toContain(result.sessionToken);
     expect(persisted.rows[0]?.consumed_at).not.toBeNull();
+    await users.findOrCreateByEmail({
+      email: 'creator@example.com',
+      newUserId: randomUUID(),
+    });
+    await expect(countRows(pool, 'spaces')).resolves.toBe(1);
     await expect(
       sessions.findActiveByTokenHash(
         security.hashSessionToken(result.sessionToken),
@@ -111,6 +122,7 @@ describe.skipIf(!databaseUrl)('passwordless session persistence', () => {
       reason: new InvalidLoginChallengeError(),
     });
     await expect(countRows(pool, 'users')).resolves.toBe(1);
+    await expect(countRows(pool, 'spaces')).resolves.toBe(1);
     await expect(countRows(pool, 'sessions')).resolves.toBe(1);
   });
 
@@ -239,7 +251,9 @@ async function insertChallenge(
 }
 
 async function countRows(pool: Pool, table: string): Promise<number> {
-  if (!['users', 'sessions', 'identity_security_events'].includes(table)) {
+  if (
+    !['users', 'spaces', 'sessions', 'identity_security_events'].includes(table)
+  ) {
     throw new Error('Unexpected test table');
   }
   const result = await pool.query<{ count: string }>(

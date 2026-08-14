@@ -1,25 +1,25 @@
 ---
-name: Levels
+name: Neon
 colors:
-  primary: '#27272A'
-  secondary: '#8B5CF6'
+  primary: '#BBF351'
+  secondary: '#00BCFF'
   success: '#16A34A'
   warning: '#D97706'
   danger: '#DC2626'
-  surface: '#FFFFFF'
-  text: '#111827'
-  neutral: '#FFFFFF'
+  surface: '#121A16'
+  text: '#F3F8EE'
+  neutral: '#121A16'
 typography:
   h1:
-    fontFamily: 'Inter'
-    fontSize: 2rem
+    fontFamily: 'STIX Two Text'
+    fontSize: 2.5rem
   body-md:
-    fontFamily: 'Inter'
+    fontFamily: 'Roboto'
     fontSize: 1rem
   label-caps:
-    fontFamily: 'JetBrains Mono'
-    fontSize: 0.75rem
-  sourceScale: '12/14/16/20/24/32'
+    fontFamily: 'Source Code Pro'
+    fontSize: 0.875rem
+  sourceScale: '14/16/18/24/32/40'
   weights: '100, 200, 300, 400, 500, 600, 700, 800, 900'
 rounded:
   sm: 4px
@@ -32,21 +32,21 @@ spacing:
 
 ## Overview
 
-Conversion-focused design that removes friction and guides users toward action through clarity, trust, and speed.
+Dark-base surfaces with electric neon glow effects and high-contrast color pairings for bold, attention-grabbing interfaces.
 
 ## Style Foundations
 
-- **Visual style:** modern, clean
-- **Typography scale:** 12/14/16/20/24/32
-- **Typography fonts:** primary=Inter, display=Inter, mono=JetBrains Mono
+- **Visual style:** high-contrast
+- **Typography scale:** 14/16/18/24/32/40
+- **Typography fonts:** primary=Roboto, display=STIX Two Text, mono=Source Code Pro
 - **Typography weights:** 100, 200, 300, 400, 500, 600, 700, 800, 900
-- **Color palette:** primary, neutral, success, warning, danger
+- **Color palette:** dark canvas, primary, secondary
 - **Spacing scale:** 4/8/12/16/24/32
 
 ## Colors
 
-- **Primary (#27272A):** Token from style foundations.
-- **Secondary (#8B5CF6):** Token from style foundations.
+- **Primary (#BBF351):** Token from style foundations.
+- **Secondary (#00BCFF):** Token from style foundations.
 - **Success (#16A34A):** Token from style foundations.
 - **Warning (#D97706):** Token from style foundations.
 - **Danger (#DC2626):** Token from style foundations.

@@ -2,88 +2,152 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 
 export const prerender = false;
+
+Astro.response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+Astro.response.headers.set('Pragma', 'no-cache');
+Astro.response.headers.set('Expires', '0');
+
+const developmentLogin = import.meta.env.DEV;
+const defaultTestAccountEmail = import.meta.env.DEV
+  ? (import.meta.env.DEV_TEST_ACCOUNT_EMAIL ?? '')
+  : '';
+const defaultTestAccountPassword = import.meta.env.DEV
+  ? (import.meta.env.DEV_TEST_ACCOUNT_PASSWORD ?? '')
+  : '';
 ---
 
 <BaseLayout
-  title="登录｜多多剧场"
-  description="登录多多剧场，继续你的故事创作和短剧制作。"
+  title="登录多多剧场｜继续你的 AI 故事与短剧创作项目"
+  description="登录多多剧场，继续整理故事、打磨剧本，或推进已有项目的剧集、分镜与制作素材。"
+  pageClass="login-page"
+  robots="noindex,nofollow"
 >
-  <section class="auth-page" aria-labelledby="login-title">
-    <div class="auth-card auth-card-wide">
-      <p class="eyebrow">欢迎回来</p>
-      <h1 id="login-title">继续你的<br /><em>创作。</em></h1>
-      <p class="auth-description">用邮箱验证码或密码登录你的多多剧场账号。</p>
-
-      <div class="auth-tabs" role="tablist" aria-label="登录方式">
-        <button class="auth-tab is-active" type="button" role="tab" aria-selected="true" data-auth-mode="code">
-          验证码登录
-        </button>
-        <button class="auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="password">
-          密码登录
-        </button>
+  <section class="auth-rewrite" aria-labelledby="auth-title">
+    <div class="auth-rewrite-layout">
+      <div class="auth-story-preview" aria-label="故事项目预览" role="img">
+        <div class="auth-story-topline">
+          <span>DUODUO / STORY UNIVERSE</span>
+          <span>PROJECT 01</span>
+        </div>
+        <div class="auth-story-canvas">
+          <div class="auth-story-core">
+            <span>STORY PROJECT</span>
+            <strong>雨停之前</strong>
+            <small>一个故事正在长出自己的世界。</small>
+          </div>
+          <div class="auth-story-node auth-story-node-character">
+            <span>CHARACTER</span>
+            <strong>林岸</strong>
+            <small>失去记忆的电台编辑</small>
+          </div>
+          <div class="auth-story-node auth-story-node-world">
+            <span>WORLD</span>
+            <strong>雨城</strong>
+            <small>每场雨都带走一段记忆</small>
+          </div>
+          <div class="auth-story-node auth-story-node-episode">
+            <span>EPISODE</span>
+            <strong>第 03 集</strong>
+            <small>最后一段录音</small>
+          </div>
+          <div class="auth-story-node auth-story-node-output">
+            <span>CONTINUE AS</span>
+            <strong>VOICE / DRAMA</strong>
+            <small>声音或画面，继续你的故事</small>
+          </div>
+          <i class="auth-story-line auth-story-line-a" aria-hidden="true"></i>
+          <i class="auth-story-line auth-story-line-b" aria-hidden="true"></i>
+          <i class="auth-story-line auth-story-line-c" aria-hidden="true"></i>
+        </div>
+        <div class="auth-story-footer">
+          <span>YOUR STORY IS STILL HERE</span>
+          <span class="auth-story-status"><i aria-hidden="true"></i> CREATIVE SPACE READY</span>
+        </div>
       </div>
 
-      <section class="auth-mode" data-auth-panel="code" aria-labelledby="code-login-title">
-        <h2 id="code-login-title" class="sr-only">邮箱验证码登录</h2>
-        <form class="auth-form" id="code-request-form">
-          <label for="code-email">邮箱地址</label>
-          <input id="code-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-          <button class="button button-primary" type="submit">发送验证码 <span aria-hidden="true">↗</span></button>
-        </form>
-        <form class="auth-form is-hidden" id="code-verify-form">
-          <label for="login-code">输入 6 位验证码</label>
-          <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required />
-          <button class="button button-primary" type="submit">验证并登录 <span aria-hidden="true">↗</span></button>
-          <button class="auth-secondary-button" id="code-resend" type="button">重新发送验证码</button>
-        </form>
-        <p class="auth-note" id="code-status" role="status">验证码会打印在 Server 开发控制台，有效期 10 分钟。</p>
-      </section>
+      <div class="auth-rewrite-panel">
+        <p class="eyebrow">STORY CREATION UNIVERSE</p>
+        <h1 id="auth-title">继续你的<br /><em>故事。</em></h1>
+        <p class="auth-rewrite-intro">登录后继续整理人物、推进剧情，或制作下一集。</p>
 
-      <section class="auth-mode is-hidden" data-auth-panel="password" aria-labelledby="password-login-title">
-        <h2 id="password-login-title" class="sr-only">邮箱密码登录</h2>
-        <form class="auth-form" id="password-form">
-          <label for="password-email">邮箱地址</label>
-          <input id="password-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-          <label for="password">密码</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="至少 8 个字符" required />
-          <button class="button button-primary" type="submit">登录 <span aria-hidden="true">↗</span></button>
-        </form>
-        <button class="text-link auth-inline-link" id="forgot-password" type="button">忘记密码？使用验证码重置</button>
-        <p class="auth-note" id="password-status" role="status">还没有设置密码？可以先使用验证码登录。</p>
-      </section>
+        <section class="auth-rewrite-mode is-hidden" data-auth-panel="code" aria-labelledby="code-login-title" aria-hidden="true">
+          <h2 id="code-login-title" class="sr-only">邮箱验证码登录</h2>
+          <form class="auth-form auth-rewrite-form" id="code-request-form">
+            <label for="code-email">邮箱</label>
+            <input id="code-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+            <label for="login-code">验证码</label>
+            <div class="auth-code-row">
+              <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required={!developmentLogin} />
+              <button class="auth-secondary-button" id="code-send" type="button">发送验证码</button>
+            </div>
+            <button class="button button-primary" type="submit">登录 <span aria-hidden="true">↗</span></button>
+          </form>
+          <p class="auth-note" id="code-status" role="status" aria-live="polite"></p>
+          <button class="auth-switch-link" type="button" data-auth-show="password">使用密码登录 <span aria-hidden="true">→</span></button>
+        </section>
 
-      <section class="auth-mode is-hidden" data-auth-panel="reset" aria-labelledby="reset-password-title">
-        <h2 id="reset-password-title">重置密码</h2>
-        <p class="auth-description">输入账号邮箱，验证码会打印在 Server 开发控制台。</p>
-        <form class="auth-form" id="reset-request-form">
-          <label for="reset-email">邮箱地址</label>
-          <input id="reset-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-          <button class="button button-primary" type="submit">发送重置验证码 <span aria-hidden="true">↗</span></button>
-        </form>
-        <form class="auth-form is-hidden" id="reset-verify-form">
-          <label for="reset-code">验证码</label>
-          <input id="reset-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required />
-          <label for="reset-password">新密码</label>
-          <input id="reset-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="至少 8 个字符" required />
-          <label for="reset-password-confirm">确认新密码</label>
-          <input id="reset-password-confirm" name="password-confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="再次输入密码" required />
-          <button class="button button-primary" type="submit">重置并登录 <span aria-hidden="true">↗</span></button>
-        </form>
-        <button class="text-link auth-inline-link" id="back-to-password" type="button">← 返回密码登录</button>
-        <p class="auth-note" id="reset-status" role="status"></p>
-      </section>
+        <section class="auth-rewrite-mode" data-auth-panel="password" aria-labelledby="password-login-title" aria-hidden="false">
+          <h2 id="password-login-title" class="sr-only">邮箱密码登录</h2>
+          <form class="auth-form auth-rewrite-form" id="password-form">
+            <label for="password-email">邮箱</label>
+            <input id="password-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" value={defaultTestAccountEmail} required />
+            <label for="password">密码</label>
+            <div class="auth-password-field">
+              <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" placeholder="至少 8 个字符" value={defaultTestAccountPassword} required />
+              <button class="password-toggle" type="button" data-password-toggle="password" aria-label="显示密码" aria-pressed="false"><span aria-hidden="true">◉</span></button>
+            </div>
+            <button class="button button-primary" type="submit">登录 <span aria-hidden="true">↗</span></button>
+          </form>
+          <div class="auth-rewrite-actions">
+            <button class="auth-switch-link" id="forgot-password" type="button">忘记密码？</button>
+            <button class="auth-switch-link" type="button" data-auth-show="code">使用验证码登录 <span aria-hidden="true">→</span></button>
+          </div>
+          <p class="auth-note" id="password-status" role="status" aria-live="polite"></p>
+        </section>
 
-      <a class="text-link" href="/">← 返回首页</a>
+        <section class="auth-rewrite-mode is-hidden" data-auth-panel="reset" aria-labelledby="reset-password-title">
+          <h2 id="reset-password-title">找回你的故事。</h2>
+          <p class="auth-rewrite-description">通过邮箱验证码重置密码，登录后继续创作。</p>
+          <form class="auth-form auth-rewrite-form" id="reset-request-form">
+            <label for="reset-email">邮箱</label>
+            <input id="reset-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+            <button class="button button-primary" type="submit">发送重置验证码 <span aria-hidden="true">↗</span></button>
+          </form>
+          <form class="auth-form auth-rewrite-form is-hidden" id="reset-verify-form">
+            <label for="reset-code">验证码</label>
+            <input id="reset-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required />
+            <label for="reset-password">新密码</label>
+            <div class="auth-password-field">
+              <input id="reset-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="至少 8 个字符" required />
+              <button class="password-toggle" type="button" data-password-toggle="reset-password" aria-label="显示密码" aria-pressed="false"><span aria-hidden="true">◉</span></button>
+            </div>
+            <label for="reset-password-confirm">确认新密码</label>
+            <div class="auth-password-field">
+              <input id="reset-password-confirm" name="password-confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="再次输入密码" required />
+              <button class="password-toggle" type="button" data-password-toggle="reset-password-confirm" aria-label="显示密码" aria-pressed="false"><span aria-hidden="true">◉</span></button>
+            </div>
+            <button class="button button-primary" type="submit">重置并登录 <span aria-hidden="true">↗</span></button>
+          </form>
+          <button class="auth-switch-link" id="back-to-password" type="button"><span aria-hidden="true">←</span> 返回密码登录</button>
+          <p class="auth-note" id="reset-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <label class="auth-consent" for="auth-consent">
+          <input id="auth-consent" name="consent" type="checkbox" required />
+          <span>我同意服务条款和隐私政策。</span>
+        </label>
+      </div>
     </div>
   </section>
 </BaseLayout>
 
 <script>
+  const isDevelopmentLogin = import.meta.env.DEV;
   const panels = document.querySelectorAll<HTMLElement>('[data-auth-panel]');
-  const tabs = document.querySelectorAll<HTMLButtonElement>('[data-auth-mode]');
   const codeEmail = document.querySelector<HTMLInputElement>('#code-email');
   const codeRequestForm = document.querySelector<HTMLFormElement>('#code-request-form');
-  const codeVerifyForm = document.querySelector<HTMLFormElement>('#code-verify-form');
+  const codeSendButton = document.querySelector<HTMLButtonElement>('#code-send');
+  const loginCode = document.querySelector<HTMLInputElement>('#login-code');
   const codeStatus = document.querySelector<HTMLElement>('#code-status');
   const passwordForm = document.querySelector<HTMLFormElement>('#password-form');
   const passwordStatus = document.querySelector<HTMLElement>('#password-status');
@@ -91,26 +155,31 @@ export const prerender = false;
   const resetRequestForm = document.querySelector<HTMLFormElement>('#reset-request-form');
   const resetVerifyForm = document.querySelector<HTMLFormElement>('#reset-verify-form');
   const resetStatus = document.querySelector<HTMLElement>('#reset-status');
+
   const nextPath = (): string => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    return requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/app';
+    return requested?.startsWith('/') && !requested.startsWith('//') ? requested : '/workspace';
   };
 
   const setMode = (mode: string) => {
     panels.forEach((panel) => {
-      panel.classList.toggle('is-hidden', panel.dataset.authPanel !== mode);
-    });
-    tabs.forEach((tab) => {
-      const active = tab.dataset.authMode === mode;
-      tab.classList.toggle('is-active', active);
-      tab.setAttribute('aria-selected', String(active));
+      const active = panel.dataset.authPanel === mode;
+      panel.classList.toggle('is-hidden', !active);
+      panel.setAttribute('aria-hidden', String(!active));
     });
   };
 
   const setBusy = (form: HTMLFormElement | null, busy: boolean) => {
+    form?.setAttribute('aria-busy', String(busy));
     form?.querySelectorAll('button').forEach((button) => {
       button.disabled = busy;
     });
+  };
+
+  const setStatus = (element: HTMLElement | null, message: string, state = 'info') => {
+    if (!element) return;
+    element.textContent = message;
+    element.dataset.state = state;
   };
 
   const readError = async (response: Response, fallback: string): Promise<string> => {
@@ -122,71 +191,86 @@ export const prerender = false;
     }
   };
 
-  const request = async (
-    path: string,
-    body: Record<string, string | undefined>,
-  ): Promise<Record<string, any>> => {
+  const request = async (path: string, body: Record<string, string | undefined>): Promise<Record<string, any>> => {
     const response = await fetch(path, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!response.ok) {
-      throw new Error(await readError(response, '暂时无法完成操作，请稍后重试。'));
-    }
+    if (!response.ok) throw new Error(await readError(response, '暂时无法完成操作，请稍后重试。'));
     return response.json();
   };
 
   const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : '暂时无法完成操作，请稍后重试。';
 
-  tabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.authMode ?? 'code')));
+  document.querySelectorAll<HTMLButtonElement>('[data-auth-show]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = button.dataset.authShow ?? 'code';
+      if (mode === 'password' && codeEmail?.value && passwordForm) {
+        const passwordEmail = passwordForm.querySelector<HTMLInputElement>('#password-email');
+        if (passwordEmail && !passwordEmail.value) passwordEmail.value = codeEmail.value;
+      }
+      setMode(mode);
+    });
+  });
 
-  codeRequestForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!codeEmail || !codeStatus || !codeRequestForm.checkValidity()) return;
+  document.querySelector<HTMLButtonElement>('#forgot-password')?.addEventListener('click', () => {
+    const email = document.querySelector<HTMLInputElement>('#password-email');
+    if (email?.value && resetEmail) resetEmail.value = email.value;
+    setMode('reset');
+  });
+
+  document.querySelector<HTMLButtonElement>('#back-to-password')?.addEventListener('click', () => setMode('password'));
+
+  document.querySelectorAll<HTMLButtonElement>('[data-password-toggle]').forEach((toggle) => {
+    toggle.addEventListener('click', () => {
+      const input = document.querySelector<HTMLInputElement>(`#${toggle.dataset.passwordToggle}`);
+      if (!input) return;
+      const visible = input.type === 'text';
+      input.type = visible ? 'password' : 'text';
+      toggle.setAttribute('aria-pressed', String(!visible));
+      toggle.setAttribute('aria-label', visible ? '显示密码' : '隐藏密码');
+    });
+  });
+
+  codeSendButton?.addEventListener('click', async () => {
+    if (!codeEmail || !codeStatus || !codeEmail.checkValidity()) return;
     setBusy(codeRequestForm, true);
-    codeStatus.textContent = '正在生成验证码…';
+    setStatus(codeStatus, '正在发送验证码…', 'pending');
     try {
       await request('/api/v1/auth/email-code-requests', { email: codeEmail.value });
-      codeRequestForm.classList.add('is-hidden');
-      codeVerifyForm?.classList.remove('is-hidden');
-      codeStatus.textContent = '验证码已生成，请查看 Server 开发控制台。';
-      document.querySelector<HTMLInputElement>('#login-code')?.focus();
+      codeSendButton.textContent = '重新发送验证码';
+      setStatus(codeStatus, '验证码有效期 10 分钟。开发环境会显示在 Server 控制台。', 'success');
+      loginCode?.focus();
     } catch (error) {
-      codeStatus.textContent = errorMessage(error);
+      setStatus(codeStatus, errorMessage(error), 'error');
     } finally {
       setBusy(codeRequestForm, false);
     }
   });
 
-  document.querySelector<HTMLButtonElement>('#code-resend')?.addEventListener('click', () => codeRequestForm?.requestSubmit());
-
-  codeVerifyForm?.addEventListener('submit', async (event) => {
+  codeRequestForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const code = document.querySelector<HTMLInputElement>('#login-code');
-    if (!codeEmail || !code || !codeStatus || !codeVerifyForm.checkValidity()) return;
-    setBusy(codeVerifyForm, true);
-    codeStatus.textContent = '正在验证…';
+    if (!codeEmail || !codeStatus || !codeEmail.checkValidity()) return;
+    setBusy(codeRequestForm, true);
+    setStatus(codeStatus, '正在打开你的故事空间…', 'pending');
     try {
-      const result = await request('/api/v1/auth/email-code-verifications', {
-        email: codeEmail.value,
-        code: code.value,
-      });
+      if (isDevelopmentLogin) {
+        await request('/api/v1/auth/development-logins', { email: codeEmail.value });
+        window.location.assign(nextPath());
+        return;
+      }
+
+      if (!loginCode || !codeRequestForm.checkValidity()) return;
+      const result = await request('/api/v1/auth/email-code-verifications', { email: codeEmail.value, code: loginCode.value });
       const destination = nextPath();
-      window.location.assign(
-        result.hasPassword
-          ? destination
-          : `/account/password?next=${encodeURIComponent(destination)}`,
-      );
+      window.location.assign(result.hasPassword ? destination : `/account/password?next=${encodeURIComponent(destination)}`);
     } catch (error) {
-      codeStatus.textContent = errorMessage(error);
+      setStatus(codeStatus, errorMessage(error), 'error');
     } finally {
-      setBusy(codeVerifyForm, false);
+      setBusy(codeRequestForm, false);
     }
   });
 
@@ -196,39 +280,30 @@ export const prerender = false;
     const password = document.querySelector<HTMLInputElement>('#password');
     if (!email || !password || !passwordStatus || !passwordForm.checkValidity()) return;
     setBusy(passwordForm, true);
-    passwordStatus.textContent = '正在登录…';
+    setStatus(passwordStatus, '正在登录…', 'pending');
     try {
-      await request('/api/v1/auth/password-logins', {
-        email: email.value,
-        password: password.value,
-      });
+      await request('/api/v1/auth/password-logins', { email: email.value, password: password.value });
       window.location.assign(nextPath());
     } catch (error) {
-      passwordStatus.textContent = errorMessage(error);
+      setStatus(passwordStatus, errorMessage(error), 'error');
     } finally {
       setBusy(passwordForm, false);
     }
-  });
-
-  document.querySelector('#forgot-password')?.addEventListener('click', () => {
-    const email = document.querySelector<HTMLInputElement>('#password-email');
-    if (email?.value && resetEmail) resetEmail.value = email.value;
-    setMode('reset');
   });
 
   resetRequestForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!resetEmail || !resetStatus || !resetRequestForm.checkValidity()) return;
     setBusy(resetRequestForm, true);
-    resetStatus.textContent = '正在生成重置验证码…';
+    setStatus(resetStatus, '正在发送重置验证码…', 'pending');
     try {
       await request('/api/v1/auth/password-reset-requests', { email: resetEmail.value });
       resetRequestForm.classList.add('is-hidden');
       resetVerifyForm?.classList.remove('is-hidden');
-      resetStatus.textContent = '验证码已生成，请查看 Server 开发控制台。';
+      setStatus(resetStatus, '验证码已发送。开发环境会显示在 Server 控制台。', 'success');
       document.querySelector<HTMLInputElement>('#reset-code')?.focus();
     } catch (error) {
-      resetStatus.textContent = errorMessage(error);
+      setStatus(resetStatus, errorMessage(error), 'error');
     } finally {
       setBusy(resetRequestForm, false);
     }
@@ -241,11 +316,11 @@ export const prerender = false;
     const confirm = document.querySelector<HTMLInputElement>('#reset-password-confirm');
     if (!resetEmail || !code || !password || !confirm || !resetStatus || !resetVerifyForm.checkValidity()) return;
     if (password.value !== confirm.value) {
-      resetStatus.textContent = '两次输入的密码不一致。';
+      setStatus(resetStatus, '两次输入的密码不一致。', 'error');
       return;
     }
     setBusy(resetVerifyForm, true);
-    resetStatus.textContent = '正在重置密码…';
+    setStatus(resetStatus, '正在重置密码…', 'pending');
     try {
       await request('/api/v1/auth/password-reset-verifications', {
         email: resetEmail.value,
@@ -254,11 +329,9 @@ export const prerender = false;
       });
       window.location.assign(nextPath());
     } catch (error) {
-      resetStatus.textContent = errorMessage(error);
+      setStatus(resetStatus, errorMessage(error), 'error');
     } finally {
       setBusy(resetVerifyForm, false);
     }
   });
-
-  document.querySelector('#back-to-password')?.addEventListener('click', () => setMode('password'));
 </script>

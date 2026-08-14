@@ -47,7 +47,7 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
     );
     teamId = randomUUID();
     otherTeamId = randomUUID();
@@ -90,7 +90,10 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
       tenantId: teamId,
       projectId: teamProject.id,
       userId: memberId,
+      role: 'editor',
       createdAt: NOW,
+      updatedAt: NOW,
+      revokedAt: null,
     });
 
     const memberProjects = await projects.listVisible({
@@ -107,6 +110,10 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
       memberProjects.items.find((item) => item.id === teamProject.id)
         ?.collaborator,
     ).toBe(true);
+    expect(
+      memberProjects.items.find((item) => item.id === teamProject.id)
+        ?.collaboratorRole,
+    ).toBe('editor');
 
     const adminProjects = await projects.listVisible({
       tenantId: teamId,
@@ -124,10 +131,12 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
     const projectId = randomUUID();
     await expect(
       pool.query(
-        'INSERT INTO story_projects (id, tenant_id, created_by_user_id, title, visibility, status, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)',
+        'INSERT INTO story_projects (id, tenant_id, space_id, created_by_user_id, owner_user_id, title, visibility, status, revision, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)',
         [
           projectId,
           teamId,
+          teamId,
+          otherMemberId,
           otherMemberId,
           '越权项目',
           'team',
@@ -142,14 +151,21 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
     await projects.create(projectRow);
     await expect(
       pool.query(
-        'INSERT INTO project_collaborators (id, tenant_id, project_id, user_id, created_at) VALUES ($1, $2, $3, $4, $5)',
-        [randomUUID(), otherTeamId, projectRow.id, otherMemberId, NOW],
+        'INSERT INTO project_collaborators (id, tenant_id, project_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $6)',
+        [
+          randomUUID(),
+          otherTeamId,
+          projectRow.id,
+          otherMemberId,
+          'editor',
+          NOW,
+        ],
       ),
     ).rejects.toMatchObject({ code: '23503' });
     await expect(
       pool.query(
-        'INSERT INTO project_collaborators (id, tenant_id, project_id, user_id, created_at) VALUES ($1, $2, $3, $4, $5)',
-        [randomUUID(), teamId, projectRow.id, otherMemberId, NOW],
+        'INSERT INTO project_collaborators (id, tenant_id, project_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $6)',
+        [randomUUID(), teamId, projectRow.id, otherMemberId, 'editor', NOW],
       ),
     ).rejects.toMatchObject({ code: '23503' });
   });
@@ -166,7 +182,9 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
     return {
       id: randomUUID(),
       tenantId: teamId,
+      spaceId: teamId,
       createdByUserId: creatorId,
+      ownerUserId: creatorId,
       title: '故事项目',
       visibility: 'team',
       status: 'active',
@@ -192,6 +210,10 @@ describe.skipIf(!databaseUrl)('story project PostgreSQL boundary', () => {
     await pool.query(
       'INSERT INTO teams (id, name, created_by_user_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $4)',
       [id, name, createdByUserId, NOW],
+    );
+    await pool.query(
+      'INSERT INTO spaces (id, kind, owner_team_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $4)',
+      [id, 'team', id, NOW],
     );
   }
 

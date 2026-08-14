@@ -248,6 +248,8 @@ HarmonyOS 客户端 ─┘
 
 ## 项目文档
 
+- [`C 端用户体系数据库表设计`](docs/architecture/2026-08-13-c-end-user-database-schema-design.md)：将个人空间、团队空间、成员、邀请、项目所有权、协作者权限和迁移约束落到 PostgreSQL 表模型。
+- [`C 端用户体系与权限设计`](docs/architecture/2026-08-13-c-end-user-system-and-permissions.md)：定义用户、空间、团队、项目和权限的产品规则与授权边界。
 - [`PROJECT-PLAN.md`](PROJECT-PLAN.md)：项目级规划、已确认决策和讨论记录。
 - [`Pi Agent 技术架构拆解`](docs/architecture/pi-agent-architecture.md)：对本地 vendor 参考实现的 Agent Loop、Harness、会话树、工具执行、上下文压缩与扩展边界进行源码级拆解。
 - [`Agent Core 功能调研与生产架构方案`](docs/architecture/agent-core-market-research.md)：定义 Harness、Agent 逻辑、四级隔离、上下文、分层记忆、RAG/Wiki、Artifact、沙箱和可靠执行的生产基线。
@@ -293,6 +295,16 @@ docker compose -f compose.minio.yml up -d
 
 MinIO API 默认运行在 `http://localhost:9000`，控制台运行在 `http://localhost:9001`；本地默认账号是 `duoduo_server`，密码是 `change-me`。首次启动后，在控制台创建与 `SERVER_OBJECT_STORAGE_BUCKET` 一致的 Bucket（默认是 `duoduo-assets`），再启动 Server。
 
+如需一次启动本地后端基础设施，可使用统一 Compose。它包含 PostgreSQL、业务 MinIO、Milvus、Milvus 依赖、Elasticsearch 和单节点 Kafka KRaft：
+
+```bash
+cp infra/.env.example .env
+docker compose -f compose.dev.yml up -d
+docker compose -f compose.dev.yml ps
+```
+
+详细服务地址和数据库连接配置见 [`docs/architecture/unified-local-infrastructure.md`](docs/architecture/unified-local-infrastructure.md)。
+
 主要代码目录：
 
 ```text
@@ -303,6 +315,8 @@ apps/mobile/    移动端预留目录，尚未加入 workspace
 agent/          NestJS Agent 服务与基础设施适配器
 packages/agent-runtime/  框架无关的 Agent Runtime 与 Harness
 compose.minio.yml        本地 MinIO 对象存储
+compose.dev.yml          本地后端基础设施一体化 Compose
+infra/.env.example       本地基础设施环境变量示例
 vendor/         仅限本地使用的外部参考项目
 ```
 

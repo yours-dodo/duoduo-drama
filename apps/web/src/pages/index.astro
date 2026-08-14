@@ -1,100 +1,320 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
-export const prerender = true;
+export const prerender = false;
+
+const siteOrigin = import.meta.env.PUBLIC_SITE_URL ?? Astro.site?.origin ?? Astro.url.origin;
+const siteUrl = new URL('/', siteOrigin).href;
+const logoUrl = new URL('/favicon.svg', siteOrigin).href;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${siteUrl}#organization`,
+      name: '多多剧场',
+      url: siteUrl,
+      logo: logoUrl,
+      description: '面向个人创作者与内容团队的有声小说与 AI 短剧工作台，支持故事开发、剧本编辑、声音内容制作与短剧生产。',
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${siteUrl}#website`,
+      name: '多多剧场',
+      url: siteUrl,
+      description: '有声小说与 AI 短剧工作台，统一管理故事资产，推进故事开发、剧本编辑与内容制作。',
+      inLanguage: 'zh-CN',
+      publisher: { '@id': `${siteUrl}#organization` },
+    },
+  ],
+};
 ---
 
 <BaseLayout
-  title="多多剧场｜用 AI 把故事变成可制作的短剧"
-  description="多多剧场连接故事创作、剧本处理、分镜制作与素材管理，让创作者从一句灵感开始，持续推进到可制作的短剧项目。"
-  eyebrow="AI 故事与短剧创作平台"
+  title="多多剧场｜有声小说与 AI 短剧工作台"
+  description="多多剧场是面向个人创作者与内容团队的有声小说与 AI 短剧工作台，支持故事开发、剧本编辑、声音内容制作与短剧生产。"
+  keywords="有声小说、AI 短剧、短剧创作、故事创作、剧本编辑、内容生产工作台、AI 内容生产、多多剧场"
+  eyebrow="从故事开发到内容成片"
+  pageClass="landing-page"
+  robots="index,follow"
+  structuredData={structuredData}
 >
-  <section class="hero-section" aria-labelledby="hero-title">
+  <section class="hero-section creator-hero story-map-hero" aria-labelledby="hero-title">
     <div class="hero-copy">
-      <p class="eyebrow">AI 故事与短剧创作平台</p>
-      <h1 id="hero-title">把一个灵感，<em>写成一部短剧。</em></h1>
+      <p class="eyebrow">STORY DEVELOPMENT / CONTENT PRODUCTION</p>
+      <h1 id="hero-title">从故事开发，<em>到内容成片。</em></h1>
       <p class="hero-description">
-        多多剧场把对话式故事创作、剧本处理和短剧制作串成一条可追溯的创作流程。你负责判断和取舍，Agent 帮你推进每一步。
+        多多剧场帮助个人创作者与内容团队，完成从灵感整理、故事构建到剧本和内容制作的完整流程。
       </p>
       <div class="hero-actions">
-        <a class="button button-primary" href="/login">开始创作 <span aria-hidden="true">↗</span></a>
-        <a class="text-link" href="#workflow">了解创作流程 <span aria-hidden="true">↓</span></a>
+        <a class="button button-primary" href="/stories">开始创作 <span aria-hidden="true">↗</span></a>
+        <a class="text-link" href="#story-foundation">查看生产流程 <span aria-hidden="true">↓</span></a>
       </div>
-      <p class="hero-note">保留人工编辑、确认、回退和版本历史，让每个决定都属于你。</p>
+      <p class="hero-note">统一管理故事资产，让创作、协作与制作持续推进。</p>
     </div>
-    <div class="hero-art" aria-label="故事创作流程预览" role="img">
-      <div class="orbit orbit-one"></div>
-      <div class="orbit orbit-two"></div>
-      <div class="hero-card hero-card-main">
-        <span class="card-label">当前创作</span>
-        <strong>雨停之前</strong>
-        <span class="card-meta">故事项目 · 第 03 版</span>
-        <div class="card-progress"><span></span></div>
-        <span class="card-status">正在整理人物关系</span>
+    <div class="hero-art creator-showcase story-map-stage" aria-label="故事项目内容生产流程示例：项目雨停之前连接人物林岸、最后一段录音、雨城世界观和下一阶段制作" role="img">
+      <div class="showcase-header story-map-header">
+        <span>STORY PROJECT / CONTENT PIPELINE</span>
+        <span>PROJECT 01 / IN PRODUCTION</span>
       </div>
-      <div class="hero-card hero-card-note">
-        <span class="note-dot"></span>
-        <span>Agent 已完成一轮梳理</span>
+      <div class="story-map-intro">
+        <span class="story-map-kicker">STORY PROJECT</span>
+        <strong>从故事开发，<br /><em>推进内容生产。</em></strong>
+        <span>围绕人物、世界、冲突和内容形态，持续推进一部作品。</span>
       </div>
-      <div class="hero-stamp">STORY<br />TO<br />SCREEN</div>
+      <div class="story-map-canvas">
+        <svg class="story-map-connections" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <marker id="story-map-arrow" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+              <path d="M0,0 L5,2.5 L0,5 Z" fill="currentColor" />
+            </marker>
+          </defs>
+          <line class="story-map-connection story-map-connection-character" x1="50" y1="50" x2="18" y2="16" marker-end="url(#story-map-arrow)" />
+          <line class="story-map-connection story-map-connection-secret" x1="50" y1="50" x2="82" y2="16" marker-end="url(#story-map-arrow)" />
+          <line class="story-map-connection story-map-connection-world" x1="50" y1="50" x2="18" y2="84" marker-end="url(#story-map-arrow)" />
+          <line class="story-map-connection story-map-connection-choice" x1="50" y1="50" x2="82" y2="84" marker-end="url(#story-map-arrow)" />
+        </svg>
+        <div class="story-map-core">
+          <span class="story-map-core-label">PROJECT</span>
+          <strong>雨停之前</strong>
+          <span>故事项目持续推进中</span>
+        </div>
+        <div class="story-map-node story-map-node-character">
+          <span>CHARACTER</span>
+          <strong>林岸</strong>
+          <small>电台编辑，正在寻找一段失踪的录音</small>
+        </div>
+        <div class="story-map-node story-map-node-secret">
+          <span>CONFLICT</span>
+          <strong>最后一段录音</strong>
+          <small>每一次回放都让真相更近一步</small>
+        </div>
+        <div class="story-map-node story-map-node-world">
+          <span>WORLD</span>
+          <strong>雨城</strong>
+          <small>记忆会随雨季重新排列</small>
+        </div>
+        <div class="story-map-node story-map-node-choice">
+          <span>NEXT STAGE</span>
+          <strong>进入下一阶段 <span aria-hidden="true">↗</span></strong>
+          <small>从故事结构推进到剧本和内容制作</small>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="signal-row" aria-label="平台能力">
-    <div><strong>01</strong><span>对话式创作</span></div>
-    <div><strong>02</strong><span>版本可追溯</span></div>
-    <div><strong>03</strong><span>人机协同推进</span></div>
-  </section>
-
-  <section id="workflow" class="workflow-section" aria-labelledby="workflow-title">
-    <div class="section-heading">
-      <p class="eyebrow">一条连续的创作路径</p>
-      <h2 id="workflow-title">先把故事讲好，<br /><em>再把它拍出来。</em></h2>
+  <section id="story-foundation" class="foundation-section" aria-labelledby="foundation-title">
+    <div class="section-heading foundation-heading">
+      <p class="eyebrow">STORY DEVELOPMENT</p>
+      <h2 id="foundation-title">把故事开发，<br /><em>变成可管理的内容资产。</em></h2>
+      <p>将灵感、人物、世界观、剧情结构和剧本集中在同一个项目中，减少重复整理，让创作和协作有清晰依据。</p>
     </div>
-    <div class="workflow-list">
-      <article>
-        <span class="step-number">01</span>
-        <h3>故事</h3>
-        <p>从一句话、一个人物或一份旧稿开始，把模糊的想法变成有方向的故事。</p>
-      </article>
-      <article>
-        <span class="step-number">02</span>
-        <h3>剧本</h3>
-        <p>沿着对话继续打磨，让人物、冲突和情节逐步沉淀成可编辑的剧本成果。</p>
-      </article>
-      <article>
-        <span class="step-number">03</span>
-        <h3>短剧</h3>
-        <p>确认后的故事可以进入独立的短剧项目，继续推进剧集、分镜与制作素材。</p>
-      </article>
+    <div class="foundation-board">
+      <div class="foundation-board-top"><span>STORY PROJECT / 雨停之前</span><span>REVISION 03</span></div>
+      <div class="foundation-asset-grid">
+        <div class="foundation-asset foundation-asset-large"><span>01</span><strong>灵感</strong><p>记录故事起点。</p></div>
+        <div class="foundation-asset"><span>02</span><strong>人物</strong><p>建立角色关系。</p></div>
+        <div class="foundation-asset"><span>03</span><strong>世界观</strong><p>明确故事规则。</p></div>
+        <div class="foundation-asset"><span>04</span><strong>结构</strong><p>梳理剧情走向。</p></div>
+        <div class="foundation-asset foundation-asset-wide"><span>05</span><strong>剧本</strong><p>进入具体制作。</p></div>
+      </div>
     </div>
   </section>
 
-  <section id="workspaces" class="workspace-section" aria-labelledby="workspace-title">
-    <div class="workspace-intro">
-      <p class="eyebrow">两个工作台，一个创作闭环</p>
-      <h2 id="workspace-title">你的故事，<br /><em>值得被认真推进。</em></h2>
-      <p>故事创作和短剧制作各自拥有适合自己的工作方式，同时通过确认过的成果版本自然衔接。</p>
+  <section class="idea-section" aria-labelledby="idea-title">
+    <div class="idea-copy">
+      <p class="eyebrow">START A PROJECT</p>
+      <h2 id="idea-title">从一个想法开始，<br /><em>建立完整的故事项目。</em></h2>
+      <p>一句设定、一段对白或一份未完成的稿件，都可以成为项目的起点。</p>
+      <a class="text-link" href="/stories">创建故事项目 <span aria-hidden="true">↗</span></a>
     </div>
-    <div class="workspace-cards">
-      <a class="workspace-card story-card" href="/app/stories">
-        <span class="card-index">A / STORY</span>
-        <h3>故事创作</h3>
-        <p>用对话发展故事、整理人物和剧本，保留每次创作判断。</p>
-        <span class="card-arrow" aria-hidden="true">↗</span>
+    <div class="idea-prompt" aria-label="故事灵感示例">
+      <div class="idea-prompt-bar"><span></span><span>STORY SEED</span><span>01</span></div>
+      <p>“一个人醒来后，发现所有人都忘记了他。”</p>
+      <div class="idea-result-list"><span>STORY</span><strong>雨停之前</strong><span>CHARACTER</span><strong>林岸 / 电台编辑</strong><span>WORLD</span><strong>雨城 / 记忆会随雨消失</strong></div>
+    </div>
+  </section>
+
+  <section class="character-section editorial-split" aria-labelledby="character-title">
+    <div class="editorial-visual character-board" aria-label="人物档案视觉示例">
+      <span class="editorial-index">CHARACTER / 01</span>
+      <div class="character-portrait"><span>林</span></div>
+      <div class="character-caption"><strong>林岸</strong><span>失去记忆的电台编辑</span></div>
+      <div class="character-facts"><span>GOAL</span><strong>找回最后一段录音</strong><span>FEAR</span><strong>记忆并不属于自己</strong></div>
+    </div>
+    <div class="editorial-copy">
+      <p class="eyebrow">CHARACTERS</p>
+      <h2 id="character-title">让人物、关系与动机，<br /><em>成为故事的驱动力。</em></h2>
+      <p>记录角色目标、关系和变化，让每一次选择都服务于剧情推进。</p>
+      <span class="copy-note">角色档案、人物弧线与关键关系，统一沉淀在故事项目中。</span>
+    </div>
+  </section>
+
+  <section class="world-section editorial-split editorial-split-reverse" aria-labelledby="world-title">
+    <div class="editorial-visual world-board" aria-label="世界观视觉示例">
+      <span class="editorial-index">WORLD BUILDING / 02</span>
+      <div class="world-map"><span class="world-pin pin-one">雨城</span><span class="world-pin pin-two">旧电台</span><span class="world-pin pin-three">无声街</span><i></i><i></i><i></i></div>
+      <div class="world-timeline"><span>1998</span><b></b><span>雨季</span><b></b><span>现在</span></div>
+    </div>
+    <div class="editorial-copy">
+      <p class="eyebrow">WORLD BUILDING</p>
+      <h2 id="world-title">建立清晰规则，<br /><em>让故事拥有可信的发生空间。</em></h2>
+      <p>整理地点、时间、背景与运行规则，让世界设定真正参与冲突和叙事。</p>
+      <span class="copy-note">重要设定可追踪、可复用，并持续服务于后续内容生产。</span>
+    </div>
+  </section>
+
+  <section id="workspaces" class="format-section" aria-labelledby="format-title">
+    <div class="section-heading format-heading">
+      <p class="eyebrow">CONTENT FORMATS</p>
+      <h2 id="format-title">一份故事，<br /><em>多种内容形态。</em></h2>
+    </div>
+    <div class="format-grid">
+      <a class="format-card format-card-audio" href="/stories">
+        <div class="format-card-top"><span>01 / LISTEN</span><span aria-hidden="true">↗</span></div>
+        <div class="format-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <h3>AI 有声小说</h3>
+        <p>将故事转化为适合声音表达的内容，围绕对白、叙述和节奏完成制作。</p>
+        <span class="format-link">制作有声内容 <span aria-hidden="true">↗</span></span>
       </a>
-      <a class="workspace-card drama-card" href="/app/dramas">
-        <span class="card-index">B / DRAMA</span>
-        <h3>短剧制作</h3>
-        <p>从确认的故事版本出发，组织剧集、场景、镜头和制作素材。</p>
-        <span class="card-arrow" aria-hidden="true">↗</span>
+      <a class="format-card format-card-drama" href="/dramas">
+        <div class="format-card-top"><span>02 / WATCH</span><span aria-hidden="true">↗</span></div>
+        <div class="format-frame" aria-hidden="true"><span></span><i></i><b></b></div>
+        <h3>AI 短剧</h3>
+        <p>将故事拆解为剧集、场景和镜头，逐步推进短剧内容生产。</p>
+        <span class="format-link">制作短剧内容 <span aria-hidden="true">↗</span></span>
       </a>
     </div>
   </section>
 
-  <section class="closing-section" aria-labelledby="closing-title">
-    <p class="eyebrow">从今天的第一句开始</p>
-    <h2 id="closing-title">让好故事，<em>继续往下走。</em></h2>
-    <a class="button button-light" href="/login">进入多多剧场 <span aria-hidden="true">↗</span></a>
+  <section class="transformation-section" aria-labelledby="transformation-title">
+    <div class="section-heading transformation-heading">
+      <p class="eyebrow">PRODUCTION PIPELINE</p>
+      <h2 id="transformation-title">从故事底稿，<br /><em>进入可执行的制作流程。</em></h2>
+      <p>故事确认后，继续完成剧集规划、场景拆分、镜头设计和制作素材整理，让内容生产有明确的下一步。</p>
+    </div>
+    <div class="transformation-rail" aria-label="故事到短剧的创作流程">
+      <div><span>01</span><strong>STORY</strong><small>故事成果</small></div>
+      <i aria-hidden="true"></i>
+      <div><span>02</span><strong>SCRIPT</strong><small>剧本方向</small></div>
+      <i aria-hidden="true"></i>
+      <div><span>03</span><strong>EPISODES</strong><small>剧集组织</small></div>
+      <i aria-hidden="true"></i>
+      <div><span>04</span><strong>SCENES</strong><small>场景拆分</small></div>
+      <i aria-hidden="true"></i>
+      <div><span>05</span><strong>SHOTS</strong><small>镜头推进</small></div>
+      <i aria-hidden="true"></i>
+      <div class="transformation-final"><span>06</span><strong>DRAMA</strong><small>制作素材</small></div>
+    </div>
+      <a class="button button-secondary transformation-cta drama-cta" href="/dramas">进入短剧制作 <span aria-hidden="true">↗</span></a>
+  </section>
+
+  <section id="workflow" class="workflow-section journey-section" aria-labelledby="workflow-title">
+    <div class="section-heading workflow-intro">
+      <p class="eyebrow">CREATION WORKFLOW</p>
+      <h2 id="workflow-title">从设定到成片，<br /><em>每个阶段都清晰可追踪。</em></h2>
+      <p>围绕同一个故事项目，逐步完成内容开发、结构整理和制作输出，适合个人创作者，也适合内容团队协作。</p>
+    </div>
+    <div class="workflow-board">
+      <header class="workflow-board-header">
+        <div>
+          <span class="workflow-board-kicker">CREATIVE MAP / 03 STAGES</span>
+          <strong>ONE PROJECT / MULTIPLE OUTPUTS</strong>
+        </div>
+        <span class="workflow-board-status"><i aria-hidden="true"></i> CONTENT IN PRODUCTION</span>
+      </header>
+      <div class="workflow-map" aria-label="从内容开发到内容输出的三阶段生产流程">
+        <section class="workflow-stage workflow-stage-foundation" aria-labelledby="workflow-foundation-title">
+          <header class="workflow-stage-header">
+            <span class="workflow-stage-index">01</span>
+            <div><span>FOUNDATION</span><h3 id="workflow-foundation-title">内容基础</h3></div>
+            <small>建立故事项目与核心设定</small>
+          </header>
+          <div class="workflow-foundation-flow">
+            <article class="workflow-node workflow-node-idea">
+              <div class="workflow-node-top"><span>01 / START</span><span>SPARK</span></div>
+              <h4>IDEA</h4>
+              <p>记录故事起点与创作目标。</p>
+            </article>
+            <article class="workflow-node workflow-node-story">
+              <div class="workflow-node-top"><span>02 / CORE</span><span>STORY</span></div>
+              <h4>STORY</h4>
+              <p>集中管理故事核心资产。</p>
+            </article>
+            <div class="workflow-branches" aria-label="故事的两个支撑方向">
+              <article class="workflow-node workflow-node-branch">
+                <div class="workflow-node-top"><span>03</span><span>PEOPLE</span></div>
+                <h4>CHARACTERS</h4>
+                <p>建立角色目标与关键关系。</p>
+              </article>
+              <article class="workflow-node workflow-node-branch">
+                <div class="workflow-node-top"><span>04</span><span>PLACE</span></div>
+                <h4>WORLD</h4>
+                <p>明确时间、地点与运行规则。</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="workflow-stage workflow-stage-structure" aria-labelledby="workflow-structure-title">
+          <header class="workflow-stage-header">
+            <span class="workflow-stage-index">02</span>
+            <div><span>STRUCTURE</span><h3 id="workflow-structure-title">叙事结构</h3></div>
+            <small>组织剧情、剧集与剧本</small>
+          </header>
+          <div class="workflow-structure-flow">
+            <article class="workflow-node workflow-node-episodes">
+              <div class="workflow-node-top"><span>05 / RHYTHM</span><span>EPISODES</span></div>
+              <h4>EPISODES</h4>
+              <p>将剧情整理为可执行的剧集结构。</p>
+              <div class="workflow-episode-track" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            </article>
+            <span class="workflow-flow-arrow" aria-hidden="true">↓</span>
+            <article class="workflow-node workflow-node-script">
+              <div class="workflow-node-top"><span>06 / SCENE</span><span>SCRIPT</span></div>
+              <h4>SCRIPT</h4>
+              <p>完成场景、对白与节奏设计。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="workflow-stage workflow-stage-output" aria-labelledby="workflow-output-title">
+          <div class="workflow-output-mark" aria-hidden="true"><span>03</span><i></i><i></i><i></i></div>
+          <header class="workflow-stage-header">
+            <div><span>OUTPUT</span><h3 id="workflow-output-title">内容输出</h3></div>
+            <small>进入有声小说或短剧制作</small>
+          </header>
+          <article class="workflow-output-node">
+            <div class="workflow-node-top"><span>07 / ARRIVE</span><span>READY TO SHARE</span></div>
+            <h4>DRAMA</h4>
+            <p>将故事底稿转化为可制作、可发布的内容。</p>
+            <span class="workflow-output-link">TURN STORY INTO SCENES <span aria-hidden="true">↗</span></span>
+          </article>
+        </section>
+      </div>
+      <footer class="workflow-board-footer"><span>STORY / SYSTEM</span><span>ONE PROJECT · MULTIPLE CONTENT OUTPUTS</span></footer>
+    </div>
+  </section>
+
+  <section class="capability-section principle-section" aria-labelledby="capability-title">
+    <div class="capability-intro">
+      <p class="eyebrow">A CREATIVE PRINCIPLE</p>
+      <h2 id="capability-title">把繁琐交给 AI，<br /><em>把多巴胺留给创作。</em></h2>
+    </div>
+    <div class="capability-grid">
+      <article><span>01</span><h3>灵感不会丢</h3><p>人物、关系、章节和素材，都在同一个故事现场持续生长。</p></article>
+      <article><span>02</span><h3>每次推进都有回声</h3><p>编辑、确认、回退和历史记录，让你随时找回创作的感觉。</p></article>
+      <article><span>03</span><h3>高光可以继续</h3><p>同一份故事底稿，既能被听见，也能被看见。</p></article>
+    </div>
+  </section>
+
+  <section class="closing-section final-cta" aria-labelledby="closing-title">
+    <p class="eyebrow">YOUR STORY STARTS HERE</p>
+    <h2 id="closing-title">现在，就让<em>下一次心动发生。</em></h2>
+    <p>从第一句开始，把灵感变成故事，把故事送到更多人的耳边和眼前。</p>
+    <div class="final-cta-actions">
+      <a class="button button-light" href="/stories">开始写我的故事 <span aria-hidden="true">↗</span></a>
+      <a class="button button-secondary drama-cta" href="/dramas">把故事变成短剧 <span aria-hidden="true">↗</span></a>
+    </div>
   </section>
 </BaseLayout>

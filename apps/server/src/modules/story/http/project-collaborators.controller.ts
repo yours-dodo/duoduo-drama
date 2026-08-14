@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Query,
@@ -30,7 +31,13 @@ import {
 import { AddProjectCollaborator } from '../application/add-project-collaborator.js';
 import { ListProjectCollaborators } from '../application/list-project-collaborators.js';
 import { RemoveProjectCollaborator } from '../application/remove-project-collaborator.js';
-import { AddProjectCollaboratorDto } from './story-project.dto.js';
+import { SetProjectCollaboratorPermissionOverride } from '../application/set-project-collaborator-permission-override.js';
+import { UpdateProjectCollaboratorRole } from '../application/update-project-collaborator-role.js';
+import {
+  AddProjectCollaboratorDto,
+  SetProjectCollaboratorPermissionOverrideDto,
+  UpdateProjectCollaboratorRoleDto,
+} from './story-project.dto.js';
 import { throwStoryHttpError } from './story-http-errors.js';
 
 @Controller({
@@ -46,6 +53,10 @@ export class ProjectCollaboratorsController {
     private readonly removeCollaborator: RemoveProjectCollaborator,
     @Inject(ListProjectCollaborators)
     private readonly listCollaborators: ListProjectCollaborators,
+    @Inject(UpdateProjectCollaboratorRole)
+    private readonly updateRole: UpdateProjectCollaboratorRole,
+    @Inject(SetProjectCollaboratorPermissionOverride)
+    private readonly setPermissionOverride: SetProjectCollaboratorPermissionOverride,
   ) {}
 
   @Get()
@@ -96,6 +107,66 @@ export class ProjectCollaboratorsController {
         actorUserId: tenant.userId,
         projectId,
         userId: body.userId,
+        role: body.role,
+        requestId: readRequestId(request),
+      });
+    } catch (error) {
+      throwStoryHttpError(error);
+    }
+  }
+
+  @Patch(':userId')
+  async updateCollaboratorRole(
+    @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
+    @Body(
+      new ValidationPipe({
+        expectedType: UpdateProjectCollaboratorRoleDto,
+        transform: true,
+        whitelist: true,
+      }),
+    )
+    body: UpdateProjectCollaboratorRoleDto,
+    @Req() request: Request,
+  ) {
+    const tenant = readTenantContext(request);
+    try {
+      return await this.updateRole.execute({
+        tenantId: tenant.tenantId,
+        actorUserId: tenant.userId,
+        projectId,
+        userId,
+        role: body.role,
+        requestId: readRequestId(request),
+      });
+    } catch (error) {
+      throwStoryHttpError(error);
+    }
+  }
+
+  @Patch(':userId/permissions')
+  async setPermission(
+    @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
+    @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
+    @Body(
+      new ValidationPipe({
+        expectedType: SetProjectCollaboratorPermissionOverrideDto,
+        transform: true,
+        whitelist: true,
+      }),
+    )
+    body: SetProjectCollaboratorPermissionOverrideDto,
+    @Req() request: Request,
+  ) {
+    const tenant = readTenantContext(request);
+    try {
+      return await this.setPermissionOverride.execute({
+        tenantId: tenant.tenantId,
+        actorUserId: tenant.userId,
+        projectId,
+        userId,
+        permissionKey: body.permissionKey,
+        effect: body.effect,
         requestId: readRequestId(request),
       });
     } catch (error) {

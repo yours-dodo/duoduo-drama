@@ -1,0 +1,71 @@
+model Team {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  name                  String                   @db.VarChar(100)
+  createdByUserId       String                   @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy             User                     @relation("TeamCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  memberships           TeamMembership[]
+  idempotencyRecords    IdempotencyRecord[]
+  auditRecords          AuditRecord[]
+  invitations           TeamInvitation[]
+  storyProjects         StoryProject[]
+  projectCollaborators  ProjectCollaborator[]
+  conversations         Conversation[]
+  messages              Message[]
+  generationRequests    StoryGenerationRequest[]
+  assets                Asset[]
+  storyArtifacts        StoryArtifact[]
+  storyArtifactVersions StoryArtifactVersion[]
+  ownedSpaces           Space[]                  @relation("SpaceOwnerTeam")
+
+  @@index([createdByUserId, createdAt(sort: Desc)], map: "teams_created_by_user_id_created_at_idx")
+  @@map("teams")
+}
+
+model TeamInvitation {
+  id                   String          @id @default(uuid()) @db.Uuid
+  tenantId             String          @map("tenant_id") @db.Uuid
+  email                String          @db.VarChar(254)
+  invitedByUserId      String          @map("invited_by_user_id") @db.Uuid
+  tokenHash            String          @unique(map: "team_invitations_token_hash_key") @map("token_hash") @db.Char(64)
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt            DateTime        @map("expires_at") @db.Timestamptz(3)
+  acceptedAt           DateTime?       @map("accepted_at") @db.Timestamptz(3)
+  acceptedByUserId     String?         @map("accepted_by_user_id") @db.Uuid
+  revokedAt            DateTime?       @map("revoked_at") @db.Timestamptz(3)
+  team                 Team            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invitedBy            User            @relation("TeamInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedBy           User?           @relation("TeamInvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+  invitedByMembership  TeamMembership  @relation("TeamInvitationSenderMembership", fields: [tenantId, invitedByUserId], references: [tenantId, userId], onDelete: Restrict)
+  acceptedByMembership TeamMembership? @relation("TeamInvitationAcceptorMembership", fields: [tenantId, acceptedByUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "team_invitations_tenant_id_created_at_id_idx")
+  @@index([tenantId, email, acceptedAt, revokedAt], map: "team_invitations_tenant_id_email_state_idx")
+  @@index([expiresAt], map: "team_invitations_expires_at_idx")
+  @@map("team_invitations")
+}
+
+model TeamMembership {
+  id                           String                 @id @default(uuid()) @db.Uuid
+  tenantId                     String                 @map("tenant_id") @db.Uuid
+  userId                       String                 @map("user_id") @db.Uuid
+  role                         String                 @db.VarChar(16)
+  joinedAt                     DateTime               @default(now()) @map("joined_at") @db.Timestamptz(3)
+  removedAt                    DateTime?              @map("removed_at") @db.Timestamptz(3)
+  team                         Team                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                         User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sentInvitations              TeamInvitation[]       @relation("TeamInvitationSenderMembership")
+  acceptedInvitations          TeamInvitation[]       @relation("TeamInvitationAcceptorMembership")
+  auditRecords                 AuditRecord[]          @relation("AuditActorMembership")
+  projectCollaborations        ProjectCollaborator[]
+  authoredMessages             Message[]              @relation("MessageAuthorMembership")
+  uploadedAssets               Asset[]                @relation("AssetUploaderMembership")
+  createdStoryArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionCreatorMembership")
+
+  @@unique([tenantId, userId], map: "team_memberships_tenant_id_user_id_key")
+  @@unique([tenantId, id], map: "team_memberships_tenant_id_id_key")
+  @@index([userId, removedAt], map: "team_memberships_user_id_removed_at_idx")
+  @@index([tenantId, role, removedAt], map: "team_memberships_tenant_id_role_removed_at_idx")
+  @@map("team_memberships")
+}
