@@ -11,7 +11,7 @@ const { projectId } = Astro.params;
 <BaseLayout
   title="故事项目｜多多剧场"
   description="继续你的故事项目创作。"
-  pageClass="story-page"
+  pageClass="story-page story-detail-page"
 >
   <AuthGate requireTeam>
     <StoryApp client:only="vue" projectId={projectId} />

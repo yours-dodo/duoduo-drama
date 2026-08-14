@@ -1,31 +1,49 @@
 ---
 version: alpha
-name: Bugatti-design-analysis
-description: An austere luxury-automotive interface that uses a near-pure black canvas, white uppercase letterspaced display, and fluorescent orange as the controlled voltage. The system runs three custom Bugatti typefaces — Bugatti Display, Bugatti Text Regular, and Bugatti Monospace — and combines them at modest weights with wide tracking to feel European-engineered, hyper-minimal, and quietly expensive. Fluorescent orange is reserved for brand signals, actions, links, and active states; there is no decorative chrome or visual noise.
+name: Duoduo Story Workspace
+description: A dark editorial story workspace that uses a restrained theater canvas, warm text, fluorescent orange as the primary action signal, and a light dialog-based creation entry.
 
 colors:
-  primary: "#ff6a00"
-  primary-hover: "#ff8a3d"
-  accent: "#ff6a00"
-  accent-glow: "rgba(255, 106, 0, 0.22)"
-  accent-glow-soft: "rgba(255, 106, 0, 0.12)"
-  ink: "#ffffff"
-  body: "#cccccc"
-  body-strong: "#e6e6e6"
-  muted: "#999999"
-  muted-soft: "#666666"
-  hairline: "#262626"
-  hairline-strong: "#3a3a3a"
-  canvas: "#000000"
-  surface-soft: "#0d0d0d"
-  surface-card: "#141414"
-  surface-elevated: "#1f1f1f"
-  on-primary: "#000000"
-  on-dark: "#ffffff"
-  on-photo: "#ffffff"
-  link: "#ffb078"
-  warning: "#d4a017"
-  success: "#5fa657"
+  primary: "#EE752F"
+  primary-hover: "#FF8C4D"
+  accent: "#EE752F"
+  accent-glow: "rgba(238, 117, 47, 0.22)"
+  accent-glow-soft: "rgba(238, 117, 47, 0.12)"
+  ink: "#F5F3EF"
+  body: "#F5F3EF"
+  body-strong: "#F5F3EF"
+  muted: "#99999F"
+  muted-soft: "#6F7078"
+  hairline: "rgba(245, 243, 239, 0.14)"
+  hairline-strong: "rgba(245, 243, 239, 0.24)"
+  canvas: "#080808"
+  surface-soft: "#0D0D0F"
+  surface-card: "#151517"
+  surface-elevated: "#202023"
+  on-primary: "#1B261F"
+  on-dark: "#F5F3EF"
+  on-photo: "#F5F3EF"
+  link: "#FF8C4D"
+  drama-signal: "#C8FF43"
+  warning: "#D97706"
+  success: "#16A34A"
+  theme-light:
+    canvas: "#F4F7F3"
+    surface: "#FFFFFF"
+    raised: "#E8EFE9"
+    ink: "#162B1F"
+    muted: "#617368"
+    hairline: "rgba(22, 43, 31, 0.16)"
+    primary: "#C66525"
+    primary-hover: "#B4551C"
+  story-entry:
+    canvas: "#EFEDE7"
+    paper: "#FBFAF6"
+    ink: "#172027"
+    muted: "#667078"
+    hairline: "rgba(23, 32, 39, 0.17)"
+    blue: "#2857D8"
+    green: "#B9E94D"
 
 typography:
   display-xl:
@@ -114,7 +132,11 @@ spacing:
   lg: 24px
   xl: 40px
   xxl: 64px
-  section: 120px
+  section: 144px
+  section-mobile: 88px
+  section-narrow: 64px
+  content-max: 1180px
+  nav-gutter: 40px
 
 components:
   button-primary:
@@ -208,47 +230,53 @@ components:
 
 ## Overview
 
-Bugatti's marketing surface is the most austere interface in luxury automotive: a near-pure black canvas (`{colors.canvas}` — #000000) holding white uppercase **letterspaced** display type, fluorescent-orange signals, and full-bleed automotive photography. The system uses fluorescent orange sparingly for brand actions and active states, while keeping surfaces flat, quiet, and nearly monochrome. The empty space, the photograph, and the precisely-tracked Bugatti Display headline remain the brand; orange provides the single controlled voltage that guides interaction.
+Story 工作区复用首页的公共视觉契约，但只迁移颜色主题和空间节奏。项目详情视图保持深色编辑室气质：近黑画布、温暖文字、橙色行动信号、细线和足够的内容呼吸。根路由的创建入口使用浅色单对话框，并用蓝色表达输入/聚焦、荧光绿表达下一步动作。
 
-The system runs **three custom Bugatti typefaces**: **Bugatti Display** (display headlines, the "BUGATTI" wordmark, all caps with wide tracking), **Bugatti Text Regular** (body paragraphs, a serif text face), and **Bugatti Monospace** (button labels, navigation, captions, dates — anywhere precision and machined feel matters). The split is deliberate and unbreakable: never use Bugatti Text in a button, never use Bugatti Monospace in a paragraph.
-
-Display sizes use weight 400 (regular) — never bold. Visual emphasis comes from **size and tracking**, not weight. Letter-spacing on the wordmark is 6px; on display headlines 2-4px; on uppercase labels 2-2.5px. Tight tracking is a brand violation. The wide spacing creates the "engineered precision" feel that no other luxury maker matches.
+本次同步范围是颜色主题和边距系统；字体、圆角和非 Story 场景组件仍沿用现有文档，待后续专项迁移。颜色与边距规则优先于旧的组件描述：详情工作区使用深色主题，根创建入口使用 `story-entry` 浅色主题；两者都遵循统一的 1180px 内容对齐和 4px 基础间距。
 
 **Key Characteristics:**
-- Pure black canvas (`{colors.canvas}` — #000000) with white type. The system does not have a light mode.
-- Three custom Bugatti typefaces: **Display** (uppercase headlines + wordmark), **Text Regular** (body serif), **Monospace** (buttons, captions, nav).
-- All display headlines are UPPERCASE with wide letter-spacing (2-4px). Body copy stays sentence-case at standard tracking.
-- Fluorescent orange (`{colors.primary}` — #ff6a00) is the single chromatic brand signal. It appears on the wordmark mark, active navigation, primary action outlines, focus states, and selected workbench items.
-- Orange signals carry a restrained glow: `{colors.accent-glow-soft}` for resting marks and `{colors.accent-glow}` for focus, hover, and active states. The glow must remain localized and never wash the page background.
-- Buttons are pill-shaped (`{rounded.pill}`) with **transparent background** and a 1px fluorescent-orange outline. A filled orange hover state provides the only momentary color expansion.
-- Photography is the only depth element. No drop shadows. No gradients. No card surfaces. Surface cards are `{colors.surface-card}` (#141414) at most — a barely-different-from-black tone.
-- Section rhythm is generous — `{spacing.section}` (120px) between major bands, longer than most marketing sites because Bugatti's pages are mostly photography with minimal text density.
+- 深色详情主题以 `{colors.canvas}`（#080808）为默认画布，使用 `{colors.ink}`（#F5F3EF）作为主阅读色。
+- 橙色 `{colors.primary}`（#EE752F）只表达品牌、当前动作、聚焦和确认状态；短剧相关输出保留 `{colors.drama-signal}`（#C8FF43）。
+- 浅色根入口使用 `{colors.story-entry.*}` 主题：米色画布、纸张面板、深色文字、蓝色输入信号和绿色提交信号。
+- 边框使用低对比度 hairline；阴影只用于浮起的对话框或状态面板，不制造厚重的卡片层级。
+- 桌面主要区域使用 `{spacing.section}`（144px）节奏；移动端收缩到 `{spacing.section-mobile}`（88px），窄屏收缩到 `{spacing.section-narrow}`（64px）。
 
 ## Colors
 
-### Brand & Accent
-- **Primary** (`{colors.primary}` — #ff6a00): The fluorescent-orange brand signal. Use it for actions, active states, focus rings, brand marks, and concise metadata — never for large text blocks.
-- **Primary Hover** (`{colors.primary-hover}` — #ff8a3d): A lighter orange used only while hovering or focusing an actionable control.
-- **Link** (`{colors.link}` — #ffb078): A softened orange for inline links and lower-intensity interactive text on black.
+### 深色主题（详情工作区默认）
 
-### Surface
-- **Canvas** (`{colors.canvas}` — #000000): The default page floor across every surface. Pure black.
-- **Surface Soft** (`{colors.surface-soft}` — #0d0d0d): A barely-different-from-black tone used for spec table rows and dense data sections.
-- **Surface Card** (`{colors.surface-card}` — #141414): Cards (career callout, newsroom article container, occasional content cards). Even card surfaces stay nearly-black — no contrast jump.
-- **Surface Elevated** (`{colors.surface-elevated}` — #1f1f1f): One step further from black, used for nested cards on rare dense pages.
-- **Hairline** (`{colors.hairline}` — #262626): The 1px divider tone. Visible but quiet. Used on table rows, between body sections, around card outlines.
-- **Hairline Strong** (`{colors.hairline-strong}` — #3a3a3a): A heavier divider used on the underside of input fields (input fields have no border — only an underline hairline).
+| Role | Value | 用途 |
+| --- | --- | --- |
+| `{colors.canvas}` / `--story-canvas` | `#080808` | 页面主画布 |
+| `{colors.surface-soft}` / `--story-surface-soft` | `#0D0D0F` | 编辑器、内嵌面板和输入区域 |
+| `{colors.surface-card}` / `--story-surface-card` | `#151517` | 抬升面板、列表卡片和状态区 |
+| `{colors.surface-elevated}` / `--story-surface-elevated` | `#202023` | 需要额外层级的嵌套区域 |
+| `{colors.ink}` / `--story-ink` | `#F5F3EF` | 标题、主文字、当前成果 |
+| `{colors.body}` / `--story-body` | `#F5F3EF` | 正文和编辑内容 |
+| `{colors.muted}` / `--story-muted` | `#99999F` | 辅助说明、标签和状态文字 |
+| `{colors.hairline}` / `--story-hairline` | `rgba(245, 243, 239, 0.14)` | 分隔线和卡片边界 |
+| `{colors.primary}` / `--story-accent` | `#EE752F` | 品牌信号、动作、当前状态和 focus |
+| `{colors.primary-hover}` / `--story-accent-hover` | `#FF8C4D` | hover/focus 的橙色增强 |
+| `{colors.drama-signal}` | `#C8FF43` | 仅用于短剧输出信号 |
 
-### Text
-- **Ink / On Dark** (`{colors.on-dark}` — #ffffff): All headline and primary text on dark canvas. Orange is the signal layer, not the reading layer.
-- **Body** (`{colors.body}` — #cccccc): Default running-text color (slightly cooler than pure white). Used in body paragraphs.
-- **Body Strong** (`{colors.body-strong}` — #e6e6e6): Emphasized body / lead paragraph.
-- **Muted** (`{colors.muted}` — #999999): Footer links, dates, captions, secondary metadata. Dembrandt's frequency analysis confirms this as palette-2 (count 6, medium confidence).
-- **Muted Soft** (`{colors.muted-soft}` — #666666): A second-tier muted for very-secondary text (legal disclaimer, copyright line).
+### 浅色主题（根创建入口）
 
-### Semantic
-- **Warning** (`{colors.warning}` — #d4a017): Reserved for technical-warning callouts (specifications, recall notices). Almost never appears on marketing surfaces.
-- **Success** (`{colors.success}` — #5fa657): Order confirmation states (rare on marketing pages).
+| Role | Value | 用途 |
+| --- | --- | --- |
+| `{colors.story-entry.canvas}` / `--story-entry-canvas` | `#EFEDE7` | 页面画布 |
+| `{colors.story-entry.paper}` / `--story-entry-paper` | `#FBFAF6` | 单对话框和状态面板 |
+| `{colors.story-entry.ink}` / `--story-entry-ink` | `#172027` | 标题、正文、输入内容 |
+| `{colors.story-entry.muted}` / `--story-entry-muted` | `#667078` | 说明文字和辅助状态 |
+| `{colors.story-entry.hairline}` / `--story-entry-line` | `rgba(23, 32, 39, 0.17)` | 对话框和输入分隔线 |
+| `{colors.story-entry.blue}` / `--story-entry-blue` | `#2857D8` | 输入、焦点和入口品牌线 |
+| `{colors.story-entry.green}` / `--story-entry-green` | `#B9E94D` | 提交动作、悬停反馈和对话框偏移色 |
+
+### 使用规则
+
+- 橙色是正在发生的动作，不用于大面积铺色；荧光绿只代表短剧输出或入口提交反馈。
+- 深色工作区使用米白主文字；浅色入口使用深蓝黑文字。颜色不能成为唯一状态线索。
+- 边框优先使用半透明 hairline；阴影只用于对话框和状态面板，避免堆叠式玻璃拟态。
+- 不引入紫色渐变、彩色霓虹背景或与内容状态无关的装饰色。
 
 ## Typography
 
@@ -302,19 +330,20 @@ The substitution preserves the three-family split, which is more important than 
 
 ### Spacing System
 - **Base unit:** 4px.
-- **Tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 24px · `{spacing.xl}` 40px · `{spacing.xxl}` 64px · `{spacing.section}` 120px.
-- **Section padding:** `{spacing.section}` (120px) — longer than most marketing sites because Bugatti's bands are mostly photography with minimal text. The empty space frames the cars.
-- **Card internal padding:** `{spacing.lg}` (24px) for newsroom and content cards; `{spacing.md}` (16px) for the career callout card; `{spacing.xxl}` (64px) inside hero photo bands.
-- **Gutters:** `{spacing.xl}` (40px) between cards in 2-up grids — wider than typical because Bugatti's grids are sparse.
+- **Utility tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 24px · `{spacing.xl}` 40px · `{spacing.xxl}` 64px.
+- **Section rhythm:** `{spacing.section}` (144px) on desktop, `{spacing.section-mobile}` (88px) on mobile, and `{spacing.section-narrow}` (64px) on narrow screens.
+- **Content alignment:** use `{spacing.content-max}` (1180px) as the shared content width; desktop outer gutters are approximately `{spacing.nav-gutter}` (40px).
+- **Story entry shell:** the full-screen dialog keeps 32px outer padding on desktop and 20px on mobile; the dialog uses responsive inner padding, with a 24px mobile minimum.
+- **Detail workbench:** preserve generous gaps between the project sidebar, artifact list, and editor. Prefer 64px for major columns, 48px for nested workbench columns, and 24–40px for card grids.
 
 ### Grid & Container
-- **Max content width:** ~1280px centered. Hero photo bands bleed full-width with no max.
-- **Editorial body:** Single 12-column grid; photo bands are full-bleed.
-- **Newsroom layout:** 2-up article grid at desktop, 1-up at tablet+mobile.
-- **Career listings:** Single column with 80px row spacing.
+- **Max content width:** `{spacing.content-max}` (1180px) centered; full-screen entry surfaces may bleed to the viewport while the dialog remains constrained.
+- **Editorial body:** align workspace headers, project layouts, artifact workbenches, and status bars to the same content column.
+- **Project detail:** use a wide main editor with a narrower project/sidebar column; collapse to one column below the tablet breakpoint.
+- **Entry dialog:** constrain the dialog to a readable width and keep its outer offset visible on all sides; do not let it touch the viewport edge.
 
 ### Whitespace Philosophy
-Bugatti uses whitespace more aggressively than any luxury-auto competitor. The homepage hero is mostly photography + huge whitespace + a single sentence + a single button. The empty black space below the photograph is intentional — it lets the car breathe. Compressing the whitespace to "fit more content" breaks the brand's fundamental contract: that less is more.
+Story uses whitespace to separate creative stages and reduce the feeling of an administrative dashboard. Keep the primary prompt, project context, artifact list, and editor visibly distinct. Compressing the 144/88/64px rhythm into dense utility panels breaks the editorial workbench feeling.
 
 ## Elevation & Depth
 
@@ -359,7 +388,7 @@ Hero photography fills full-width with no rounding. Photo cards inside grids ret
 
 **`button-icon`** — Circular icon buttons (carousel arrows, share, language switcher). 40 × 40px, transparent background, fluorescent-orange outline 1px, rounded `{rounded.full}`. Same outline-only treatment as the primary button.
 
-**`text-link`** — Inline body links in `{colors.link}` (#ffb078), with the stronger `{colors.primary}` signal on hover. Underlined by default. Type inherits `{typography.body-md}` (Bugatti Text Regular, serif).
+**`text-link`** — Inline body links in `{colors.link}` (#FF8C4D), with the stronger `{colors.primary}` signal on hover. Underlined by default. Type inherits `{typography.body-md}` (Bugatti Text Regular, serif).
 
 ### Cards & Containers
 
@@ -399,15 +428,16 @@ Hero photography fills full-width with no rounding. Photo cards inside grids ret
 - Use Bugatti Display for headlines, Bugatti Text Regular (serif!) for body, Bugatti Monospace for buttons + captions + nav. The trinity is unbreakable.
 - Keep `{component.button-primary}` transparent with a 1px fluorescent-orange outline; fill it with orange only on hover or focus.
 - Use weight 400 everywhere. Bold breaks the brand voice — the system has no bold weight role.
-- Use `{spacing.section}` (120px) between major editorial bands. The whitespace is part of the brand.
-- Reserve `{colors.primary}` (#ff6a00) for concise brand signals, actions, active states, and focus rings. Use `{colors.link}` (#ffb078) for lower-intensity inline links.
+- Use `{spacing.section}` (144px) on desktop, `{spacing.section-mobile}` (88px) on mobile, and `{spacing.section-narrow}` (64px) on narrow screens. The whitespace is part of the editorial rhythm.
+- Reserve `{colors.primary}` (#EE752F) for concise brand signals, actions, active states, and focus rings. Use `{colors.primary-hover}` (#FF8C4D) for interactive emphasis.
+- Keep `{colors.drama-signal}` (#C8FF43) limited to short-drama output signals; do not turn it into a second primary brand color.
 - Add only a localized, low-alpha orange glow to fluorescent signals. Resting elements use `{colors.accent-glow-soft}`; interactive emphasis may use `{colors.accent-glow}`.
 
 ### Don't
-- Don't introduce additional accent colors outside the orange family. Keep the palette black, white, gray, and fluorescent orange; green remains reserved for success states.
+- Don't introduce additional accent colors outside the documented themes. Keep the dark palette warm and restrained; green remains limited to `story-entry` submit feedback and short-drama output signals.
 - Don't bold any type. The system has no bold weight — every typeface stays at 400.
 - Don't fill primary buttons by default. Transparent orange outline first; solid orange is reserved for hover and focus.
-- Don't compress whitespace between sections. The 120px rhythm is part of the editorial pacing.
+- Don't compress whitespace between sections. The 144/88/64px rhythm is part of the editorial pacing.
 - Don't use rounded corners outside buttons. Cards, photos, inputs all stay at 0px. Rounded cards read as consumer-tech, not luxury-engineered.
 - Don't tighten letter-spacing on display headlines. 2-4px tracking on Bugatti Display is non-negotiable.
 - Don't use Bugatti Display in a button (use Bugatti Monospace) or Bugatti Monospace in a paragraph (use Bugatti Text Regular). The trinity split is the brand voice.
@@ -421,7 +451,7 @@ Hero photography fills full-width with no rounding. Photo cards inside grids ret
 | Mobile | < 768px | Hamburger nav; hero h1 64→32px; career callout card hides; photo bands stay full-bleed; footer 4 cols → 1 |
 | Tablet | 768–1024px | Top nav stays minimal (MENU + wordmark + STORE); 2-up newsroom grid; career rows full-width |
 | Desktop | 1024–1440px | Full minimal top-nav; 2-up newsroom grid; spec tables 4-up |
-| Wide | > 1440px | Same as desktop with more breathing room; max content 1280px |
+| Wide | > 1440px | Same as desktop with more breathing room; content alignment remains capped at 1180px |
 
 ### Touch Targets
 - `{component.button-primary}` renders at minimum 44 × 44px (matches WCAG AAA).
@@ -452,7 +482,7 @@ Hero photography fills full-width with no rounding. Photo cards inside grids ret
 
 ## Known Gaps
 
-- The palette is intentionally constrained to black, white, gray, and fluorescent orange (`#ff6a00`). Dark surface tones (`#0d0d0d`, `#141414`, `#1f1f1f`) remain subordinate so orange signals stay legible without turning the interface into a colorful dashboard.
+- The palette is intentionally constrained to the homepage's dark theater theme (`#080808`, `#0D0D0F`, `#151517`, `#202023`) plus warm text and orange action signals. The root creation entry is the documented light exception, using the `story-entry` canvas, paper, blue, and green tokens.
 - The three Bugatti typefaces (Display, Text Regular, Monospace) are licensed to Bugatti and not available as web fonts publicly. Substitutes are documented in the typography section.
 - Animation and transition timings (photo carousel transitions, hover-reveal of menu, configurator animations) are not in scope.
 - Form validation states beyond the underline-only `{component.text-input}` are not extracted — error / success states are inferred from general standards, not from the analyzed surfaces.

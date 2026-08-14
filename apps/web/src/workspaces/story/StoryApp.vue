@@ -14,14 +14,12 @@ import {
   getStoryArtifact,
   getStoryProject,
   listStoryArtifacts,
-  listStoryProjects,
   type StoryArtifact,
   type StoryArtifactContentFormat,
   type StoryArtifactVersion,
   type StoryProject,
 } from './story-api';
 import StoryStatusBar from './components/StoryStatusBar.vue';
-import { getStoryCoverVariant, hasStoryCover } from './story-cover';
 
 const props = defineProps<{
   projectId?: string;
@@ -46,7 +44,52 @@ const creating = ref(false);
 const saving = ref(false);
 const confirming = ref(false);
 const discarding = ref(false);
-const failedCoverProjectIds = ref(new Set<string>());
+type WorkFilter = 'all' | 'active' | 'archived';
+
+const workFilter = ref<WorkFilter>('all');
+const workFilters: Array<{ value: WorkFilter; label: string }> = [
+  { value: 'all', label: '全部作品' },
+  { value: 'active', label: '创作中' },
+  { value: 'archived', label: '已归档' },
+];
+const placeholderWorks = [
+  {
+    title: '雨停之前',
+    type: '故事项目',
+    status: 'active' as const,
+    statusLabel: '创作中',
+    updated: '刚刚更新',
+    meta: '03 个成果 · 第 4 次更新',
+    mark: '01',
+  },
+  {
+    title: '无声电台',
+    type: '故事项目',
+    status: 'active' as const,
+    statusLabel: '创作中',
+    updated: '昨天更新',
+    meta: '05 个成果 · 第 8 次更新',
+    mark: '02',
+  },
+  {
+    title: '潮汐之后',
+    type: '故事项目',
+    status: 'archived' as const,
+    statusLabel: '已归档',
+    updated: '6 月 18 日',
+    meta: '08 个成果 · 第 12 次更新',
+    mark: '03',
+  },
+  {
+    title: '明天的旧照片',
+    type: '故事项目',
+    status: 'active' as const,
+    statusLabel: '创作中',
+    updated: '6 月 16 日',
+    meta: '02 个成果 · 第 2 次更新',
+    mark: '04',
+  },
+] as const;
 
 const activeTeam = computed(
   () =>
@@ -59,6 +102,11 @@ const canEdit = computed(
     selectedVersion.value?.status === 'draft',
 );
 const projectMode = computed(() => (props.projectId ? 'project' : 'catalog'));
+const visiblePlaceholderWorks = computed(() =>
+  workFilter.value === 'all'
+    ? placeholderWorks
+    : placeholderWorks.filter((work) => work.status === workFilter.value),
+);
 const statusBarMessage = computed(() => {
   if (viewState.value === 'loading') return '读取中…';
   if (viewState.value === 'error') return '需要处理';
@@ -88,7 +136,6 @@ async function loadWorkspace() {
   errorMessage.value = '';
   actionMessage.value = '';
   try {
-    failedCoverProjectIds.value = new Set();
     session.value = await getSession();
     selectedTeamId.value ??= session.value.teams[0]?.id ?? null;
     if (selectedTeamId.value === null) {
@@ -102,22 +149,11 @@ async function loadWorkspace() {
     if (props.projectId) {
       await loadProject(selectedTeamId.value, props.projectId);
     } else {
-      projects.value = (await listStoryProjects(selectedTeamId.value)).items;
       viewState.value = 'ready';
     }
   } catch (error) {
     handleError(error);
   }
-}
-
-function handleCoverError(projectId: string) {
-  failedCoverProjectIds.value = new Set(failedCoverProjectIds.value).add(
-    projectId,
-  );
-}
-
-function shouldShowCover(project: StoryProject) {
-  return hasStoryCover(project) && !failedCoverProjectIds.value.has(project.id);
 }
 
 async function loadProject(teamId: string, projectId: string) {
@@ -301,7 +337,10 @@ function formatDate(value: string | undefined) {
     class="workspace-shell story-workspace story-workbench"
     aria-labelledby="story-workspace-title"
   >
-    <header class="workspace-shell-header story-workbench-header">
+    <header
+      v-if="projectMode === 'project'"
+      class="workspace-shell-header story-workbench-header"
+    >
       <div>
         <p class="eyebrow">Story Studio / 01</p>
         <h1 id="story-workspace-title">故事创作</h1>
@@ -350,88 +389,149 @@ function formatDate(value: string | undefined) {
     </div>
 
     <template v-else-if="projectMode === 'catalog'">
-      <section class="story-library" aria-labelledby="story-library-title">
-        <header class="story-library-header">
-          <div>
-            <span class="panel-label">我的小说</span>
-            <h2 id="story-library-title">正在写的故事</h2>
-            <p>从一个名字开始，把人物、世界和剧情慢慢写成一部小说。</p>
-          </div>
-          <span class="story-library-count">{{ projects.length }} 部作品</span>
-        </header>
-
-        <div v-if="projects.length" class="story-book-grid">
-          <a
-            v-for="(item, index) in projects"
-            :key="item.id"
-            class="story-book-card"
-            :href="`/stories/${item.id}`"
-            :aria-label="`打开小说：${item.title}`"
-          >
-            <div
-              class="story-book-cover"
-              :class="getStoryCoverVariant(item.id)"
-            >
-              <img
-                v-if="shouldShowCover(item)"
-                :src="item.coverUrl"
-                :alt="item.title"
-                @error="handleCoverError(item.id)"
-              />
-              <div v-else class="story-default-cover" aria-hidden="true">
-                <span class="story-cover-index"
-                  >STORY / {{ String(index + 1).padStart(2, '0') }}</span
-                >
-                <span class="story-cover-mark">✦</span>
-                <span class="story-cover-code">WORK IN PROGRESS</span>
-              </div>
-            </div>
-            <div class="story-book-info">
-              <h3>{{ item.title }}</h3>
-              <div class="story-book-meta">
-                <span>{{
-                  item.status === 'active' ? '进行中' : '已归档'
-                }}</span>
-                <span>{{ formatDate(item.updatedAt) }}</span>
-              </div>
-            </div>
-          </a>
-        </div>
-
-        <div v-else class="story-library-empty">
-          <span class="panel-icon" aria-hidden="true">○</span>
-          <strong>还没有故事项目</strong>
-          <span>先给这个想法一个名字，之后再慢慢长出人物、世界和剧本。</span>
-        </div>
-
-        <form
-          v-if="activeTeam"
-          class="new-project-form story-new-project-form"
-          @submit.prevent="createProject"
-        >
-          <div>
-            <label for="new-story-title">新建小说</label>
-            <span>给下一个故事一个名字</span>
-          </div>
-          <div class="new-project-input-row">
-            <input
-              id="new-story-title"
-              v-model="newProjectTitle"
-              type="text"
-              placeholder="例如：雨停之前"
-              maxlength="200"
-            />
-            <button
-              type="submit"
-              :disabled="creating || !newProjectTitle.trim()"
-              :aria-label="creating ? '正在创建' : '创建小说'"
-            >
-              {{ creating ? '…' : '+' }}
+      <div class="story-catalog-layout">
+        <aside class="story-floating-sidebar" aria-label="故事工作区功能导航">
+          <div class="story-floating-sidebar-mark" aria-hidden="true">S</div>
+          <nav class="story-floating-nav">
+            <a class="story-floating-nav-item is-active" href="#story-entry-title">
+              <span class="story-floating-nav-index">01</span>
+              <span>创作</span>
+            </a>
+            <a class="story-floating-nav-item" href="#story-works">
+              <span class="story-floating-nav-index">02</span>
+              <span>作品</span>
+            </a>
+            <button class="story-floating-nav-item" type="button" disabled>
+              <span class="story-floating-nav-index">03</span>
+              <span>素材</span>
             </button>
-          </div>
-        </form>
-        <p v-else class="panel-footnote">当前账号还没有可用的团队空间。</p>
-      </section>
+            <button class="story-floating-nav-item" type="button" disabled>
+              <span class="story-floating-nav-index">04</span>
+              <span>协作</span>
+            </button>
+          </nav>
+          <span class="story-floating-sidebar-note">STORY / DESK</span>
+        </aside>
+
+        <div class="story-catalog-main">
+          <section class="story-entry-dialog" aria-labelledby="story-entry-title">
+            <div class="story-entry-brand" aria-hidden="true">DUODUO / STORY</div>
+            <div class="story-entry-copy">
+              <span class="story-entry-kicker">AI 创作入口</span>
+              <h1 id="story-entry-title">你想写什么？</h1>
+              <p>把脑海里的第一句话交给我。</p>
+            </div>
+
+            <form class="story-entry-form" @submit.prevent="createProject">
+              <label class="sr-only" for="story-entry-prompt">故事想法</label>
+              <textarea
+                id="story-entry-prompt"
+                v-model="newProjectTitle"
+                autofocus
+                rows="4"
+                maxlength="200"
+                placeholder="比如：一个失去记忆的女孩，每晚都会收到来自未来的语音……"
+                :disabled="creating || !activeTeam"
+                @keydown.enter.meta.prevent="createProject"
+                @keydown.enter.ctrl.prevent="createProject"
+              ></textarea>
+              <div class="story-entry-form-footer">
+                <span>{{
+                  activeTeam ? '按 ⌘ Enter 开始' : '当前账号还没有可用的团队空间'
+                }}</span>
+                <button
+                  class="story-entry-submit"
+                  type="submit"
+                  :disabled="creating || !activeTeam || !newProjectTitle.trim()"
+                  :aria-label="creating ? '正在创建故事' : '开始创作'"
+                >
+                  <span>{{ creating ? '创建中…' : '开始' }}</span>
+                  <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            </form>
+
+            <p v-if="errorMessage" class="story-entry-error" role="alert">
+              {{ errorMessage }}
+            </p>
+          </section>
+
+          <section
+            id="story-works"
+            class="story-works-region"
+            aria-labelledby="story-works-title"
+          >
+            <header class="story-works-header">
+              <div>
+                <span class="story-entry-kicker">MY WORKS / 02</span>
+                <h2 id="story-works-title">我的作品</h2>
+                <p>把已经发生的创作收在这里，继续下一次推进。</p>
+              </div>
+              <label class="story-space-switcher">
+                <span>当前空间</span>
+                <select v-model="selectedTeamId" aria-label="切换空间">
+                  <option
+                    v-for="team in session?.teams ?? []"
+                    :key="team.id"
+                    :value="team.id"
+                  >
+                    {{ team.name }}
+                  </option>
+                </select>
+              </label>
+            </header>
+
+            <div class="story-works-toolbar" aria-label="作品筛选">
+              <div class="story-filter-list" role="group" aria-label="按状态筛选作品">
+                <button
+                  v-for="filter in workFilters"
+                  :key="filter.value"
+                  class="story-filter-button"
+                  :class="{ 'is-active': workFilter === filter.value }"
+                  type="button"
+                  :aria-pressed="workFilter === filter.value"
+                  @click="workFilter = filter.value"
+                >
+                  {{ filter.label }}
+                </button>
+              </div>
+              <span class="story-works-count"
+                >{{ visiblePlaceholderWorks.length }} / {{ placeholderWorks.length }} 件作品</span
+              >
+            </div>
+
+            <div v-if="visiblePlaceholderWorks.length" class="story-placeholder-grid">
+              <article
+                v-for="work in visiblePlaceholderWorks"
+                :key="work.title"
+                class="story-placeholder-card"
+                :class="`is-${work.status}`"
+              >
+                <div class="story-placeholder-card-top">
+                  <span>{{ work.mark }}</span>
+                  <span>{{ work.updated }}</span>
+                </div>
+                <div class="story-placeholder-cover" aria-hidden="true">
+                  <span>{{ work.title.slice(0, 1) }}</span>
+                </div>
+                <div class="story-placeholder-card-body">
+                  <span class="story-placeholder-type">{{ work.type }}</span>
+                  <h3>{{ work.title }}</h3>
+                  <p>{{ work.meta }}</p>
+                </div>
+                <footer class="story-placeholder-card-footer">
+                  <span>{{ work.statusLabel }}</span>
+                  <span aria-hidden="true">↗</span>
+                </footer>
+              </article>
+            </div>
+            <div v-else class="story-works-empty">
+              <strong>还没有符合条件的作品</strong>
+              <span>切换筛选条件后，作品会继续留在这里。</span>
+            </div>
+          </section>
+        </div>
+      </div>
     </template>
 
     <template v-else>
@@ -608,6 +708,7 @@ function formatDate(value: string | undefined) {
     </template>
 
     <StoryStatusBar
+      v-if="projectMode === 'project'"
       :team-name="activeTeam?.name"
       :project-name="project?.title"
       :status="statusBarMessage"
