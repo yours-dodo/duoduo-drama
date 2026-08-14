@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WorksApp from '../../workspaces/works/WorksApp.vue';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="作品详情｜作品广场｜多多剧场"
+  description="在多多剧场沉浸式浏览一部作品。"
+  pageClass="works-page"
+>
+  <WorksApp client:only="vue" initialWorkId={Astro.params.workId} />
+</BaseLayout>

@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import WorksApp from '../../workspaces/works/WorksApp.vue';
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="作品广场｜多多剧场"
+  description="浏览多多剧场正在发生的故事、短剧和声音作品。"
+  pageClass="works-page"
+>
+  <WorksApp client:only="vue" />
+</BaseLayout>
