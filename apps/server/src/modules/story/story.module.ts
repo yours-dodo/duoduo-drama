@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 import { Module } from '@nestjs/common';
 
+import { SERVER_CONFIG, type ServerConfig } from '../../config/server-config.js';
 import { AGENT_GATEWAY } from '../../integrations/agent/agent-gateway.js';
 import type { AgentGateway } from '../../integrations/agent/agent-contracts.js';
+import { HttpAgentGateway } from '../../integrations/agent/http-agent-gateway.js';
 import { MockAgentGateway } from '../../integrations/agent/mock-agent-gateway.js';
 import { DatabaseClock } from '../../platform/database/database-clock.js';
 import { DatabaseModule } from '../../platform/database/database.module.js';
@@ -164,7 +166,13 @@ import {
     MockAgentGateway,
     {
       provide: AGENT_GATEWAY,
-      useExisting: MockAgentGateway,
+      useFactory: (config: ServerConfig): AgentGateway => {
+        if (config.agentServiceUrl) {
+          return new HttpAgentGateway(config.agentServiceUrl);
+        }
+        return new MockAgentGateway();
+      },
+      inject: [SERVER_CONFIG],
     },
     {
       provide: ListStoryArtifacts,

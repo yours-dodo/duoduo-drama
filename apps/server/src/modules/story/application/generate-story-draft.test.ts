@@ -1,106 +1,171 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentGatewayError } from '../../../integrations/agent/agent-gateway.js';
+import type {
+  StoryGenerationAgentResult,
+  StoryTaskRef,
+} from '../../../integrations/agent/agent-contracts.js';
 import { GenerateStoryDraft } from './generate-story-draft.js';
 
 const NOW = new Date('2026-08-10T03:00:00.000Z');
 
-describe('GenerateStoryDraft', () => {
-  it('commits an Agent message, draft artifact, and version after the gateway succeeds', async () => {
-    const fixture = buildFixture();
-    const useCase = new GenerateStoryDraft(
-      fixture.projects,
-      fixture.memberships,
-      fixture.collaborators,
-      fixture.conversations,
-      fixture.messages,
-      fixture.generationRequests,
-      fixture.artifacts,
-      fixture.artifactVersions,
-      fixture.gateway,
-      fixture.transactions,
-      fixture.clock,
-      fixture.ids,
-    );
+const OUTLINE_RESULT: StoryGenerationAgentResult = {
+  artifactType: 'outline',
+  title: '故事大纲',
+  content: '# 故事大纲',
+  contentFormat: 'markdown',
+  assistantBody: '已生成故事草稿',
+};
 
-    await expect(
-      useCase.execute({
-        tenantId: 'team-id',
-        actorUserId: 'creator-id',
-        projectId: 'project-id',
-        conversationId: 'conversation-id',
-        requestId: 'generation-id',
-      }),
-    ).resolves.toMatchObject({
+describe('GenerateStoryDraft', () => {
+  it('starts an Agent task and returns processing without blocking', async () => {
+    const fixture = buildFixture();
+    const useCase = createUseCase(fixture);
+
+    const result = await useCase.execute({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      conversationId: 'conversation-id',
+      requestId: 'generation-id',
+    });
+
+    expect(result).toMatchObject({
       generationRequest: {
         id: 'generation-id',
-        status: 'succeeded',
-        agentMessageId: 'agent-message-id',
-        artifactId: 'artifact-id',
-        artifactVersionId: 'version-id',
+        status: 'processing',
+        pipelineStage: 'script',
       },
-      message: {
-        id: 'agent-message-id',
-        authorType: 'agent',
-      },
-      artifact: {
-        id: 'artifact-id',
-        currentVersionId: 'version-id',
-      },
-      artifactVersion: {
-        id: 'version-id',
-        status: 'draft',
-        sourceType: 'agent',
-        generationRequestId: 'generation-id',
-      },
+      message: null,
+      artifact: null,
+      artifactVersion: null,
     });
-    expect(fixture.gateway.generateStory).toHaveBeenCalledWith(
+    expect(fixture.gateway.startStory).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: 'generation-id',
         userPrompt: '请梳理人物关系',
         messages: [{ authorType: 'user', body: '请梳理人物关系' }],
       }),
     );
+    expect(fixture.messages.create).not.toHaveBeenCalled();
+  });
+
+  it('completes the generation through read when the task succeeds', async () => {
+    const fixture = buildFixture({
+      request: generationRequest({
+        status: 'processing',
+        processingStartedAt: NOW,
+        inputSnapshot: {
+          body: '请梳理人物关系',
+          agentTaskId: 'task-1',
+          pipelineStage: 'video',
+        },
+      }),
+      taskResult: OUTLINE_RESULT,
+    });
+    const useCase = createUseCase(fixture);
+
+    const result = await useCase.read({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      conversationId: 'conversation-id',
+      requestId: 'generation-id',
+    });
+
+    expect(result).toMatchObject({
+      generationRequest: { status: 'succeeded' },
+      message: { id: 'agent-message-id', authorType: 'agent' },
+      artifact: { id: 'artifact-id' },
+      artifactVersion: { id: 'version-id' },
+    });
+    expect(fixture.gateway.getStoryTask).toHaveBeenCalledWith('task-1');
     expect(fixture.messages.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'agent-message-id',
-        authorType: 'agent',
-      }),
-    );
-    expect(fixture.artifactVersions.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        artifactId: 'artifact-id',
-        sourceMessageId: 'agent-message-id',
-      }),
+      expect.objectContaining({ authorType: 'agent' }),
     );
   });
 
   it('records a categorized Agent failure without creating a partial result', async () => {
     const fixture = buildFixture({
-      gatewayError: new AgentGatewayError('timeout'),
+      request: generationRequest({
+        status: 'processing',
+        processingStartedAt: NOW,
+        inputSnapshot: {
+          body: '请梳理人物关系',
+          agentTaskId: 'task-1',
+          pipelineStage: 'images',
+        },
+      }),
+      taskFailureCode: 'timeout',
     });
     const useCase = createUseCase(fixture);
 
-    await expect(
-      useCase.execute({
-        tenantId: 'team-id',
-        actorUserId: 'creator-id',
-        projectId: 'project-id',
-        conversationId: 'conversation-id',
-        requestId: 'generation-id',
-      }),
-    ).resolves.toMatchObject({
-      generationRequest: {
-        status: 'failed',
-        failureCode: 'timeout',
-      },
+    const result = await useCase.read({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      conversationId: 'conversation-id',
+      requestId: 'generation-id',
+    });
+
+    expect(result).toMatchObject({
+      generationRequest: { status: 'failed', failureCode: 'timeout' },
       message: null,
       artifact: null,
       artifactVersion: null,
     });
     expect(fixture.messages.create).not.toHaveBeenCalled();
-    expect(fixture.artifacts.create).not.toHaveBeenCalled();
-    expect(fixture.artifactVersions.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a running task processing and refreshes its stage', async () => {
+    const fixture = buildFixture({
+      request: generationRequest({
+        status: 'processing',
+        processingStartedAt: NOW,
+        inputSnapshot: {
+          body: '请梳理人物关系',
+          agentTaskId: 'task-1',
+          pipelineStage: 'script',
+        },
+      }),
+    });
+    const useCase = createUseCase(fixture);
+
+    const result = await useCase.read({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      conversationId: 'conversation-id',
+      requestId: 'generation-id',
+    });
+
+    expect(result).toMatchObject({
+      generationRequest: { status: 'processing', pipelineStage: 'video' },
+      message: null,
+    });
+  });
+
+  it('records a categorized start failure without creating a partial result', async () => {
+    const fixture = buildFixture({
+      gatewayError: new AgentGatewayError('timeout'),
+    });
+    const useCase = createUseCase(fixture);
+
+    const result = await useCase.execute({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      conversationId: 'conversation-id',
+      requestId: 'generation-id',
+    });
+
+    expect(result).toMatchObject({
+      generationRequest: { status: 'failed', failureCode: 'timeout' },
+      message: null,
+      artifact: null,
+      artifactVersion: null,
+    });
+    expect(fixture.messages.create).not.toHaveBeenCalled();
   });
 
   it('replays a succeeded request without calling the Agent again', async () => {
@@ -162,11 +227,10 @@ describe('GenerateStoryDraft', () => {
       message: { id: 'agent-message-id' },
       artifactVersion: { id: 'version-id' },
     });
-    expect(fixture.gateway.generateStory).not.toHaveBeenCalled();
-    expect(fixture.messages.create).not.toHaveBeenCalled();
+    expect(fixture.gateway.startStory).not.toHaveBeenCalled();
   });
 
-  it('leaves an already processing request for explicit recovery', async () => {
+  it('leaves an already processing request for the poller', async () => {
     const fixture = buildFixture({
       request: generationRequest({
         status: 'processing',
@@ -187,7 +251,7 @@ describe('GenerateStoryDraft', () => {
       generationRequest: { status: 'processing' },
       message: null,
     });
-    expect(fixture.gateway.generateStory).not.toHaveBeenCalled();
+    expect(fixture.gateway.startStory).not.toHaveBeenCalled();
   });
 });
 
@@ -235,6 +299,8 @@ function buildFixture(
   options: {
     request?: ReturnType<typeof generationRequest>;
     gatewayError?: AgentGatewayError;
+    taskResult?: StoryGenerationAgentResult;
+    taskFailureCode?: 'timeout' | 'agent_unavailable' | 'protocol_error';
     resultMessage?: Record<string, unknown> | null;
     resultArtifact?: Record<string, unknown> | null;
     resultVersion?: Record<string, unknown> | null;
@@ -297,15 +363,28 @@ function buildFixture(
       listForArtifact: vi.fn(async () => []),
     },
     gateway: {
-      generateStory: vi.fn(async () => {
+      startStory: vi.fn(async (): Promise<StoryTaskRef> => {
         if (options.gatewayError) throw options.gatewayError;
-        return {
-          artifactType: 'outline' as const,
-          title: '故事大纲',
-          content: '# 故事大纲',
-          contentFormat: 'markdown' as const,
-          assistantBody: '已生成故事草稿',
-        };
+        return { taskId: 'task-1', status: 'running', stage: 'script' };
+      }),
+      getStoryTask: vi.fn(async (taskId: string) => {
+        if (options.taskFailureCode) {
+          return {
+            taskId,
+            status: 'failed' as const,
+            stage: 'images' as const,
+            failureCode: options.taskFailureCode,
+          };
+        }
+        if (options.taskResult) {
+          return {
+            taskId,
+            status: 'succeeded' as const,
+            stage: 'video' as const,
+            result: options.taskResult,
+          };
+        }
+        return { taskId, status: 'running' as const, stage: 'video' as const };
       }),
     },
     transactions: {
@@ -357,9 +436,10 @@ function membership() {
     id: 'membership-id',
     tenantId: 'team-id',
     userId: 'creator-id',
-    role: 'member' as const,
-    joinedAt: NOW,
-    removedAt: null,
+    role: 'admin' as const,
+    status: 'active' as const,
+    createdAt: NOW,
+    updatedAt: NOW,
   };
 }
 

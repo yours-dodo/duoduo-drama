@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentGatewayError } from './agent-gateway.js';
 import { MockAgentGateway } from './mock-agent-gateway.js';
 
 const request = {
@@ -22,27 +21,29 @@ const request = {
 };
 
 describe('MockAgentGateway', () => {
-  it('returns the same candidate for the same authorized input', async () => {
+  it('starts a task and completes it with a mock script result', async () => {
     const gateway = new MockAgentGateway();
 
-    const first = await gateway.generateStory(request);
-    const second = await gateway.generateStory(request);
+    const first = await gateway.startStory(request);
+    const second = await gateway.startStory(request);
 
-    expect(first).toEqual(second);
-    expect(first).toMatchObject({
+    expect(first.taskId).not.toBe(second.taskId);
+    const snapshot = await gateway.getStoryTask(first.taskId);
+    expect(snapshot.status).toBe('succeeded');
+    expect(snapshot.result).toMatchObject({
       artifactType: 'outline',
       contentFormat: 'markdown',
       title: '故事大纲：请梳理人物关系',
     });
-    expect(first.content).toContain('请梳理人物关系');
-    expect(first.assistantBody).toContain('故事大纲：请梳理人物关系');
+    expect(snapshot.result!.content).toContain('请梳理人物关系');
   });
 
   it('can expose a safe categorized failure for recovery tests', async () => {
     const gateway = new MockAgentGateway({ failureCode: 'timeout' });
 
-    await expect(gateway.generateStory(request)).rejects.toMatchObject(
-      new AgentGatewayError('timeout'),
-    );
+    const task = await gateway.startStory(request);
+    const snapshot = await gateway.getStoryTask(task.taskId);
+    expect(snapshot.status).toBe('failed');
+    expect(snapshot.failureCode).toBe('timeout');
   });
 });
