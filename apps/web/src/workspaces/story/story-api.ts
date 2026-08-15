@@ -2,8 +2,8 @@ import { requestJson } from '../../lib/server-api/http-client';
 
 export type StoryProjectVisibility = 'team' | 'private';
 export type StoryProjectStatus = 'active' | 'archived';
-export type StoryArtifactType =
-  'idea' | 'world_setting' | 'character' | 'outline' | 'script';
+export type StoryCreationMode = 'standard' | 'immersive';
+export type StoryArtifactType = 'outline' | 'roles' | 'worldview' | 'story';
 export type StoryArtifactStatus = 'active' | 'archived';
 export type StoryArtifactContentFormat = 'markdown' | 'text' | 'json';
 export type StoryArtifactVersionStatus = 'draft' | 'confirmed' | 'discarded';
@@ -11,10 +11,14 @@ export type StoryArtifactVersionSource = 'user' | 'agent' | 'import';
 
 export interface StoryProject {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
+  spaceId: string;
+  spaceKind: 'personal' | 'team' | null;
   createdByUserId: string;
+  ownerUserId: string;
   title: string;
   coverUrl?: string | null;
+  creationMode: StoryCreationMode;
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
   revision: number;
@@ -27,7 +31,7 @@ export interface StoryProject {
 
 export interface StoryArtifact {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   type: StoryArtifactType;
   title: string;
@@ -39,7 +43,7 @@ export interface StoryArtifact {
 
 export interface StoryArtifactVersion {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   artifactId: string;
   versionNumber: number;
   content: string;
@@ -59,6 +63,27 @@ export interface StoryProjectsResponse {
 
 export interface StoryProjectResponse {
   project: StoryProject;
+  modules?: StoryArtifact[];
+}
+
+export interface StoryImportJob {
+  id: string;
+  tenantId: string | null;
+  projectId: string;
+  createdByUserId: string;
+  sourceFileName: string;
+  sourceContentType: string;
+  sourceByteSize: number;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed';
+  failureCode: string | null;
+  processingStartedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoryImportJobResponse {
+  importJob: StoryImportJob;
 }
 
 export interface StoryArtifactsResponse {
@@ -76,7 +101,7 @@ export interface StoryVersionsResponse {
 
 export interface StoryConversation {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   title: string;
   status: 'active' | 'archived';
@@ -92,7 +117,7 @@ export interface StoryConversationResponse {
 export interface StoryMessageAppendResponse {
   message: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
     authorType: 'user' | 'assistant' | 'system';
     body: string;
@@ -159,9 +184,22 @@ export function listStoryProjects(
   );
 }
 
+export function listPersonalStoryProjects(
+  limit = 50,
+): Promise<StoryProjectsResponse> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  return requestJson<StoryProjectsResponse>(
+    `v1/me/story-projects?${query.toString()}`,
+  );
+}
+
 export function createStoryProject(
   teamId: string,
-  input: { title: string; visibility?: StoryProjectVisibility },
+  input: {
+    title: string;
+    visibility?: StoryProjectVisibility;
+    creationMode?: StoryCreationMode;
+  },
   idempotencyKey = createIdempotencyKey('create-story-project'),
 ): Promise<StoryProjectResponse> {
   return sendJson<StoryProjectResponse>(
@@ -169,7 +207,58 @@ export function createStoryProject(
     'POST',
     {
       title: input.title,
+      creationMode: input.creationMode ?? 'standard',
       visibility: input.visibility ?? 'team',
+    },
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createPersonalStoryProject(
+  input: { title: string; creationMode?: StoryCreationMode },
+  idempotencyKey = createIdempotencyKey('create-personal-story-project'),
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    'v1/me/story-projects',
+    'POST',
+    {
+      title: input.title,
+      creationMode: input.creationMode ?? 'standard',
+    },
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createStoryImportJob(
+  teamId: string,
+  projectId: string,
+  file: Pick<File, 'name' | 'type' | 'size'>,
+  idempotencyKey = createIdempotencyKey('create-story-import-job'),
+): Promise<StoryImportJobResponse> {
+  return sendJson<StoryImportJobResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/import-jobs`,
+    'POST',
+    {
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      byteSize: file.size,
+    },
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createPersonalStoryImportJob(
+  projectId: string,
+  file: Pick<File, 'name' | 'type' | 'size'>,
+  idempotencyKey = createIdempotencyKey('create-personal-story-import-job'),
+): Promise<StoryImportJobResponse> {
+  return sendJson<StoryImportJobResponse>(
+    `v1/me/story-projects/${projectId}/import-jobs`,
+    'POST',
+    {
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      byteSize: file.size,
     },
     { 'Idempotency-Key': idempotencyKey },
   );
@@ -183,6 +272,19 @@ export function createStoryConversation(
 ): Promise<StoryConversationResponse> {
   return sendJson<StoryConversationResponse>(
     `v1/teams/${teamId}/story-projects/${projectId}/conversations`,
+    'POST',
+    input,
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createPersonalStoryConversation(
+  projectId: string,
+  input: { title: string },
+  idempotencyKey = createIdempotencyKey('create-personal-story-conversation'),
+): Promise<StoryConversationResponse> {
+  return sendJson<StoryConversationResponse>(
+    `v1/me/story-projects/${projectId}/conversations`,
     'POST',
     input,
     { 'Idempotency-Key': idempotencyKey },
@@ -225,6 +327,20 @@ export function retryStoryGeneration(
     `v1/teams/${teamId}/story-projects/${projectId}/conversations/${conversationId}/generation-requests/${requestId}/retry`,
     'POST',
     {},
+);
+}
+
+export function appendPersonalStoryMessage(
+  projectId: string,
+  conversationId: string,
+  body: string,
+  idempotencyKey = createIdempotencyKey('append-personal-story-message'),
+): Promise<StoryMessageAppendResponse> {
+  return sendJson<StoryMessageAppendResponse>(
+    `v1/me/story-projects/${projectId}/conversations/${conversationId}/messages`,
+    'POST',
+    { body },
+    { 'Idempotency-Key': idempotencyKey },
   );
 }
 

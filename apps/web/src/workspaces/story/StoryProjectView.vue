@@ -3,31 +3,77 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { isStoryModule, type StoryModule } from './router';
+import StoryOutlineWorkspace from './StoryOutlineWorkspace.vue';
+import StoryRolesWorkspace from './StoryRolesWorkspace.vue';
+import StoryStoryWorkspace from './StoryStoryWorkspace.vue';
+import StoryWorldviewWorkspace from './StoryWorldviewWorkspace.vue';
+
+type StoryModuleDefinition = {
+  label: string;
+  description: string;
+  workspaceTitle: string;
+  workspaceDescription: string;
+  focus: readonly string[];
+  relationLabel: string;
+  relation: string;
+};
 
 const route = useRoute();
 
-const moduleLabels: Record<StoryModule, string> = {
-  outline: '大纲',
-  roles: '角色资产',
-  worldview: '设定',
-  story: '故事',
-};
-
-const moduleDescriptions: Record<StoryModule, string> = {
-  outline: '从故事骨架开始，整理主线、章节和推进节奏。',
-  roles: '集中维护角色关系、人物动机和可复用的角色资产。',
-  worldview: '沉淀故事发生所需的世界规则、空间与背景设定。',
-  story: '进入故事生产，把设定和结构推进为可阅读的正文。',
+const moduleDefinitions: Record<StoryModule, StoryModuleDefinition> = {
+  worldview: {
+    label: '世界观',
+    description: '建立故事成立的边界，让人物行动和事件推进有据可依。',
+    workspaceTitle: '世界观底稿',
+    workspaceDescription: '从规则、空间和历史开始，沉淀一个可以持续引用的故事世界。',
+    focus: ['核心规则与限制', '时代、空间与社会背景', '可被角色和大纲引用的设定'],
+    relationLabel: '基础资产',
+    relation: '为角色资产和大纲提供故事边界。',
+  },
+  roles: {
+    label: '角色资产',
+    description: '整理推动故事的人物、关系和每一次关键选择。',
+    workspaceTitle: '角色资产库',
+    workspaceDescription: '把人物目标、动机与变化整理成可以被故事持续调用的资产。',
+    focus: ['人物目标与内在动机', '角色关系与冲突位置', '角色在故事中的变化方向'],
+    relationLabel: '动力资产',
+    relation: '让世界观中的规则转化为人物行动。',
+  },
+  outline: {
+    label: '大纲',
+    description: '把世界观与角色组织成连续、可推进的故事结构。',
+    workspaceTitle: '故事结构底稿',
+    workspaceDescription: '先确认故事核心、冲突关系和事件因果，再逐步推进到正文生产。',
+    focus: ['故事核心与推进方向', '主要事件与因果关系', '角色目标与冲突推进'],
+    relationLabel: '结构资产',
+    relation: '把世界边界和人物动力编排成可执行的故事路径。',
+  },
+  story: {
+    label: '故事正文',
+    description: '将已经确认的结构推进为可阅读、可迭代的故事内容。',
+    workspaceTitle: '正文生产区',
+    workspaceDescription: '从已确认的结构出发，持续编辑内容、接收反馈并保留每次版本。',
+    focus: ['连续内容的组织', '段落级编辑与反馈', '版本结果的持续迭代'],
+    relationLabel: '生产结果',
+    relation: '承接大纲的推进，将结构转化为可阅读的正文。',
+  },
 };
 
 const currentModule = computed<StoryModule>(() => {
   const value = String(route.params.module ?? 'outline');
   return isStoryModule(value) ? value : 'outline';
 });
+const currentTitleId = computed(() => {
+  if (currentModule.value === 'outline') return 'story-outline-workspace-title';
+  if (currentModule.value === 'roles') return 'story-roles-workspace-title';
+  if (currentModule.value === 'worldview') return 'story-worldview-workspace-title';
+  if (currentModule.value === 'story') return 'story-story-workspace-title';
+  return `story-project-${currentModule.value}-title`;
+});
+const currentDefinition = computed(() => moduleDefinitions[currentModule.value]);
 const modeLabel = computed(() =>
-  route.meta.mode === 'immersive' ? '沉浸式创作' : '故事创建',
+  route.meta.mode === 'immersive' ? '沉浸式项目' : '故事项目',
 );
-const projectId = computed(() => String(route.params.projectId ?? ''));
 const importPending = computed(
   () => route.query.import === 'pending' && currentModule.value === 'outline',
 );
@@ -36,27 +82,65 @@ const importPending = computed(
 <template>
   <section
     class="story-project-route"
-    aria-labelledby="story-project-module-title"
+    :aria-labelledby="currentTitleId"
   >
     <div class="story-project-module-main">
-      <header class="story-subroute-header">
-        <span class="story-subroute-index">{{ modeLabel }}</span>
-        <h1 id="story-project-module-title">{{ moduleLabels[currentModule] }}</h1>
-        <p>{{ moduleDescriptions[currentModule] }}</p>
-      </header>
+      <StoryWorldviewWorkspace v-if="currentModule === 'worldview'" />
+      <StoryRolesWorkspace v-else-if="currentModule === 'roles'" />
+      <StoryOutlineWorkspace v-else-if="currentModule === 'outline'" />
+      <StoryStoryWorkspace v-else-if="currentModule === 'story'" />
 
-      <section
-        class="story-subroute-panel"
-        :aria-label="`${moduleLabels[currentModule]}内容`"
-      >
-        <span class="story-subroute-kicker">{{ modeLabel }}</span>
-        <h2>{{ moduleLabels[currentModule] }}</h2>
-        <p v-if="importPending" role="status">
-          故事导入任务已建立，等待文件上传与解析。
-        </p>
-        <p v-else>{{ moduleDescriptions[currentModule] }}</p>
-        <span class="story-project-route-id">{{ projectId }}</span>
-      </section>
+      <template v-else>
+        <header class="story-asset-intro">
+          <div class="story-asset-intro-copy">
+            <span class="story-asset-eyebrow">{{ modeLabel }} / 项目资产</span>
+            <h1 :id="`story-project-${currentModule}-title`">
+              {{ currentDefinition.label }}
+            </h1>
+            <p>{{ currentDefinition.description }}</p>
+          </div>
+        </header>
+
+        <div class="story-asset-workspace">
+          <section
+            class="story-asset-main-panel"
+            :aria-label="`${currentDefinition.label}内容区`"
+          >
+            <div class="story-asset-panel-heading">
+              <div>
+                <span class="story-asset-panel-kicker">当前模块</span>
+                <h2>{{ currentDefinition.workspaceTitle }}</h2>
+              </div>
+              <span class="story-asset-panel-state">编辑空间</span>
+            </div>
+
+            <p class="story-asset-workspace-description">
+              {{ currentDefinition.workspaceDescription }}
+            </p>
+
+            <div class="story-asset-focus-list">
+              <div
+                v-for="item in currentDefinition.focus"
+                :key="item"
+                class="story-asset-focus-item"
+              >
+                <span class="story-asset-focus-mark" aria-hidden="true"></span>
+                <span>{{ item }}</span>
+              </div>
+            </div>
+
+            <p v-if="importPending" class="story-asset-import-status" role="status">
+              故事导入任务已建立，等待文件上传与解析。
+            </p>
+          </section>
+
+          <aside class="story-asset-context" aria-label="资产关系">
+            <span class="story-asset-context-kicker">生产关系</span>
+            <strong>{{ currentDefinition.relationLabel }}</strong>
+            <p>{{ currentDefinition.relation }}</p>
+          </aside>
+        </div>
+      </template>
     </div>
   </section>
 </template>

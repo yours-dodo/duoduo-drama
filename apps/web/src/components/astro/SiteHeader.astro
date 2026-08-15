@@ -6,6 +6,9 @@ interface Props {
   showBackLink?: boolean;
   showStoryTools?: boolean;
   showWorkspaceTools?: boolean;
+  storyModuleProjectId?: string;
+  storyModule?: string;
+  storyModuleImmersive?: boolean;
 }
 
 const {
@@ -15,7 +18,24 @@ const {
   showBackLink = false,
   showStoryTools = false,
   showWorkspaceTools = false,
+  storyModuleProjectId,
+  storyModule,
+  storyModuleImmersive = false,
 } = Astro.props;
+
+const storyModules = [
+  { key: 'outline', label: '大纲' },
+  { key: 'roles', label: '角色资产' },
+  { key: 'worldview', label: '设定' },
+  { key: 'story', label: '故事' },
+] as const;
+const hasStoryModuleContext = Boolean(storyModuleProjectId && storyModule);
+const currentStoryModule = storyModules.some((item) => item.key === storyModule)
+  ? storyModule
+  : 'outline';
+const storyModuleBasePath = storyModuleImmersive
+  ? `/stories/immersive/${encodeURIComponent(storyModuleProjectId ?? '')}`
+  : `/stories/${encodeURIComponent(storyModuleProjectId ?? '')}`;
 ---
 
 <header class="site-header">
@@ -23,6 +43,19 @@ const {
     <span class="brand-mark" aria-hidden="true">多</span>
     <span>{brandName}</span>
   </a>
+  {showStoryTools && hasStoryModuleContext && (
+    <nav class="story-header-module-nav" aria-label="故事编辑目录">
+      {storyModules.map((item) => (
+        <a
+          class:list={['story-header-module-link', { 'is-active': item.key === currentStoryModule }]}
+          href={`${storyModuleBasePath}/${item.key}`}
+          aria-current={item.key === currentStoryModule ? 'page' : undefined}
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  )}
   {showWorkspaceTools && (
     <div class="workspace-header-tools" aria-label="工作台工具">
       <button
@@ -55,11 +88,13 @@ const {
   )}
   {showStoryTools && (
     <div class="story-header-tools" aria-label="故事工作区工具">
-      <nav class="story-header-nav" aria-label="故事工作区导航">
-        <a href="/dramas">短剧工作台</a>
-        <a href="/works">作品广场</a>
-        <a href="/collaboration">联合创作</a>
-      </nav>
+      {!hasStoryModuleContext && (
+        <nav class="story-header-nav" aria-label="故事工作区导航">
+          <a href="/dramas">短剧工作台</a>
+          <a href="/works">作品广场</a>
+          <a href="/collaboration">联合创作</a>
+        </nav>
+      )}
       <button
         class="story-header-tool"
         type="button"

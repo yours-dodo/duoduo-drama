@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createStoryRouter,
   isStoryModule,
+  storyModules,
   toStoryRoutePath,
 } from './router';
 
@@ -59,6 +60,7 @@ describe('story router', () => {
   });
 
   it('recognizes only the four story modules', () => {
+    expect(storyModules).toEqual(['worldview', 'roles', 'outline', 'story']);
     expect(isStoryModule('outline')).toBe(true);
     expect(isStoryModule('roles')).toBe(true);
     expect(isStoryModule('worldview')).toBe(true);

@@ -8,10 +8,10 @@ const helpOpen = ref(false);
 const isFullscreen = ref(false);
 
 const storyModules = [
-  { key: 'outline', label: '大纲' },
+  { key: 'worldview', label: '世界观' },
   { key: 'roles', label: '角色资产' },
-  { key: 'worldview', label: '设定' },
-  { key: 'story', label: '故事' },
+  { key: 'outline', label: '大纲' },
+  { key: 'story', label: '故事正文' },
 ] as const;
 
 const isProjectRoute = computed(() => route.meta.page === 'project');
@@ -19,8 +19,8 @@ const isImmersiveRoute = computed(() => route.meta.mode === 'immersive');
 const projectId = computed(() => String(route.params.projectId ?? ''));
 const moduleBasePath = computed(() =>
   isImmersiveRoute.value
-    ? `/stories/immersive/${encodeURIComponent(projectId.value)}`
-    : `/stories/${encodeURIComponent(projectId.value)}`,
+    ? `/immersive/${encodeURIComponent(projectId.value)}`
+    : `/${encodeURIComponent(projectId.value)}`,
 );
 const currentModule = computed(() => String(route.params.module ?? 'outline'));
 
@@ -102,10 +102,10 @@ onBeforeUnmount(() => {
 
 <template>
   <header class="site-header">
-    <RouterLink class="brand" to="/" aria-label="多多故事台首页">
+    <a class="brand" href="/" aria-label="多多故事台首页">
       <span class="brand-mark" aria-hidden="true">多</span>
       <span>多多故事台</span>
-    </RouterLink>
+    </a>
 
     <nav
       v-if="isProjectRoute"
@@ -126,9 +126,9 @@ onBeforeUnmount(() => {
 
     <div class="story-header-tools" aria-label="故事工作区工具">
       <nav v-if="!isProjectRoute" class="story-header-nav" aria-label="故事工作区导航">
-        <RouterLink to="/dramas">短剧工作台</RouterLink>
-        <RouterLink to="/works">作品广场</RouterLink>
-        <RouterLink to="/collaboration">联合创作</RouterLink>
+        <a href="/dramas">短剧工作台</a>
+        <a href="/works">作品广场</a>
+        <a href="/collaboration">联合创作</a>
       </nav>
 
       <button
