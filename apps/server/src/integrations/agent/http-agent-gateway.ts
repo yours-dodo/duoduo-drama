@@ -30,8 +30,8 @@ interface AgentErrorBody {
 /**
  * Real gateway to the Agent service's linear story-script workflow.
  * Replaces MockAgentGateway for story generation; it persists the structured
- * script as a `json` artifact and returns a human summary as the assistant
- * message.
+ * script inside the `story` module as JSON and returns a human summary as the
+ * assistant message.
  */
 export class HttpAgentGateway implements AgentGateway {
   constructor(
@@ -149,7 +149,7 @@ function assembleResult(result: AgentTaskResult): StoryGenerationAgentResult {
   });
   const script = result.script as { title?: string } | undefined;
   return {
-    artifactType: 'script',
+    artifactType: 'story',
     title: script?.title ?? '未命名故事',
     content,
     contentFormat: 'json',

@@ -7,11 +7,47 @@ const message = ref('');
 <template>
   <aside class="story-editor-chat" aria-label="创作对话">
     <header class="story-editor-chat-header">
-      <div>
-        <span class="story-editor-chat-kicker">AI WORKSPACE</span>
+      <div class="story-editor-chat-header-main">
         <h2>创作对话</h2>
       </div>
-      <span class="story-editor-chat-status">在线</span>
+
+      <div class="story-editor-chat-actions" aria-label="故事生产操作">
+        <button
+          class="story-editor-chat-action story-editor-chat-action-story"
+          type="button"
+          disabled
+          title="即将开放"
+        >
+          <span class="story-editor-chat-action-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+              <path
+                d="M4.2 11.2V10a5.8 5.8 0 0 1 11.6 0v1.2M4.2 11.2H3.4a1.4 1.4 0 0 0 0 2.8h.8v-2.8ZM15.8 11.2h.8a1.4 1.4 0 0 1 0 2.8h-.8v-2.8Z"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path d="M15.8 14c0 1.6-1.3 2.8-2.8 2.8h-1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+          </span>
+          <span>发布为有声小说</span>
+        </button>
+
+        <button
+          class="story-editor-chat-action story-editor-chat-action-drama"
+          type="button"
+          disabled
+          title="即将开放"
+        >
+          <span class="story-editor-chat-action-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+              <rect x="2.8" y="4.5" width="14.4" height="11" rx="1.2" stroke="currentColor" stroke-width="1.4" />
+              <path d="m6.3 4.5 2 3.2M10 4.5l2 3.2M13.7 4.5l2 3.2M6.5 10.3v3.4l3-1.7-3-1.7Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span>推进至短剧</span>
+        </button>
+      </div>
     </header>
 
     <div class="story-editor-chat-history" aria-live="polite">
@@ -28,7 +64,7 @@ const message = ref('');
         id="story-editor-chat-input"
         v-model="message"
         rows="3"
-        placeholder="输入你想和 AI 讨论的内容…"
+        placeholder="输入你的想法，Agent帮你创作。"
       ></textarea>
       <div class="story-editor-chat-input-footer">
         <span>Enter 发送</span>

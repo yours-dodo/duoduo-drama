@@ -59,8 +59,15 @@ describe('story router', () => {
     expect(router.currentRoute.value.fullPath).toBe('/project-1/outline');
   });
 
-  it('recognizes only the four story modules', () => {
-    expect(storyModules).toEqual(['worldview', 'roles', 'outline', 'story']);
+  it('recognizes the five story modules', () => {
+    expect(storyModules).toEqual([
+      'basic',
+      'worldview',
+      'roles',
+      'outline',
+      'story',
+    ]);
+    expect(isStoryModule('basic')).toBe(true);
     expect(isStoryModule('outline')).toBe(true);
     expect(isStoryModule('roles')).toBe(true);
     expect(isStoryModule('worldview')).toBe(true);

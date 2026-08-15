@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 
 import { isStoryModule, type StoryModule } from './router';
+import StoryBasicInfoWorkspace from './StoryBasicInfoWorkspace.vue';
 import StoryOutlineWorkspace from './StoryOutlineWorkspace.vue';
 import StoryRolesWorkspace from './StoryRolesWorkspace.vue';
 import StoryStoryWorkspace from './StoryStoryWorkspace.vue';
@@ -21,6 +22,15 @@ type StoryModuleDefinition = {
 const route = useRoute();
 
 const moduleDefinitions: Record<StoryModule, StoryModuleDefinition> = {
+  basic: {
+    label: '故事基础信息',
+    description: '集中确认故事的标题、类型和核心表达，为后续资产建立统一的创作方向。',
+    workspaceTitle: '故事基础信息',
+    workspaceDescription: '先把故事是什么、写给谁以及想表达什么说清楚，再开始组织世界观、角色和情节。',
+    focus: ['故事标题与一句话概念', '题材、类型与目标读者', '故事简介和核心表达'],
+    relationLabel: '项目起点',
+    relation: '为世界观、角色资产、大纲和正文提供统一的故事方向。',
+  },
   worldview: {
     label: '世界观',
     description: '建立故事成立的边界，让人物行动和事件推进有据可依。',
@@ -68,6 +78,7 @@ const currentTitleId = computed(() => {
   if (currentModule.value === 'roles') return 'story-roles-workspace-title';
   if (currentModule.value === 'worldview') return 'story-worldview-workspace-title';
   if (currentModule.value === 'story') return 'story-story-workspace-title';
+  if (currentModule.value === 'basic') return 'story-basic-info-workspace-title';
   return `story-project-${currentModule.value}-title`;
 });
 const currentDefinition = computed(() => moduleDefinitions[currentModule.value]);
@@ -84,8 +95,37 @@ const importPending = computed(
     class="story-project-route"
     :aria-labelledby="currentTitleId"
   >
+    <div class="story-project-content-toolbar">
+      <RouterLink
+        class="story-project-back-link"
+        to="/"
+        aria-label="回到创作空间"
+      >
+        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
+          <path
+            d="M8.2 4.2 2.8 10l5.4 5.8M3.2 10h14"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span>回到创作空间</span>
+      </RouterLink>
+
+      <div class="story-project-toolbar-actions" aria-label="项目操作">
+        <button class="story-project-toolbar-action" type="button" disabled title="即将开放">
+          保存
+        </button>
+        <button class="story-project-toolbar-action" type="button" disabled title="即将开放">
+          导出
+        </button>
+      </div>
+    </div>
+
     <div class="story-project-module-main">
-      <StoryWorldviewWorkspace v-if="currentModule === 'worldview'" />
+      <StoryBasicInfoWorkspace v-if="currentModule === 'basic'" />
+      <StoryWorldviewWorkspace v-else-if="currentModule === 'worldview'" />
       <StoryRolesWorkspace v-else-if="currentModule === 'roles'" />
       <StoryOutlineWorkspace v-else-if="currentModule === 'outline'" />
       <StoryStoryWorkspace v-else-if="currentModule === 'story'" />

@@ -60,7 +60,7 @@ describe('HttpAgentGateway', () => {
     expect(task).toEqual({ taskId: 'task-1', status: 'running', stage: 'script' });
   });
 
-  it('maps a succeeded task to a json script artifact', async () => {
+  it('maps a succeeded task to the json story module', async () => {
     const script = { title: '潮声之后', logline: '一句话' };
     server = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -83,7 +83,7 @@ describe('HttpAgentGateway', () => {
     const snapshot = await gateway.getStoryTask('task-1');
     expect(snapshot.status).toBe('succeeded');
     const result = snapshot.result!;
-    expect(result.artifactType).toBe('script');
+    expect(result.artifactType).toBe('story');
     expect(result.contentFormat).toBe('json');
     const content = JSON.parse(result.content) as {
       script: unknown;

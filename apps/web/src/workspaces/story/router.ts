@@ -20,6 +20,7 @@ const StoryRoutePlaceholder = defineComponent({
 });
 
 export const storyModules = [
+  'basic',
   'worldview',
   'roles',
   'outline',

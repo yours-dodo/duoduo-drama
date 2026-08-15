@@ -8,6 +8,7 @@ const helpOpen = ref(false);
 const isFullscreen = ref(false);
 
 const storyModules = [
+  { key: 'basic', label: '故事基础信息' },
   { key: 'worldview', label: '世界观' },
   { key: 'roles', label: '角色资产' },
   { key: 'outline', label: '大纲' },
