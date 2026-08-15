@@ -45,12 +45,19 @@ const storyTypes = ['短篇小说', '长篇小说', '短剧', '剧本', '沉浸�
 
         <label class="story-basic-info-field">
           <span>故事类型</span>
-          <select v-model="storyType">
-            <option disabled value="">选择故事类型</option>
-            <option v-for="type in storyTypes" :key="type" :value="type">
+          <div class="story-basic-info-type-box" role="group" aria-label="故事类型选项">
+            <button
+              v-for="type in storyTypes"
+              :key="type"
+              class="story-basic-info-type-option"
+              :class="{ 'is-selected': storyType === type }"
+              type="button"
+              :aria-pressed="storyType === type"
+              @click="storyType = type"
+            >
               {{ type }}
-            </option>
-          </select>
+            </button>
+          </div>
         </label>
       </form>
 
