@@ -91,7 +91,11 @@ export class PrismaStoryArtifactVersionRepository implements StoryArtifactVersio
 function readVersion(
   row: StoryArtifactVersionRow,
 ): StoryArtifactVersionSnapshot {
-  if (row.contentFormat !== 'markdown' && row.contentFormat !== 'text') {
+  if (
+    row.contentFormat !== 'markdown' &&
+    row.contentFormat !== 'text' &&
+    row.contentFormat !== 'json'
+  ) {
     throw new Error(
       'Database returned an invalid story artifact content format',
     );
