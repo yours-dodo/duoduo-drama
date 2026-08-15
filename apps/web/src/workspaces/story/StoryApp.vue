@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import { ApiError } from '../../lib/server-api/api-error';
 import {
@@ -14,11 +14,15 @@ import {
   discardStoryDraft,
   editStoryDraft,
   getStoryArtifact,
+  getStoryGenerationRequest,
   getStoryProject,
   listStoryArtifacts,
+  listStoryProjects,
+  retryStoryGeneration,
   type StoryArtifact,
   type StoryArtifactContentFormat,
   type StoryArtifactVersion,
+  type StoryGenerationPipelineStage,
   type StoryProject,
 } from './story-api';
 import StoryStatusBar from './components/StoryStatusBar.vue';
@@ -36,12 +40,65 @@ type StorySpeechRecognition = {
 
 type StorySpeechRecognitionConstructor = new () => StorySpeechRecognition;
 
+interface StoryGeneratedAudio {
+  shotId: string;
+  audioBase64: string;
+  mimeType: string;
+}
+
+interface StoryGeneratedImage {
+  sceneId: string;
+  sceneKey?: string;
+  imageUrl: string;
+  prompt?: string;
+}
+
+interface StoryGeneratedVideo {
+  outputPath: string;
+  subtitlePath: string;
+  durationSeconds: number;
+  sizeBytes: number;
+  segmentCount: number;
+}
+
+interface StoryGeneratedContent {
+  script: {
+    title: string;
+    logline: string;
+    genre: string;
+    synopsis: string;
+    styleGuide?: string;
+    characters: Array<{ name: string; role: string; personality: string }>;
+    episodes: Array<{
+      order: number;
+      title: string;
+      scenes: Array<{
+        order: number;
+        title: string;
+        location: string;
+        timeOfDay: string;
+        shots: Array<{
+          order: number;
+          type: string;
+          speaker?: string;
+          line?: string;
+          narration?: string;
+        }>;
+      }>;
+    }>;
+  };
+  images: StoryGeneratedImage[];
+  audio: StoryGeneratedAudio[];
+  video?: StoryGeneratedVideo;
+}
+
 const props = defineProps<{
   projectId?: string;
 }>();
 
 const session = ref<SessionSnapshot | null>(null);
 const projects = ref<StoryProject[]>([]);
+const realProjects = ref<StoryProject[]>([]);
 const project = ref<StoryProject | null>(null);
 const artifacts = ref<StoryArtifact[]>([]);
 const selectedArtifact = ref<StoryArtifact | null>(null);
@@ -62,8 +119,17 @@ const searchDate = ref('');
 const storyPrompt = ref('');
 const voiceInputActive = ref(false);
 const storyPromptSubmitting = ref(false);
+const generationStage = ref<StoryGenerationPipelineStage | null>(null);
+const generationError = ref('');
+const activeGeneration = ref<{
+  teamId: string;
+  projectId: string;
+  conversationId: string;
+  requestId: string;
+} | null>(null);
 const appliedSearch = ref({ query: '', date: '' });
 let speechRecognition: StorySpeechRecognition | null = null;
+let generationPollTimer: number | undefined;
 const placeholderWorks = [
   {
     title: '雨停之前',
@@ -101,7 +167,37 @@ const canEdit = computed(
     project.value?.canEdit === true &&
     selectedVersion.value?.status === 'draft',
 );
+const canEditGenerated = computed(() => canEdit.value && !storyContent.value);
 const projectMode = computed(() => (props.projectId ? 'project' : 'catalog'));
+const generationStageLabel = computed(() => {
+  switch (generationStage.value) {
+    case 'queued':
+      return '排队等待生成…';
+    case 'script':
+      return 'AI 正在创作剧本…';
+    case 'images':
+      return '正在生成场景配图…';
+    case 'speech':
+      return '正在合成对白配音…';
+    case 'video':
+      return '正在渲染短视频…';
+    default:
+      return 'AI 生成中…';
+  }
+});
+const agentServiceUrl =
+  import.meta.env.PUBLIC_AGENT_SERVICE_URL ?? 'http://127.0.0.1:3002';
+const storyContent = computed<StoryGeneratedContent | null>(() => {
+  if (selectedVersion.value?.contentFormat !== 'json') return null;
+  try {
+    const parsed = JSON.parse(
+      selectedVersion.value.content,
+    ) as StoryGeneratedContent;
+    return parsed && typeof parsed.script === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+});
 const hasAppliedWorkConditions = computed(() =>
   Boolean(appliedSearch.value.query || appliedSearch.value.date),
 );
@@ -121,6 +217,20 @@ const filteredPlaceholderWorks = computed(() => {
     : [...filteredWorks].sort((left, right) =>
         right.updatedAt.localeCompare(left.updatedAt),
       );
+});
+const filteredRealWorks = computed(() => {
+  const { query, date } = appliedSearch.value;
+  return realProjects.value
+    .filter((work) => {
+      const matchesQuery =
+        !query ||
+        [work.title].some((value) =>
+          value.toLocaleLowerCase().includes(query),
+        );
+      const matchesDate = !date || work.updatedAt.startsWith(date);
+      return matchesQuery && matchesDate;
+    })
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 });
 const recentPlaceholderWorkTitle = computed(() =>
   hasAppliedWorkConditions.value
@@ -169,6 +279,12 @@ async function loadWorkspace() {
     if (props.projectId) {
       await loadProject(selectedTeamId.value, props.projectId);
     } else {
+      try {
+        const { items } = await listStoryProjects(selectedTeamId.value, 50);
+        realProjects.value = items;
+      } catch {
+        realProjects.value = [];
+      }
       viewState.value = 'ready';
     }
   } catch (error) {
@@ -190,7 +306,46 @@ async function loadProject(teamId: string, projectId: string) {
   if (selectedArtifact.value) {
     await loadArtifact(teamId, projectId, selectedArtifact.value.id);
   }
+  await resumeProjectGeneration(teamId, projectId);
   viewState.value = 'ready';
+}
+
+async function resumeProjectGeneration(teamId: string, projectId: string) {
+  const active = readActiveGeneration(projectId);
+  if (!active) return;
+  try {
+    const { generationRequest } = await getStoryGenerationRequest(
+      teamId,
+      projectId,
+      active.conversationId,
+      active.requestId,
+    );
+    generationStage.value = generationRequest.pipelineStage;
+    if (generationRequest.status === 'processing') {
+      activeGeneration.value = {
+        teamId,
+        projectId,
+        conversationId: active.conversationId,
+        requestId: active.requestId,
+      };
+      storyPromptSubmitting.value = true;
+      generationError.value = '';
+      void pollGeneration();
+    } else if (generationRequest.status === 'failed') {
+      activeGeneration.value = {
+        teamId,
+        projectId,
+        conversationId: active.conversationId,
+        requestId: active.requestId,
+      };
+      storyPromptSubmitting.value = false;
+      generationError.value = 'AI 生成失败，可以点击「重试」重新生成。';
+    } else {
+      clearActiveGeneration(projectId);
+    }
+  } catch {
+    // Polling the stored task is best-effort; the project page still loads.
+  }
 }
 
 async function loadArtifact(
@@ -340,6 +495,26 @@ function createStoryTitle(prompt: string) {
     : normalized;
 }
 
+function audioSource(shot: StoryGeneratedAudio): string {
+  return `data:${shot.mimeType};base64,${shot.audioBase64}`;
+}
+
+function videoSource(video: StoryGeneratedVideo): string {
+  const fileName = video.outputPath.split(/[\\/]/).pop() ?? '';
+  return `${agentServiceUrl}/v1/story-videos/files/${encodeURIComponent(fileName)}`;
+}
+
+function subtitleSource(video: StoryGeneratedVideo): string {
+  const fileName = video.subtitlePath.split(/[\\/]/).pop() ?? '';
+  return `${agentServiceUrl}/v1/story-videos/files/${encodeURIComponent(fileName)}`;
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return `${minutes}:${String(secs).padStart(2, '0')}`;
+}
+
 async function submitStoryPrompt() {
   const prompt = storyPrompt.value.trim();
   if (!prompt || storyPromptSubmitting.value) return;
@@ -362,30 +537,97 @@ async function submitStoryPrompt() {
       createdProject.id,
       { title: '第一次创作对话' },
     );
-    await appendStoryMessage(
+    const { generationRequest } = await appendStoryMessage(
       activeTeam.value.id,
       createdProject.id,
       conversation.id,
       prompt,
     );
+    saveActiveGeneration(createdProject.id, conversation.id, generationRequest.id);
     rememberRecentConversation({
       id: conversation.id,
       projectId: createdProject.id,
       title: conversation.title,
+      requestId: generationRequest.id,
     });
     storyPrompt.value = '';
-    window.location.assign(`/stories/${createdProject.id}`);
+    generationStage.value = null;
+    generationError.value = '';
+    activeGeneration.value = {
+      teamId: activeTeam.value.id,
+      projectId: createdProject.id,
+      conversationId: conversation.id,
+      requestId: generationRequest.id,
+    };
+    await pollGeneration();
   } catch (error) {
+    generationError.value = '创建故事项目失败，请重试。';
     handleError(error);
-  } finally {
     storyPromptSubmitting.value = false;
   }
 }
+
+async function pollGeneration() {
+  const generation = activeGeneration.value;
+  if (!generation) return;
+  try {
+    const { generationRequest } = await getStoryGenerationRequest(
+      generation.teamId,
+      generation.projectId,
+      generation.conversationId,
+      generation.requestId,
+    );
+    generationStage.value = generationRequest.pipelineStage;
+    if (generationRequest.status === 'succeeded') {
+      clearActiveGeneration(generation.projectId);
+      activeGeneration.value = null;
+      storyPromptSubmitting.value = false;
+      window.location.assign(`/stories/${generation.projectId}`);
+      return;
+    }
+    if (generationRequest.status === 'failed') {
+      storyPromptSubmitting.value = false;
+      generationError.value =
+        'AI 生成失败，可以点击「重试」重新生成。';
+      return;
+    }
+  } catch {
+    // Transient polling failure — keep trying.
+  }
+  generationPollTimer = window.setTimeout(pollGeneration, 3000);
+}
+
+async function retryCurrentGeneration() {
+  const generation = activeGeneration.value;
+  if (!generation) return;
+  generationError.value = '';
+  generationStage.value = null;
+  try {
+    await retryStoryGeneration(
+      generation.teamId,
+      generation.projectId,
+      generation.conversationId,
+      generation.requestId,
+    );
+    storyPromptSubmitting.value = true;
+    await pollGeneration();
+  } catch (error) {
+    generationError.value = '重试失败，请稍后再试。';
+    handleError(error);
+  }
+}
+
+onUnmounted(() => {
+  if (generationPollTimer !== undefined) {
+    window.clearTimeout(generationPollTimer);
+  }
+});
 
 function rememberRecentConversation(conversation: {
   id: string;
   projectId: string;
   title: string;
+  requestId?: string;
 }) {
   if (typeof window === 'undefined') return;
   const storageKey = 'duoduo-story-recent-conversations';
@@ -403,6 +645,68 @@ function rememberRecentConversation(conversation: {
     window.localStorage.setItem(storageKey, JSON.stringify(next));
   } catch {
     // Recent conversations are a convenience cache; creation should still succeed.
+  }
+}
+
+const activeGenerationStorageKey = 'duoduo-story-active-generations';
+
+function readActiveGeneration(
+  projectId: string,
+): { conversationId: string; requestId: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(activeGenerationStorageKey) ?? '{}',
+    );
+    const entry = stored?.[projectId];
+    return entry &&
+      typeof entry.conversationId === 'string' &&
+      typeof entry.requestId === 'string'
+      ? { conversationId: entry.conversationId, requestId: entry.requestId }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveGeneration(
+  projectId: string,
+  conversationId: string,
+  requestId: string,
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(activeGenerationStorageKey) ?? '{}',
+    );
+    window.localStorage.setItem(
+      activeGenerationStorageKey,
+      JSON.stringify({
+        ...(stored && typeof stored === 'object' ? stored : {}),
+        [projectId]: { conversationId, requestId, updatedAt: Date.now() },
+      }),
+    );
+  } catch {
+    // Progress tracking is a convenience; generation still works without it.
+  }
+}
+
+function clearActiveGeneration(projectId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(activeGenerationStorageKey) ?? '{}',
+    );
+    if (stored && typeof stored === 'object' && projectId in stored) {
+      const next = { ...stored };
+      delete next[projectId];
+      window.localStorage.setItem(
+        activeGenerationStorageKey,
+        JSON.stringify(next),
+      );
+    }
+  } catch {
+    // Best-effort cleanup.
   }
 }
 
@@ -791,8 +1095,20 @@ function formatDate(value: string | undefined) {
                 class="story-quick-input-status"
                 role="status"
               >
-                正在准备你的故事……
+                {{ generationError || generationStageLabel }}
               </p>
+              <div
+                v-if="generationError && activeGeneration"
+                class="story-quick-input-actions"
+              >
+                <button
+                  class="button button-quiet"
+                  type="button"
+                  @click="retryCurrentGeneration"
+                >
+                  重试生成 <span>↻</span>
+                </button>
+              </div>
             </section>
           </div>
           <section
@@ -887,7 +1203,32 @@ function formatDate(value: string | undefined) {
             </div>
 
             <div
-              v-if="filteredPlaceholderWorks.length"
+              v-if="filteredRealWorks.length"
+              class="story-placeholder-grid"
+            >
+              <a
+                v-for="work in filteredRealWorks"
+                :key="work.id"
+                class="story-placeholder-item"
+                :href="`/stories/${work.id}`"
+              >
+                <div class="story-placeholder-card">
+                  <div class="story-placeholder-card-top">
+                    <span class="story-card-recent">故事项目</span>
+                  </div>
+                  <div class="story-placeholder-cover" aria-hidden="true">
+                    <strong>{{ work.title.slice(0, 1) }}</strong>
+                  </div>
+                  <div class="story-placeholder-card-body">
+                    <span class="story-placeholder-type">故事项目</span>
+                    <p>{{ formatDate(work.updatedAt) }}</p>
+                  </div>
+                </div>
+                <h3 class="story-placeholder-title">{{ work.title }}</h3>
+              </a>
+            </div>
+            <div
+              v-else-if="filteredPlaceholderWorks.length"
               class="story-placeholder-grid"
             >
               <article
@@ -1025,7 +1366,121 @@ function formatDate(value: string | undefined) {
                 </span>
               </header>
               <div v-if="selectedVersion" class="artifact-editor">
+                <div v-if="storyContent" class="story-generated-preview">
+                  <div class="story-preview-title">
+                    <h4>{{ storyContent.script.title }}</h4>
+                    <span class="story-preview-genre">{{
+                      storyContent.script.genre
+                    }}</span>
+                  </div>
+                  <p class="story-preview-logline">
+                    {{ storyContent.script.logline }}
+                  </p>
+                  <p class="story-preview-synopsis">
+                    {{ storyContent.script.synopsis }}
+                  </p>
+
+                  <template v-if="storyContent.video">
+                    <video
+                      :src="videoSource(storyContent.video)"
+                      controls
+                      preload="metadata"
+                      class="story-preview-video"
+                    ></video>
+                    <div class="story-preview-meta">
+                      <span>
+                        视频
+                        {{
+                          formatDuration(storyContent.video.durationSeconds)
+                        }}
+                        ·
+                        {{
+                          Math.round(storyContent.video.sizeBytes / 1024)
+                        }}
+                        KB
+                      </span>
+                      <a
+                        :href="subtitleSource(storyContent.video)"
+                        target="_blank"
+                        rel="noreferrer"
+                        >下载字幕 (.srt)</a
+                      >
+                    </div>
+                  </template>
+
+                  <div
+                    v-if="storyContent.images.length"
+                    class="story-preview-section"
+                  >
+                    <strong>场景配图</strong>
+                    <div class="story-preview-images">
+                      <figure
+                        v-for="image in storyContent.images"
+                        :key="image.sceneId"
+                      >
+                        <img
+                          :src="image.imageUrl"
+                          :alt="image.sceneId"
+                          loading="lazy"
+                        />
+                        <figcaption>{{ image.sceneId }}</figcaption>
+                      </figure>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="storyContent.audio.length"
+                    class="story-preview-section"
+                  >
+                    <strong>对白配音（{{ storyContent.audio.length }} 段）</strong>
+                    <div class="story-preview-audio">
+                      <div
+                        v-for="shot in storyContent.audio"
+                        :key="shot.shotId"
+                        class="story-preview-audio-item"
+                      >
+                        <span>{{ shot.shotId }}</span>
+                        <audio
+                          :src="audioSource(shot)"
+                          controls
+                          preload="none"
+                        ></audio>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="story-preview-section">
+                    <strong>剧本大纲</strong>
+                    <div
+                      v-for="episode in storyContent.script.episodes"
+                      :key="episode.order"
+                      class="story-preview-episode"
+                    >
+                      <h5>第 {{ episode.order }} 集 · {{ episode.title }}</h5>
+                      <div
+                        v-for="scene in episode.scenes"
+                        :key="scene.order"
+                        class="story-preview-scene"
+                      >
+                        <span class="story-preview-scene-heading"
+                          >场景 {{ scene.order }} · {{ scene.title }}（{{
+                            scene.location
+                          }}，{{ scene.timeOfDay }}）</span
+                        >
+                        <ul>
+                          <li v-for="shot in scene.shots" :key="shot.order">
+                            <template v-if="shot.type === 'dialogue'"
+                              >{{ shot.speaker }}：{{ shot.line }}</template
+                            >
+                            <template v-else>（旁白）{{ shot.narration }}</template>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <textarea
+                  v-else
                   v-model="draftContent"
                   :readonly="!canEdit"
                   aria-label="故事成果内容"
@@ -1049,13 +1504,32 @@ function formatDate(value: string | undefined) {
                   </select>
                 </div>
               </div>
+              <div
+                v-else-if="projectMode === 'project' && activeGeneration"
+                class="story-generation-progress"
+                role="status"
+              >
+                <span class="panel-icon" aria-hidden="true">✦</span>
+                <strong>{{ generationError || generationStageLabel }}</strong>
+                <span
+                  >生成完成后会自动刷新；也可以先离开，稍后回来查看进度。</span
+                >
+                <button
+                  v-if="generationError"
+                  class="button button-primary"
+                  type="button"
+                  @click="retryCurrentGeneration"
+                >
+                  重试生成 <span>↻</span>
+                </button>
+              </div>
               <div v-else class="artifact-no-version">
                 <span class="panel-icon" aria-hidden="true">○</span>
                 <strong>这个成果还没有可查看的版本</strong>
                 <span>它会在故事对话产出第一版内容后出现在这里。</span>
               </div>
               <div
-                v-if="selectedVersion?.status === 'draft'"
+                v-if="selectedVersion?.status === 'draft' && !storyContent"
                 class="artifact-actions"
               >
                 <button
@@ -1108,3 +1582,160 @@ function formatDate(value: string | undefined) {
     />
   </section>
 </template>
+
+<style scoped>
+.story-generated-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.story-preview-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.story-preview-title h4 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.story-preview-genre {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.story-preview-logline {
+  margin: 0;
+  font-weight: 600;
+}
+
+.story-preview-synopsis {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.85;
+  line-height: 1.6;
+}
+
+.story-preview-video {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 9 / 16;
+  background: #000;
+  border-radius: 8px;
+}
+
+.story-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.story-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--hairline, rgba(255, 255, 255, 0.12));
+  padding-top: 14px;
+}
+
+.story-preview-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.story-preview-images figure {
+  margin: 0;
+}
+
+.story-preview-images img {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.story-preview-images figcaption {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-preview-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.story-preview-audio-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.story-preview-audio-item audio {
+  height: 32px;
+}
+
+.story-quick-input-actions {
+  margin-top: 10px;
+}
+
+.story-generation-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 24px 20px;
+}
+
+.story-generation-progress strong {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.story-generation-progress > span:not(.panel-icon) {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.story-preview-episode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.story-preview-episode h5 {
+  margin: 8px 0 0;
+}
+
+.story-preview-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.story-preview-scene-heading {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.story-preview-scene ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+</style>

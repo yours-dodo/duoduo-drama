@@ -5,7 +5,7 @@ export type StoryProjectStatus = 'active' | 'archived';
 export type StoryArtifactType =
   'idea' | 'world_setting' | 'character' | 'outline' | 'script';
 export type StoryArtifactStatus = 'active' | 'archived';
-export type StoryArtifactContentFormat = 'markdown' | 'text';
+export type StoryArtifactContentFormat = 'markdown' | 'text' | 'json';
 export type StoryArtifactVersionStatus = 'draft' | 'confirmed' | 'discarded';
 export type StoryArtifactVersionSource = 'user' | 'agent' | 'import';
 
@@ -98,10 +98,43 @@ export interface StoryMessageAppendResponse {
     body: string;
     createdAt: string;
   };
-  generationRequest: {
+  generationRequest: StoryGenerationRequestOutput;
+}
+
+export type StoryGenerationPipelineStage =
+  | 'queued'
+  | 'script'
+  | 'images'
+  | 'speech'
+  | 'video';
+
+export interface StoryGenerationRequestOutput {
+  id: string;
+  tenantId: string;
+  conversationId: string;
+  triggerMessageId: string;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed';
+  failureCode: string | null;
+  pipelineStage: StoryGenerationPipelineStage | null;
+  processingStartedAt: string | null;
+  completedAt: string | null;
+  agentMessageId: string | null;
+  artifactId: string | null;
+  artifactVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoryGenerationRequestResponse {
+  generationRequest: StoryGenerationRequestOutput;
+  message: {
     id: string;
-    status: string;
-  };
+    authorType: 'user' | 'assistant' | 'system';
+    body: string;
+    createdAt: string;
+  } | null;
+  artifact: StoryArtifact | null;
+  artifactVersion: StoryArtifactVersion | null;
 }
 
 export interface StoryArtifactMutationResponse {
@@ -168,6 +201,30 @@ export function appendStoryMessage(
     'POST',
     { body },
     { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function getStoryGenerationRequest(
+  teamId: string,
+  projectId: string,
+  conversationId: string,
+  requestId: string,
+): Promise<StoryGenerationRequestResponse> {
+  return requestJson<StoryGenerationRequestResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/conversations/${conversationId}/generation-requests/${requestId}`,
+  );
+}
+
+export function retryStoryGeneration(
+  teamId: string,
+  projectId: string,
+  conversationId: string,
+  requestId: string,
+): Promise<StoryGenerationRequestResponse> {
+  return sendJson<StoryGenerationRequestResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/conversations/${conversationId}/generation-requests/${requestId}/retry`,
+    'POST',
+    {},
   );
 }
 

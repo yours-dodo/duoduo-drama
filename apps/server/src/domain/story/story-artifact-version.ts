@@ -1,4 +1,4 @@
-export type StoryArtifactContentFormat = 'markdown' | 'text';
+export type StoryArtifactContentFormat = 'markdown' | 'text' | 'json';
 export type StoryArtifactVersionStatus = 'draft' | 'confirmed' | 'discarded';
 export type StoryArtifactVersionSource = 'user' | 'agent' | 'import';
 
@@ -20,7 +20,7 @@ export interface StoryArtifactVersionSnapshot {
 export class StoryArtifactContentInvalidError extends Error {
   constructor() {
     super(
-      'Story artifact content must contain between 1 and 500000 characters',
+      'Story artifact content must contain between 1 and 5000000 characters',
     );
     this.name = 'StoryArtifactContentInvalidError';
   }
@@ -137,7 +137,7 @@ export class StoryArtifactVersion {
 
 function normalizeContent(content: string): string {
   const normalized = content.trim();
-  if (normalized.length < 1 || normalized.length > 500_000) {
+  if (normalized.length < 1 || normalized.length > 5_000_000) {
     throw new StoryArtifactContentInvalidError();
   }
   return normalized;
@@ -153,7 +153,11 @@ function normalizeVersionNumber(versionNumber: number): number {
 function normalizeContentFormat(
   contentFormat: StoryArtifactContentFormat,
 ): StoryArtifactContentFormat {
-  if (contentFormat !== 'markdown' && contentFormat !== 'text') {
+  if (
+    contentFormat !== 'markdown' &&
+    contentFormat !== 'text' &&
+    contentFormat !== 'json'
+  ) {
     throw new StoryArtifactContentFormatInvalidError();
   }
   return contentFormat;

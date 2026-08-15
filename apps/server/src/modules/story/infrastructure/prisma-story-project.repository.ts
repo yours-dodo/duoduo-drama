@@ -80,18 +80,18 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
     return this.database.withClient(async (client) => {
       const rows = await client.$queryRaw<StoryProjectRow[]>`
         SELECT
-          id,
-          tenant_id AS "tenantId",
-          space_id AS "spaceId",
+          story_projects.id AS id,
+          story_projects.tenant_id AS "tenantId",
+          story_projects.space_id AS "spaceId",
           spaces.kind AS "spaceKind",
-          created_by_user_id AS "createdByUserId",
-          owner_user_id AS "ownerUserId",
-          title,
-          visibility,
-          status,
-          revision,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
+          story_projects.created_by_user_id AS "createdByUserId",
+          story_projects.owner_user_id AS "ownerUserId",
+          story_projects.title AS title,
+          story_projects.visibility AS visibility,
+          story_projects.status AS status,
+          story_projects.revision AS revision,
+          story_projects.created_at AS "createdAt",
+          story_projects.updated_at AS "updatedAt"
         FROM story_projects
         INNER JOIN spaces ON spaces.id = story_projects.space_id
         WHERE story_projects.id = ${request.projectId}::uuid

@@ -16,6 +16,9 @@ export function messageOutput(message: MessageSnapshot) {
 export function generationRequestOutput(
   request: StoryGenerationRequestSnapshot,
 ) {
+  const inputSnapshot = request.inputSnapshot as
+    | { pipelineStage?: unknown }
+    | undefined;
   return {
     id: request.id,
     tenantId: request.tenantId,
@@ -30,6 +33,10 @@ export function generationRequestOutput(
     agentMessageId: request.agentMessageId,
     artifactId: request.artifactId,
     artifactVersionId: request.artifactVersionId,
+    pipelineStage:
+      typeof inputSnapshot?.pipelineStage === 'string'
+        ? inputSnapshot.pipelineStage
+        : null,
     createdAt: new Date(request.createdAt),
     updatedAt: new Date(request.updatedAt),
   };

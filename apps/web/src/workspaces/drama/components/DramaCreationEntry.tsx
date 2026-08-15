@@ -46,14 +46,15 @@ const DramaCreationEntry: FC = () => (
             </label>
           </div>
         </div>
-        <button
-          className="button button-primary drama-disabled-action"
-          type="button"
-          disabled
+        <a
+          className="button button-primary"
+          href="/stories"
         >
           开始创作方案
-        </button>
-        <span className="drama-action-note">创作服务接入后可用</span>
+        </a>
+        <span className="drama-action-note">
+          前往故事创作空间，一句话生成完整剧本
+        </span>
       </article>
 
       <article className="drama-creation-card drama-creation-card-secondary">
@@ -85,14 +86,15 @@ const DramaCreationEntry: FC = () => (
             <strong>08</strong> 个故事节点
           </span>
         </div>
-        <button
-          className="button button-quiet drama-disabled-action"
-          type="button"
-          disabled
+        <a
+          className="button button-quiet"
+          href="/stories"
         >
           选择故事改编
-        </button>
-        <span className="drama-action-note">故事项目接入后可用</span>
+        </a>
+        <span className="drama-action-note">
+          从故事项目列表挑选并进入短剧工作台
+        </span>
       </article>
     </div>
   </section>

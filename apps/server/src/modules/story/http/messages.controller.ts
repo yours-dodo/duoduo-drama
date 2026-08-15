@@ -103,19 +103,20 @@ export class MessagesController {
         body: body.body,
         idempotencyKey: readIdempotencyKey(suppliedIdempotencyKey),
       });
-      const generated = await this.generateStory.execute({
-        tenantId: tenant.tenantId,
-        actorUserId: tenant.userId,
-        projectId,
-        conversationId,
-        requestId: appended.generationRequest.id,
-      });
+      // Kick off the Agent pipeline without blocking the request; the client
+      // polls the generation request until it succeeds or fails.
+      void this.generateStory
+        .execute({
+          tenantId: tenant.tenantId,
+          actorUserId: tenant.userId,
+          projectId,
+          conversationId,
+          requestId: appended.generationRequest.id,
+        })
+        .catch(() => undefined);
       return {
         message: appended.message,
-        generationRequest: generated.generationRequest,
-        assistantMessage: generated.message,
-        artifact: generated.artifact,
-        artifactVersion: generated.artifactVersion,
+        generationRequest: appended.generationRequest,
       };
     } catch (error) {
       throwStoryHttpError(error);

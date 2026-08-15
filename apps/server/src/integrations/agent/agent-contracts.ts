@@ -5,6 +5,8 @@ import type {
 } from '../../domain/story/story-artifact-version.js';
 import type { StoryGenerationFailureCode } from '../../domain/story/story-generation-request.js';
 
+export type { StoryGenerationFailureCode } from '../../domain/story/story-generation-request.js';
+
 export interface StoryGenerationAgentMessage {
   authorType: 'user' | 'agent' | 'system';
   body: string;
@@ -39,10 +41,30 @@ export interface StoryGenerationAgentResult {
   assistantBody: string;
 }
 
+export type StoryGenerationStage =
+  | 'queued'
+  | 'script'
+  | 'images'
+  | 'speech'
+  | 'video';
+
+export type StoryTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface StoryTaskRef {
+  taskId: string;
+  status: StoryTaskStatus;
+  stage: StoryGenerationStage;
+}
+
+export interface StoryTaskSnapshot extends StoryTaskRef {
+  result?: StoryGenerationAgentResult;
+  error?: string;
+  failureCode?: StoryGenerationFailureCode;
+}
+
 export interface AgentGateway {
-  generateStory(
-    request: StoryGenerationAgentRequest,
-  ): Promise<StoryGenerationAgentResult>;
+  startStory(request: StoryGenerationAgentRequest): Promise<StoryTaskRef>;
+  getStoryTask(taskId: string): Promise<StoryTaskSnapshot>;
 }
 
 export type AgentGatewayFailureCode = StoryGenerationFailureCode;

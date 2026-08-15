@@ -209,6 +209,7 @@ function configFor(connectionString: string): ServerConfig {
     publicWebUrl: 'http://localhost:3000',
     loginTokenPepper: 'local-test-login-token-pepper-change-me',
     trustedProxyHops: 0,
+    agentServiceUrl: 'http://127.0.0.1:3002',
   };
 }
 

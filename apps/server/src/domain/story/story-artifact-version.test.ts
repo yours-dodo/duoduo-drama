@@ -63,7 +63,7 @@ describe('StoryArtifactVersion', () => {
         tenantId: 'team-id',
         artifactId: 'artifact-id',
         versionNumber: 1,
-        content: 'a'.repeat(500_001),
+        content: 'a'.repeat(5_000_001),
         contentFormat: 'text',
         sourceType: 'user',
         sourceMessageId: null,

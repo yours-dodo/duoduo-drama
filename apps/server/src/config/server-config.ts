@@ -12,6 +12,7 @@ export interface ServerConfig {
   publicWebUrl: string;
   loginTokenPepper: string;
   trustedProxyHops: number;
+  agentServiceUrl: string;
 }
 
 export interface ObjectStorageConfig {
@@ -30,6 +31,7 @@ const DEFAULT_TRUSTED_ORIGINS = ['http://localhost:3000'];
 const DEFAULT_PUBLIC_WEB_URL = 'http://localhost:3000';
 const DEFAULT_LOGIN_TOKEN_PEPPER =
   'local-development-login-token-pepper-change-me';
+const DEFAULT_AGENT_SERVICE_URL = 'http://127.0.0.1:3002';
 const DEFAULT_OBJECT_STORAGE_ENDPOINT = 'http://127.0.0.1:9000';
 const DEFAULT_OBJECT_STORAGE_REGION = 'us-east-1';
 const DEFAULT_OBJECT_STORAGE_ACCESS_KEY = 'duoduo_server';
@@ -73,7 +75,32 @@ export function parseServerConfig(
       runtimeEnvironment,
     ),
     trustedProxyHops: parseTrustedProxyHops(environment.TRUST_PROXY_HOPS),
+    agentServiceUrl: parseAgentServiceUrl(
+      environment.AGENT_SERVICE_URL,
+      runtimeEnvironment,
+    ),
   };
+}
+
+function parseAgentServiceUrl(
+  value: string | undefined,
+  environment: ServerEnvironment,
+): string {
+  const url = value?.trim() || DEFAULT_AGENT_SERVICE_URL;
+  if ((!value || value.trim() === '') && environment === 'production') {
+    throw new ServerConfigError('AGENT_SERVICE_URL is required in production');
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('unsupported protocol');
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    throw new ServerConfigError(
+      'AGENT_SERVICE_URL must be a valid HTTP(S) URL',
+    );
+  }
 }
 
 export function parseObjectStorageConfig(

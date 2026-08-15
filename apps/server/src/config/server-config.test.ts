@@ -29,6 +29,7 @@ describe('parseServerConfig', () => {
       publicWebUrl: 'http://localhost:3000',
       loginTokenPepper: 'local-development-login-token-pepper-change-me',
       trustedProxyHops: 0,
+      agentServiceUrl: 'http://127.0.0.1:3002',
     });
   });
 
@@ -44,6 +45,7 @@ describe('parseServerConfig', () => {
         PUBLIC_WEB_URL: 'https://app.example.com',
         LOGIN_TOKEN_PEPPER: 'a-production-login-token-pepper-32-chars',
         TRUST_PROXY_HOPS: '1',
+        AGENT_SERVICE_URL: 'http://agent.internal:3002/',
       }),
     ).toEqual({
       environment: 'production',
@@ -55,7 +57,22 @@ describe('parseServerConfig', () => {
       publicWebUrl: 'https://app.example.com',
       loginTokenPepper: 'a-production-login-token-pepper-32-chars',
       trustedProxyHops: 1,
+      agentServiceUrl: 'http://agent.internal:3002',
     });
+  });
+
+  it('requires AGENT_SERVICE_URL in production', () => {
+    expect(() =>
+      parseServerConfig({
+        NODE_ENV: 'production',
+        COOKIE_SECRET: 'a-production-cookie-secret-with-32-chars',
+        TRUSTED_ORIGINS: 'https://app.example.com',
+        PUBLIC_WEB_URL: 'https://app.example.com',
+        LOGIN_TOKEN_PEPPER: 'a-production-login-token-pepper-32-chars',
+        SERVER_DATABASE_URL:
+          'postgresql://duoduo_server:production@db.example.com:5432/duoduo_server',
+      }),
+    ).toThrow('AGENT_SERVICE_URL is required in production');
   });
 
   it('requires the dedicated Server database URL', () => {

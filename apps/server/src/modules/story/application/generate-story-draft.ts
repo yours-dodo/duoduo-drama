@@ -9,6 +9,8 @@ import {
 import type {
   AgentGateway,
   StoryGenerationAgentRequest,
+  StoryGenerationAgentResult,
+  StoryTaskRef,
 } from '../../../integrations/agent/agent-contracts.js';
 import { AgentGatewayError } from '../../../integrations/agent/agent-gateway.js';
 import type { StoryArtifactRepository } from '../ports/story-artifact-repository.js';
@@ -81,19 +83,14 @@ export class GenerateStoryDraft {
       return emptyResult(prepared.request);
     }
 
-    let agentResult;
     try {
       const agentRequest = await this.buildAgentRequest(
         input,
         prepared.request,
       );
-      agentResult = await this.gateway.generateStory(agentRequest);
-    } catch (error) {
-      return this.failAndRead(input, failureCodeFor(error));
-    }
-
-    try {
-      return await this.persistSuccess(input, prepared.request, agentResult);
+      const task = await this.gateway.startStory(agentRequest);
+      const updated = await this.updateTaskRef(prepared.request, task);
+      return emptyResult(updated);
     } catch (error) {
       return this.failAndRead(input, failureCodeFor(error));
     }
@@ -107,9 +104,55 @@ export class GenerateStoryDraft {
     requestId: string;
   }): Promise<StoryGenerationExecutionOutput> {
     const request = await this.authorizeAndRead(input);
-    return request.status === 'succeeded'
-      ? this.readResult(request)
-      : emptyResult(request);
+    if (request.status === 'succeeded') return this.readResult(request);
+    if (request.status !== 'processing') return emptyResult(request);
+
+    const taskId = readAgentTaskId(request);
+    if (!taskId) return emptyResult(request);
+
+    let task;
+    try {
+      task = await this.gateway.getStoryTask(taskId);
+    } catch {
+      // Transient polling failure: keep the request processing and let the
+      // client poll again instead of failing the whole generation.
+      return emptyResult(request);
+    }
+    if (task.status === 'failed') {
+      return this.failAndRead(input, task.failureCode ?? 'agent_unavailable');
+    }
+    if (task.status === 'succeeded' && task.result) {
+      try {
+        return await this.persistSuccess(input, request, task.result);
+      } catch (error) {
+        return this.failAndRead(input, failureCodeFor(error));
+      }
+    }
+    const updated = await this.updateTaskRef(request, task);
+    return emptyResult(updated);
+  }
+
+  private async updateTaskRef(
+    request: StoryGenerationRequestSnapshot,
+    task: StoryTaskRef,
+  ): Promise<StoryGenerationRequestSnapshot> {
+    return this.transactions.run(async () => {
+      const current = await this.generationRequests.findByIdLocked({
+        tenantId: request.tenantId,
+        requestId: request.id,
+      });
+      if (current === null) return request;
+      const aggregate = StoryGenerationRequest.restore(current);
+      const snapshot = aggregate.toSnapshot();
+      return this.generationRequests.update({
+        ...snapshot,
+        inputSnapshot: {
+          ...(snapshot.inputSnapshot as Record<string, unknown>),
+          agentTaskId: task.taskId,
+          pipelineStage: task.stage,
+        },
+      });
+    });
   }
 
   private async authorizeAndStart(input: {
@@ -297,7 +340,7 @@ export class GenerateStoryDraft {
       requestId: string;
     },
     processingRequest: StoryGenerationRequestSnapshot,
-    result: Awaited<ReturnType<AgentGateway['generateStory']>>,
+    result: StoryGenerationAgentResult,
   ): Promise<StoryGenerationExecutionOutput> {
     return this.transactions.run(async () => {
       await this.requireConversationEditor(input, true);
@@ -459,6 +502,17 @@ function emptyResult(
     artifact: null,
     artifactVersion: null,
   };
+}
+
+function readAgentTaskId(
+  request: StoryGenerationRequestSnapshot,
+): string | null {
+  const inputSnapshot = request.inputSnapshot as
+    | { agentTaskId?: unknown }
+    | undefined;
+  return typeof inputSnapshot?.agentTaskId === 'string'
+    ? inputSnapshot.agentTaskId
+    : null;
 }
 
 function failureCodeFor(error: unknown): StoryGenerationFailureCode {
