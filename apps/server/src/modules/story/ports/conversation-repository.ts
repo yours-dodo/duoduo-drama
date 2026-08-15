@@ -10,15 +10,15 @@ export interface ConversationRepository {
   create(conversation: ConversationSnapshot): Promise<ConversationSnapshot>;
   update(conversation: ConversationSnapshot): Promise<ConversationSnapshot>;
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
   }): Promise<ConversationSnapshot | null>;
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
   }): Promise<ConversationSnapshot | null>;
   listForProject(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     page: KeysetPageRequest;
   }): Promise<KeysetPage<ConversationSnapshot>>;

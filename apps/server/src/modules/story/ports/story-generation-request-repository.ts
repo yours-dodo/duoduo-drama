@@ -9,15 +9,15 @@ export interface StoryGenerationRequestRepository {
     request: StoryGenerationRequestSnapshot,
   ): Promise<StoryGenerationRequestSnapshot>;
   findByTriggerMessageId(request: {
-    tenantId: string;
+    tenantId: string | null;
     triggerMessageId: string;
   }): Promise<StoryGenerationRequestSnapshot | null>;
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     requestId: string;
   }): Promise<StoryGenerationRequestSnapshot | null>;
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId: string | null;
     requestId: string;
   }): Promise<StoryGenerationRequestSnapshot | null>;
   update(

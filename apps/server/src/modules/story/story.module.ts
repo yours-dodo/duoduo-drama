@@ -41,6 +41,7 @@ import { ArchiveStoryProject } from './application/archive-story-project.js';
 import { ArchiveStoryConversation } from './application/archive-story-conversation.js';
 import { ConfirmStoryDraft } from './application/confirm-story-draft.js';
 import { CreateStoryConversation } from './application/create-story-conversation.js';
+import { CreateStoryImportJob } from './application/create-story-import-job.js';
 import { CreateStoryProject } from './application/create-story-project.js';
 import { DiscardStoryDraft } from './application/discard-story-draft.js';
 import { EditStoryDraft } from './application/edit-story-draft.js';
@@ -68,6 +69,10 @@ import { StoryArtifactsController } from './http/story-artifacts.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
 import { MeStoryProjectsController } from './http/me-story-projects.controller.js';
+import { MeStoryConversationsController } from './http/me-story-conversations.controller.js';
+import { MeStoryImportJobsController } from './http/me-story-import-jobs.controller.js';
+import { MeStoryMessagesController } from './http/me-story-messages.controller.js';
+import { StoryImportJobsController } from './http/story-import-jobs.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
 import { PrismaConversationRepository } from './infrastructure/prisma-conversation.repository.js';
 import { PrismaMessageRepository } from './infrastructure/prisma-message.repository.js';
@@ -75,6 +80,7 @@ import { PrismaStoryArtifactRepository } from './infrastructure/prisma-story-art
 import { PrismaStoryArtifactVersionRepository } from './infrastructure/prisma-story-artifact-version.repository.js';
 import { PrismaStoryProjectRepository } from './infrastructure/prisma-story-project.repository.js';
 import { PrismaStoryGenerationRequestRepository } from './infrastructure/prisma-story-generation-request.repository.js';
+import { PrismaStoryImportJobRepository } from './infrastructure/prisma-story-import-job.repository.js';
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
@@ -103,12 +109,20 @@ import {
   STORY_ARTIFACT_VERSION_REPOSITORY,
   type StoryArtifactVersionRepository,
 } from './ports/story-artifact-version-repository.js';
+import {
+  STORY_IMPORT_JOB_REPOSITORY,
+  type StoryImportJobRepository,
+} from './ports/story-import-job-repository.js';
 
 @Module({
   imports: [DatabaseModule, AuditModule, IdentityModule, SpacesModule],
   controllers: [
     StoryProjectsController,
     MeStoryProjectsController,
+    MeStoryConversationsController,
+    MeStoryMessagesController,
+    StoryImportJobsController,
+    MeStoryImportJobsController,
     ProjectCollaboratorsController,
     ConversationsController,
     GenerationRequestsController,
@@ -162,6 +176,11 @@ import {
     {
       provide: STORY_ARTIFACT_VERSION_REPOSITORY,
       useExisting: PrismaStoryArtifactVersionRepository,
+    },
+    PrismaStoryImportJobRepository,
+    {
+      provide: STORY_IMPORT_JOB_REPOSITORY,
+      useExisting: PrismaStoryImportJobRepository,
     },
     MockAgentGateway,
     {
@@ -242,6 +261,7 @@ import {
       provide: CreateStoryProject,
       inject: [
         STORY_PROJECT_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
         SPACE_REPOSITORY,
         TEAM_MEMBERSHIP_REPOSITORY,
         IDEMPOTENCY_REPOSITORY,
@@ -252,6 +272,7 @@ import {
       ],
       useFactory: (
         projects: StoryProjectRepository,
+        artifacts: StoryArtifactRepository,
         spaces: SpaceRepository,
         memberships: TeamMembershipRepository,
         idempotency: IdempotencyRepository,
@@ -262,8 +283,46 @@ import {
       ) =>
         new CreateStoryProject(
           projects,
+          artifacts,
           spaces,
           memberships,
+          idempotency,
+          audit,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+        ),
+    },
+    {
+      provide: CreateStoryImportJob,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_IMPORT_JOB_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        importJobs: StoryImportJobRepository,
+        idempotency: IdempotencyRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+      ) =>
+        new CreateStoryImportJob(
+          projects,
+          memberships,
+          collaborators,
+          importJobs,
           idempotency,
           audit,
           transactions,

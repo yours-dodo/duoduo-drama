@@ -54,6 +54,39 @@ describe('story conversation application', () => {
     );
   });
 
+  it('creates a conversation for a personal project without team membership', async () => {
+    const fixture = buildFixture({
+      project: projectSnapshot({
+        tenantId: null,
+        spaceId: 'personal-space-id',
+        spaceKind: 'personal',
+        visibility: 'private',
+      }),
+      conversation: conversationSnapshot({ tenantId: null }),
+    });
+
+    await expect(
+      new CreateStoryConversation(
+        fixture.projects,
+        fixture.memberships,
+        fixture.collaborators,
+        fixture.conversations,
+        fixture.idempotency,
+        fixture.transactions,
+        fixture.clock,
+        fixture.fingerprint,
+        fixture.ids,
+      ).execute({
+        tenantId: null,
+        actorUserId: 'creator-id',
+        projectId: 'project-id',
+        title: '个人对话',
+        idempotencyKey: 'personal-conversation-key',
+      }),
+    ).resolves.toMatchObject({ conversation: { tenantId: null } });
+    expect(fixture.memberships.findActive).not.toHaveBeenCalled();
+  });
+
   it('does not create a conversation under an archived project', async () => {
     const fixture = buildFixture({
       project: projectSnapshot({ status: 'archived' }),
@@ -334,6 +367,7 @@ function projectSnapshot(
     ownerUserId: 'creator-id',
     title: '故事',
     visibility: 'team' as const,
+    spaceKind: 'team' as const,
     status: 'active' as const,
     revision: 1,
     createdAt: NOW,

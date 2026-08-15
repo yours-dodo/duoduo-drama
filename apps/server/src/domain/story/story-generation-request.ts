@@ -6,7 +6,7 @@ export type StoryGenerationFailureCode =
 
 export interface StoryGenerationRequestSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   conversationId: string;
   triggerMessageId: string;
   idempotencyKey: string;
@@ -50,7 +50,7 @@ export class StoryGenerationRequest {
 
   static createPending(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
     triggerMessageId: string;
     idempotencyKey: string;

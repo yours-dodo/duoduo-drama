@@ -17,6 +17,7 @@ model Team {
   assets                Asset[]
   storyArtifacts        StoryArtifact[]
   storyArtifactVersions StoryArtifactVersion[]
+  storyImportJobs       StoryImportJob[]
   ownedSpaces           Space[]                  @relation("SpaceOwnerTeam")
 
   @@index([createdByUserId, createdAt(sort: Desc)], map: "teams_created_by_user_id_created_at_idx")
@@ -62,6 +63,9 @@ model TeamMembership {
   authoredMessages             Message[]              @relation("MessageAuthorMembership")
   uploadedAssets               Asset[]                @relation("AssetUploaderMembership")
   createdStoryArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionCreatorMembership")
+  createdStoryProjects         StoryProject[]         @relation("StoryProjectCreatorMembership")
+  ownedStoryProjects           StoryProject[]         @relation("StoryProjectOwnerMembership")
+  createdStoryImportJobs       StoryImportJob[]       @relation("StoryImportJobCreatorMembership")
 
   @@unique([tenantId, userId], map: "team_memberships_tenant_id_user_id_key")
   @@unique([tenantId, id], map: "team_memberships_tenant_id_id_key")

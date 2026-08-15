@@ -10,7 +10,7 @@ import type { StoryGenerationRequestRepository } from '../ports/story-generation
 
 interface StoryGenerationRequestRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   conversationId: string;
   triggerMessageId: string;
   idempotencyKey: string;
@@ -46,16 +46,14 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
   }
 
   findByTriggerMessageId(request: {
-    tenantId: string;
+    tenantId: string | null;
     triggerMessageId: string;
   }): Promise<StoryGenerationRequestSnapshot | null> {
     return this.database.withClient(async (client) => {
-      const generationRequest = await client.storyGenerationRequest.findUnique({
+      const generationRequest = await client.storyGenerationRequest.findFirst({
         where: {
-          tenantId_triggerMessageId: {
-            tenantId: request.tenantId,
-            triggerMessageId: request.triggerMessageId,
-          },
+          tenantId: request.tenantId,
+          triggerMessageId: request.triggerMessageId,
         },
       });
       return generationRequest === null
@@ -65,17 +63,12 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     requestId: string;
   }): Promise<StoryGenerationRequestSnapshot | null> {
     return this.database.withClient(async (client) => {
       const generationRequest = await client.storyGenerationRequest.findUnique({
-        where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.requestId,
-          },
-        },
+        where: { tenantId: request.tenantId, id: request.requestId },
       });
       return generationRequest === null
         ? null
@@ -84,7 +77,7 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
   }
 
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId: string | null;
     requestId: string;
   }): Promise<StoryGenerationRequestSnapshot | null> {
     return this.database.withClient(async (client) => {
@@ -106,7 +99,7 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM story_generation_requests
-        WHERE tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId)}
           AND id = ${request.requestId}::uuid
         FOR UPDATE
       `;
@@ -121,10 +114,7 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
     return this.database.withClient(async (client) => {
       const row = await client.storyGenerationRequest.update({
         where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.id,
-          },
+          id: request.id,
         },
         data: {
           ...request,
@@ -134,6 +124,12 @@ export class PrismaStoryGenerationRequestRepository implements StoryGenerationRe
       return readGenerationRequest(row);
     });
   }
+}
+
+function tenantScope(tenantId: string | null) {
+  return tenantId === null
+    ? Prisma.sql`tenant_id IS NULL`
+    : Prisma.sql`tenant_id = ${tenantId}::uuid`;
 }
 
 function readGenerationRequest(

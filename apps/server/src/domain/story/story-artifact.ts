@@ -1,11 +1,24 @@
-export type StoryArtifactType =
-  'idea' | 'world_setting' | 'character' | 'outline' | 'script';
+export type StoryArtifactType = 'outline' | 'roles' | 'worldview' | 'story';
+
+export const STORY_MODULE_DEFINITIONS: ReadonlyArray<{
+  type: StoryArtifactType;
+  title: string;
+}> = [
+  { type: 'outline', title: '大纲' },
+  { type: 'roles', title: '角色资产' },
+  { type: 'worldview', title: '世界观' },
+  { type: 'story', title: '故事页' },
+];
+
+export function storyModuleOrder(type: StoryArtifactType): number {
+  return STORY_MODULE_DEFINITIONS.findIndex((module) => module.type === type);
+}
 
 export type StoryArtifactStatus = 'active' | 'archived';
 
 export interface StoryArtifactSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   type: StoryArtifactType;
   title: string;
@@ -41,7 +54,7 @@ export class StoryArtifact {
 
   static create(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     type: StoryArtifactType;
     title: string;
@@ -88,11 +101,10 @@ export class StoryArtifact {
 
 function normalizeType(type: StoryArtifactType): StoryArtifactType {
   if (
-    type !== 'idea' &&
-    type !== 'world_setting' &&
-    type !== 'character' &&
     type !== 'outline' &&
-    type !== 'script'
+    type !== 'roles' &&
+    type !== 'worldview' &&
+    type !== 'story'
   ) {
     throw new StoryArtifactTypeInvalidError();
   }

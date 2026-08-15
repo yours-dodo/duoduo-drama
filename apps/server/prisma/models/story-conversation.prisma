@@ -1,14 +1,14 @@
 model Conversation {
   id                 String                   @id @default(uuid()) @db.Uuid
-  tenantId           String                   @map("tenant_id") @db.Uuid
+  tenantId           String?                  @map("tenant_id") @db.Uuid
   projectId          String                   @map("project_id") @db.Uuid
   title              String                   @db.VarChar(200)
   status             String                   @db.VarChar(16)
   revision           Int                      @default(1)
   createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
-  team               Team                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  project            StoryProject             @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict)
+  team               Team?                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project            StoryProject?            @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict)
   messages           Message[]
   generationRequests StoryGenerationRequest[]
 
@@ -19,14 +19,14 @@ model Conversation {
 
 model Message {
   id                    String                  @id @default(uuid()) @db.Uuid
-  tenantId              String                  @map("tenant_id") @db.Uuid
+  tenantId              String?                 @map("tenant_id") @db.Uuid
   conversationId        String                  @map("conversation_id") @db.Uuid
   authorType            String                  @map("author_type") @db.VarChar(16)
   authorUserId          String?                 @map("author_user_id") @db.Uuid
   body                  String                  @db.Text
   createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  team                  Team                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  conversation          Conversation            @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+  team                  Team?                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation          Conversation?           @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
   author                User?                   @relation("MessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
   authorMembership      TeamMembership?         @relation("MessageAuthorMembership", fields: [tenantId, authorUserId], references: [tenantId, userId], onDelete: Restrict)
   generationRequest     StoryGenerationRequest? @relation("GenerationTrigger")

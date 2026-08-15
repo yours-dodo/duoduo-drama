@@ -17,15 +17,17 @@ export async function readConversationAccess(
   collaborators: ProjectCollaboratorRepository,
   conversations: ConversationRepository,
   input: {
-    tenantId: string;
+    tenantId: string | null;
+    actorUserId: string;
     projectId: string;
     conversationId: string;
-    membership: TeamMembershipSnapshot;
+    membership: TeamMembershipSnapshot | null;
     lock: boolean;
   },
 ) {
   const projectAccess = await readProjectAccess(projects, collaborators, {
     tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
     projectId: input.projectId,
     membership: input.membership,
     lock: input.lock,

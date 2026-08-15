@@ -78,6 +78,7 @@ export class MeStoryProjectsController {
         tenantId: null,
         actorUserId: session.userId,
         title: body.title,
+        creationMode: body.creationMode,
         visibility: 'private',
         spaceKind: 'personal',
         idempotencyKey: readIdempotencyKey(suppliedIdempotencyKey),

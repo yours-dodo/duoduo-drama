@@ -18,6 +18,10 @@ export class CreateStoryProjectDto {
   title!: string;
 
   @IsOptional()
+  @IsIn(['standard', 'immersive'])
+  creationMode: 'standard' | 'immersive' = 'standard';
+
+  @IsOptional()
   @IsIn(['team', 'private'])
   visibility: 'team' | 'private' = 'team';
 }

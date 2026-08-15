@@ -69,7 +69,7 @@ export class GenerateStoryDraft {
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
@@ -97,7 +97,7 @@ export class GenerateStoryDraft {
   }
 
   async read(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
@@ -156,7 +156,7 @@ export class GenerateStoryDraft {
   }
 
   private async authorizeAndStart(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
@@ -184,7 +184,7 @@ export class GenerateStoryDraft {
   }
 
   private async authorizeAndRead(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
@@ -202,22 +202,28 @@ export class GenerateStoryDraft {
   }
 
   private async requireConversationViewer(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
   }): Promise<void> {
-    const membership = await this.memberships.findActive({
-      tenantId: input.tenantId,
-      userId: input.actorUserId,
-    });
-    if (membership === null) throw new StoryProjectAccessDeniedError();
+    const membership =
+      input.tenantId === null
+        ? null
+        : await this.memberships.findActive({
+            tenantId: input.tenantId,
+            userId: input.actorUserId,
+          });
+    if (input.tenantId !== null && membership === null) {
+      throw new StoryProjectAccessDeniedError();
+    }
     const access = await readConversationAccess(
       this.projects,
       this.collaborators,
       this.conversations,
       {
         tenantId: input.tenantId,
+        actorUserId: input.actorUserId,
         projectId: input.projectId,
         conversationId: input.conversationId,
         membership,
@@ -229,24 +235,30 @@ export class GenerateStoryDraft {
 
   private async requireConversationEditor(
     input: {
-      tenantId: string;
+      tenantId: string | null;
       actorUserId: string;
       projectId: string;
       conversationId: string;
     },
     lock: boolean,
   ): Promise<void> {
-    const membership = await this.memberships.findActive({
-      tenantId: input.tenantId,
-      userId: input.actorUserId,
-    });
-    if (membership === null) throw new StoryProjectAccessDeniedError();
+    const membership =
+      input.tenantId === null
+        ? null
+        : await this.memberships.findActive({
+            tenantId: input.tenantId,
+            userId: input.actorUserId,
+          });
+    if (input.tenantId !== null && membership === null) {
+      throw new StoryProjectAccessDeniedError();
+    }
     const access = await readConversationAccess(
       this.projects,
       this.collaborators,
       this.conversations,
       {
         tenantId: input.tenantId,
+        actorUserId: input.actorUserId,
         projectId: input.projectId,
         conversationId: input.conversationId,
         membership,
@@ -261,7 +273,7 @@ export class GenerateStoryDraft {
 
   private async buildAgentRequest(
     input: {
-      tenantId: string;
+      tenantId: string | null;
       projectId: string;
       conversationId: string;
     },
@@ -333,7 +345,7 @@ export class GenerateStoryDraft {
 
   private async persistSuccess(
     input: {
-      tenantId: string;
+      tenantId: string | null;
       actorUserId: string;
       projectId: string;
       conversationId: string;
@@ -366,19 +378,23 @@ export class GenerateStoryDraft {
         body: result.assistantBody,
         createdAt: now,
       }).toSnapshot();
-      const artifact = StoryArtifact.create({
-        id: this.ids.create(),
+      const artifact = await this.artifacts.findActiveForProjectAndTypeLocked({
         tenantId: input.tenantId,
         projectId: input.projectId,
         type: result.artifactType,
-        title: result.title,
-        createdAt: now,
-      }).toSnapshot();
+      });
+      if (artifact === null) {
+        throw new Error('Story module is unavailable');
+      }
+      const existingVersions = await this.artifactVersions.listForArtifact({
+        tenantId: input.tenantId,
+        artifactId: artifact.id,
+      });
       const version = StoryArtifactVersion.createDraft({
         id: this.ids.create(),
         tenantId: input.tenantId,
         artifactId: artifact.id,
-        versionNumber: 1,
+        versionNumber: (existingVersions[0]?.versionNumber ?? 0) + 1,
         content: result.content,
         contentFormat: result.contentFormat,
         sourceType: 'agent',
@@ -394,7 +410,6 @@ export class GenerateStoryDraft {
       }).toSnapshot();
 
       await this.messages.create(assistantMessage);
-      await this.artifacts.create(artifact);
       await this.artifactVersions.create(version);
       await this.artifacts.update(artifactWithCurrentVersion);
 
@@ -421,7 +436,7 @@ export class GenerateStoryDraft {
 
   private async failAndRead(
     input: {
-      tenantId: string;
+      tenantId: string | null;
       requestId: string;
     },
     failureCode: StoryGenerationFailureCode,

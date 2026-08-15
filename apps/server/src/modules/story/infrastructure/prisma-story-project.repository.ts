@@ -25,6 +25,7 @@ interface StoryProjectRow {
   createdByUserId: string;
   ownerUserId: string;
   title: string;
+  creationMode: string;
   visibility: string;
   status: string;
   revision: number;
@@ -59,12 +60,12 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId?: string | null;
     projectId: string;
   }): Promise<StoryProjectSnapshot | null> {
     return this.database.withClient(async (client) => {
-      const project = await client.storyProject.findUnique({
-        where: { id: request.projectId },
+      const project = await client.storyProject.findFirst({
+        where: { id: request.projectId, tenantId: request.tenantId },
         include: { space: { select: { kind: true } } },
       });
       return project === null
@@ -74,27 +75,29 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
   }
 
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId?: string | null;
     projectId: string;
   }): Promise<StoryProjectSnapshot | null> {
     return this.database.withClient(async (client) => {
       const rows = await client.$queryRaw<StoryProjectRow[]>`
         SELECT
-          story_projects.id AS id,
+          story_projects.id,
           story_projects.tenant_id AS "tenantId",
           story_projects.space_id AS "spaceId",
           spaces.kind AS "spaceKind",
           story_projects.created_by_user_id AS "createdByUserId",
           story_projects.owner_user_id AS "ownerUserId",
-          story_projects.title AS title,
-          story_projects.visibility AS visibility,
-          story_projects.status AS status,
-          story_projects.revision AS revision,
+          story_projects.title,
+          story_projects.creation_mode AS "creationMode",
+          story_projects.visibility,
+          story_projects.status,
+          story_projects.revision,
           story_projects.created_at AS "createdAt",
           story_projects.updated_at AS "updatedAt"
         FROM story_projects
         INNER JOIN spaces ON spaces.id = story_projects.space_id
         WHERE story_projects.id = ${request.projectId}::uuid
+          AND ${tenantScope(request.tenantId, 'story_projects')}
         FOR UPDATE
       `;
       return rows[0] === undefined ? null : readProject(rows[0]);
@@ -125,6 +128,7 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
           project.created_by_user_id AS "createdByUserId",
           project.owner_user_id AS "ownerUserId",
           project.title,
+          project.creation_mode AS "creationMode",
           project.visibility,
           project.status,
           project.revision,
@@ -177,6 +181,15 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
   }
 }
 
+function tenantScope(tenantId: string | null | undefined, table: string) {
+  const column = Prisma.raw(`${table}.tenant_id`);
+  return tenantId === null
+    ? Prisma.sql`${column} IS NULL`
+    : tenantId === undefined
+      ? Prisma.sql`TRUE`
+      : Prisma.sql`${column} = ${tenantId}::uuid`;
+}
+
 function readProject(row: StoryProjectRow): StoryProjectSnapshot {
   return {
     id: row.id,
@@ -189,6 +202,7 @@ function readProject(row: StoryProjectRow): StoryProjectSnapshot {
     createdByUserId: row.createdByUserId,
     ownerUserId: row.ownerUserId,
     title: row.title,
+    creationMode: readCreationMode(row.creationMode),
     visibility: readVisibility(row.visibility),
     status: readStatus(row.status),
     revision: Number(row.revision),
@@ -218,6 +232,13 @@ function readCollaboratorRole(value: string): ProjectCollaboratorRole {
 function readVisibility(value: string): 'team' | 'private' {
   if (value !== 'team' && value !== 'private') {
     throw new Error('Database returned an invalid story project visibility');
+  }
+  return value;
+}
+
+function readCreationMode(value: string): 'standard' | 'immersive' {
+  if (value !== 'standard' && value !== 'immersive') {
+    throw new Error('Database returned an invalid story creation mode');
   }
   return value;
 }

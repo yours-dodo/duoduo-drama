@@ -10,7 +10,7 @@ import type { ConversationRepository } from '../ports/conversation-repository.js
 
 interface ConversationRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   title: string;
   status: string;
@@ -34,36 +34,26 @@ export class PrismaConversationRepository implements ConversationRepository {
   update(conversation: ConversationSnapshot): Promise<ConversationSnapshot> {
     return this.database.withClient((client) =>
       client.conversation.update({
-        where: {
-          tenantId_id: {
-            tenantId: conversation.tenantId,
-            id: conversation.id,
-          },
-        },
+        where: { id: conversation.id },
         data: conversation,
       }),
     ) as Promise<ConversationSnapshot>;
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
   }): Promise<ConversationSnapshot | null> {
     return this.database.withClient(async (client) => {
       const conversation = await client.conversation.findUnique({
-        where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.conversationId,
-          },
-        },
+        where: { tenantId: request.tenantId, id: request.conversationId },
       });
       return conversation === null ? null : readConversation(conversation);
     });
   }
 
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
   }): Promise<ConversationSnapshot | null> {
     return this.database.withClient(async (client) => {
@@ -78,7 +68,7 @@ export class PrismaConversationRepository implements ConversationRepository {
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM conversations
-        WHERE tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId)}
           AND id = ${request.conversationId}::uuid
         FOR UPDATE
       `;
@@ -87,7 +77,7 @@ export class PrismaConversationRepository implements ConversationRepository {
   }
 
   listForProject(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     page: { limit: number; after: { at: Date; id: string } | null };
   }) {
@@ -106,7 +96,7 @@ export class PrismaConversationRepository implements ConversationRepository {
           conversation.created_at AS "createdAt",
           conversation.updated_at AS "updatedAt"
         FROM conversations AS conversation
-        WHERE conversation.tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId, 'conversation.tenant_id')}
           AND conversation.project_id = ${request.projectId}::uuid
           ${after}
         ORDER BY conversation.created_at DESC, conversation.id DESC
@@ -123,6 +113,17 @@ export class PrismaConversationRepository implements ConversationRepository {
       };
     });
   }
+}
+
+function tenantScope(tenantId: string | null, column = 'tenant_id') {
+  if (column === 'conversation.tenant_id') {
+    return tenantId === null
+      ? Prisma.sql`conversation.tenant_id IS NULL`
+      : Prisma.sql`conversation.tenant_id = ${tenantId}::uuid`;
+  }
+  return tenantId === null
+    ? Prisma.sql`tenant_id IS NULL`
+    : Prisma.sql`tenant_id = ${tenantId}::uuid`;
 }
 
 function readConversation(row: ConversationRow): ConversationSnapshot {

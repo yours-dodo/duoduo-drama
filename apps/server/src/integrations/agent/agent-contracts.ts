@@ -24,7 +24,7 @@ export interface StoryGenerationAgentRequest {
   requestId: string;
   idempotencyKey: string;
   authorization: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     conversationId: string;
   };

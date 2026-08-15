@@ -1,6 +1,6 @@
 model StoryGenerationRequest {
   id                    String                 @id @default(uuid()) @db.Uuid
-  tenantId              String                 @map("tenant_id") @db.Uuid
+  tenantId              String?                @map("tenant_id") @db.Uuid
   conversationId        String                 @map("conversation_id") @db.Uuid
   triggerMessageId      String                 @map("trigger_message_id") @db.Uuid
   idempotencyKey        String                 @map("idempotency_key") @db.VarChar(128)
@@ -14,9 +14,9 @@ model StoryGenerationRequest {
   artifactVersionId     String?                @map("artifact_version_id") @db.Uuid
   createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  team                  Team                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  conversation          Conversation           @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
-  triggerMessage        Message                @relation("GenerationTrigger", fields: [tenantId, conversationId, triggerMessageId], references: [tenantId, conversationId, id], onDelete: Restrict)
+  team                  Team?                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation          Conversation?          @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+  triggerMessage        Message?               @relation("GenerationTrigger", fields: [tenantId, conversationId, triggerMessageId], references: [tenantId, conversationId, id], onDelete: Restrict)
   storyArtifactVersions StoryArtifactVersion[] @relation("StoryArtifactVersionGenerationRequest")
 
   @@unique([tenantId, id], map: "story_generation_requests_tenant_id_id_key")
