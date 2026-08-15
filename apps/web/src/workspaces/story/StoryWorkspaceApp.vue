@@ -40,9 +40,11 @@ onMounted(() => {
   <div class="story-workspace-app">
     <StoryWorkspaceHeader />
     <StorySidebar v-if="!isProjectRoute" />
-    <main class="story-workspace-app-content">
-      <RouterView />
+    <main class="story-workspace-app-content" :class="{ 'is-project': isProjectRoute }">
+      <div class="story-workspace-app-route">
+        <RouterView />
+      </div>
+      <StoryChatPanel v-if="isProjectRoute" />
     </main>
-    <StoryChatPanel v-if="isProjectRoute" />
   </div>
 </template>
