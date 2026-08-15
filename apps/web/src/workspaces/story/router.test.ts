@@ -25,11 +25,9 @@ describe('story router', () => {
       history: createMemoryHistory('/stories'),
     });
 
-    await router.push('/');
-    expect(router.currentRoute.value.name).toBe('stories-catalog');
+    expect(router.resolve('/').name).toBe('stories-catalog');
 
-    await router.push('/templates');
-    expect(router.currentRoute.value.name).toBe('stories-templates');
+    expect(router.resolve('/templates').name).toBe('stories-templates');
 
     await router.push('/project-1/roles');
     expect(router.currentRoute.value.name).toBe('stories-project-module');

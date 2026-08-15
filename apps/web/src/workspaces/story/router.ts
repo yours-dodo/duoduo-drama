@@ -39,19 +39,19 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'stories-catalog',
-    component: StoryRoutePlaceholder,
+    component: () => import('./StoryCatalogView.vue'),
     meta: { page: 'catalog' } satisfies StoryRouteMeta,
   },
   {
     path: '/immersive',
     name: 'stories-immersive',
-    component: StoryRoutePlaceholder,
+    component: () => import('./StoryImmersiveView.vue'),
     meta: { page: 'immersive' } satisfies StoryRouteMeta,
   },
   {
     path: '/templates',
     name: 'stories-templates',
-    component: StoryRoutePlaceholder,
+    component: () => import('./StoryTemplatesView.vue'),
     meta: { page: 'templates' } satisfies StoryRouteMeta,
   },
   {
