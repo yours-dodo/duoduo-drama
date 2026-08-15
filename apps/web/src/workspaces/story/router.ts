@@ -63,7 +63,7 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/immersive/:projectId/:module',
     name: 'stories-immersive-project-module',
-    component: StoryRoutePlaceholder,
+    component: () => import('./StoryProjectView.vue'),
     beforeEnter: (to) => validateProjectModule(to, 'immersive'),
     meta: { mode: 'immersive', page: 'project' } satisfies StoryRouteMeta,
   },
@@ -76,7 +76,7 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/:projectId/:module',
     name: 'stories-project-module',
-    component: StoryRoutePlaceholder,
+    component: () => import('./StoryProjectView.vue'),
     beforeEnter: (to) => validateProjectModule(to, 'story'),
     meta: { mode: 'story', page: 'project' } satisfies StoryRouteMeta,
   },

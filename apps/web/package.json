@@ -24,6 +24,7 @@
     "@astrojs/check": "^0.9.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-vue": "^6.0.8",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "^3.1.0"
