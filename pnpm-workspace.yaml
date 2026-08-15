@@ -8,4 +8,6 @@ catalog:
   vitest: ^4.1.10
 
 onlyBuiltDependencies:
+  - '@prisma/engines'
   - esbuild
+  - prisma

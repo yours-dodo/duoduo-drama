@@ -7,6 +7,9 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Generated media artifacts (short-video demos, rendered mp4/srt).
+outputs/
 .local-test-account.md
 db/postgres/
 .DS_Store
