@@ -30,7 +30,7 @@ const message = ref('');
               <path d="M15.8 14c0 1.6-1.3 2.8-2.8 2.8h-1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
             </svg>
           </span>
-          <span>发布为有声小说</span>
+          <span>转为有声小说</span>
         </button>
 
         <button

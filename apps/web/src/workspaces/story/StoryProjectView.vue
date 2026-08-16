@@ -24,10 +24,10 @@ const route = useRoute();
 const moduleDefinitions: Record<StoryModule, StoryModuleDefinition> = {
   basic: {
     label: '故事基础信息',
-    description: '集中确认故事的标题、类型和核心表达，为后续资产建立统一的创作方向。',
+    description: '集中确认故事的标题和核心表达，为后续资产建立统一的创作方向。',
     workspaceTitle: '故事基础信息',
     workspaceDescription: '先把故事是什么、写给谁以及想表达什么说清楚，再开始组织世界观、角色和情节。',
-    focus: ['故事标题与一句话概念', '题材、类型与目标读者', '故事简介和核心表达'],
+    focus: ['故事标题与一句话概念', '故事的表达与目标读者', '故事简介和核心表达'],
     relationLabel: '项目起点',
     relation: '为世界观、角色资产、大纲和正文提供统一的故事方向。',
   },
@@ -99,7 +99,7 @@ const importPending = computed(
       <RouterLink
         class="story-project-back-link"
         to="/"
-        aria-label="回到创作空间"
+        aria-label="返回创作空间"
       >
         <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
           <path
@@ -110,7 +110,7 @@ const importPending = computed(
             stroke-linejoin="round"
           />
         </svg>
-        <span>回到创作空间</span>
+        <span>返回创作空间</span>
       </RouterLink>
 
       <div class="story-project-toolbar-actions" aria-label="项目操作">

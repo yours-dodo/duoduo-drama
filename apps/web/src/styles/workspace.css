@@ -9014,43 +9014,6 @@ html[data-story-sidebar]
   background: var(--story-entry-paper);
 }
 
-.story-basic-info-type-box {
-  display: flex;
-  min-height: 46px;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--story-entry-line);
-  background: color-mix(in srgb, var(--story-entry-paper) 78%, var(--story-entry-canvas));
-}
-
-.story-basic-info-type-option {
-  min-height: 30px;
-  padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--story-entry-muted);
-  background: transparent;
-  font: inherit;
-  font-size: 0.72rem;
-  cursor: pointer;
-  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease;
-}
-
-.story-basic-info-type-option:hover,
-.story-basic-info-type-option:focus-visible {
-  border-color: var(--story-entry-line);
-  color: var(--story-entry-ink);
-  outline: none;
-}
-
-.story-basic-info-type-option.is-selected {
-  border-color: var(--story-entry-blue);
-  color: var(--story-entry-blue);
-  background: color-mix(in srgb, var(--story-entry-blue) 10%, transparent);
-}
-
 .story-basic-info-cover-card {
   align-self: start;
   aspect-ratio: 3 / 4;

@@ -3,9 +3,6 @@ import { ref } from 'vue';
 
 const storyName = ref('');
 const storyDescription = ref('');
-const storyType = ref('');
-
-const storyTypes = ['短篇小说', '长篇小说', '短剧', '剧本', '沉浸式故事'];
 </script>
 
 <template>
@@ -17,7 +14,7 @@ const storyTypes = ['短篇小说', '长篇小说', '短剧', '剧本', '沉浸�
       <div>
         <span class="story-basic-info-kicker">项目起点 / BASIC INFO</span>
         <h2 id="story-basic-info-workspace-title">故事基础信息</h2>
-        <p>先确认故事的名字、表达和类型，再继续组织后续的创作资产。</p>
+        <p>先确认故事的名字和表达，再继续组织后续的创作资产。</p>
       </div>
     </header>
 
@@ -41,23 +38,6 @@ const storyTypes = ['短篇小说', '长篇小说', '短剧', '剧本', '沉浸�
             rows="7"
             placeholder="用几句话描述这个故事想讲什么。"
           ></textarea>
-        </label>
-
-        <label class="story-basic-info-field">
-          <span>故事类型</span>
-          <div class="story-basic-info-type-box" role="group" aria-label="故事类型选项">
-            <button
-              v-for="type in storyTypes"
-              :key="type"
-              class="story-basic-info-type-option"
-              :class="{ 'is-selected': storyType === type }"
-              type="button"
-              :aria-pressed="storyType === type"
-              @click="storyType = type"
-            >
-              {{ type }}
-            </button>
-          </div>
         </label>
       </form>
 
