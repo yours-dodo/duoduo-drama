@@ -1,5 +1,6 @@
 export type StoryProjectVisibility = 'team' | 'private';
 export type StoryProjectStatus = 'active' | 'archived';
+export type StoryCreationMode = 'standard' | 'immersive';
 
 export interface StoryProjectSnapshot {
   id: string;
@@ -9,6 +10,7 @@ export interface StoryProjectSnapshot {
   createdByUserId: string;
   ownerUserId: string;
   title: string;
+  creationMode: StoryCreationMode;
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
   revision: number;
@@ -48,6 +50,7 @@ export class StoryProject {
     createdByUserId: string;
     ownerUserId: string;
     title: string;
+    creationMode: StoryCreationMode;
     visibility: StoryProjectVisibility;
     createdAt: Date;
   }): StoryProject {
@@ -59,6 +62,7 @@ export class StoryProject {
       createdByUserId: input.createdByUserId,
       ownerUserId: input.ownerUserId,
       title: normalizeTitle(input.title),
+      creationMode: normalizeCreationMode(input.creationMode),
       visibility: input.visibility,
       status: 'active',
       revision: 1,
@@ -70,6 +74,7 @@ export class StoryProject {
   static restore(snapshot: StoryProjectSnapshot): StoryProject {
     return new StoryProject({
       ...snapshot,
+      creationMode: normalizeCreationMode(snapshot.creationMode),
       createdAt: new Date(snapshot.createdAt),
       updatedAt: new Date(snapshot.updatedAt),
     });
@@ -133,6 +138,13 @@ export class StoryProject {
       throw new StoryProjectArchivedError();
     }
   }
+}
+
+function normalizeCreationMode(mode: StoryCreationMode): StoryCreationMode {
+  if (mode !== 'standard' && mode !== 'immersive') {
+    throw new Error('Story creation mode is invalid');
+  }
+  return mode;
 }
 
 function normalizeTitle(title: string): string {

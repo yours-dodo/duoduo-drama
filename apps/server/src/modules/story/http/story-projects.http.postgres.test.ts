@@ -63,7 +63,7 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_artifact_versions", "story_artifacts", "story_import_jobs", "assets", "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users" CASCADE',
     );
     await insertUser(CREATOR_ID, 'creator@example.com');
     await insertUser(ADMIN_ID, 'admin@example.com');
@@ -86,6 +86,56 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
   afterAll(async () => {
     await app.close();
     await pool.end();
+  });
+
+  it('creates an immersive project with four modules and a pending import job', async () => {
+    const write = (builder: request.Test) =>
+      builder
+        .set('Cookie', `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}`)
+        .set('Origin', 'http://localhost:3000');
+    const collection = `/v1/teams/${TEAM_ID}/story-projects`;
+
+    const created = await write(request(app.getHttpServer()).post(collection))
+      .set('Idempotency-Key', 'create-immersive-project')
+      .send({ title: '导入故事', creationMode: 'immersive' })
+      .expect(201);
+    expect(created.body.project).toMatchObject({
+      title: '导入故事',
+      creationMode: 'immersive',
+    });
+    expect(
+      created.body.modules.map((module: { type: string }) => module.type),
+    ).toEqual(['outline', 'roles', 'worldview', 'story']);
+
+    const projectId = created.body.project.id as string;
+    const imported = await write(
+      request(app.getHttpServer()).post(
+        `${collection}/${projectId}/import-jobs`,
+      ),
+    )
+      .set('Idempotency-Key', 'create-import-job')
+      .send({
+        fileName: '旧故事.md',
+        contentType: 'text/markdown',
+        byteSize: 2048,
+      })
+      .expect(201);
+    expect(imported.body.importJob).toMatchObject({
+      projectId,
+      sourceFileName: '旧故事.md',
+      status: 'pending',
+    });
+
+    const persisted = await pool.query<{
+      module_count: string;
+      job_count: string;
+    }>(
+      `SELECT
+        (SELECT COUNT(*) FROM story_artifacts WHERE project_id = $1 AND status = 'active') AS module_count,
+        (SELECT COUNT(*) FROM story_import_jobs WHERE project_id = $1) AS job_count`,
+      [projectId],
+    );
+    expect(persisted.rows[0]).toEqual({ module_count: '4', job_count: '1' });
   });
 
   it('keeps private projects hidden, revokes collaborators, and audits admin access', async () => {

@@ -2,7 +2,7 @@ export type ConversationStatus = 'active' | 'archived';
 
 export interface ConversationSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   title: string;
   status: ConversationStatus;
@@ -37,7 +37,7 @@ export class Conversation {
 
   static create(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     title: string;
     createdAt: Date;

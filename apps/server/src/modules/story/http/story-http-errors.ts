@@ -1,6 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 
 import { ApplicationError } from '../../../platform/http/application-error.js';
+import { StoryImportFileInvalidError } from '../../../domain/story/story-import-job.js';
 import { IdempotencyConflictError } from '../../tenancy/application/create-team.js';
 import {
   ConversationArchivedError,
@@ -32,6 +33,13 @@ import {
 } from '../application/story-errors.js';
 
 export function throwStoryHttpError(error: unknown): never {
+  if (error instanceof StoryImportFileInvalidError) {
+    throw storyError(
+      'STORY_IMPORT_FILE_INVALID',
+      'Story import file is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
   if (error instanceof ConversationNotFoundError) {
     throw storyError(
       'CONVERSATION_NOT_FOUND',

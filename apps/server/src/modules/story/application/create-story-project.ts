@@ -1,3 +1,8 @@
+import {
+  StoryArtifact,
+  STORY_MODULE_DEFINITIONS,
+  storyModuleOrder,
+} from '../../../domain/story/story-artifact.js';
 import { StoryProject } from '../../../domain/story/story-project.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import type { SpaceRepository } from '../../spaces/ports/space-repository.js';
@@ -5,7 +10,9 @@ import { IdempotencyConflictError } from '../../tenancy/application/create-team.
 import type { IdempotencyRepository } from '../../tenancy/ports/idempotency-repository.js';
 import type { TeamMembershipRepository } from '../../tenancy/ports/team-membership-repository.js';
 import { projectOutput } from './project-output.js';
+import { artifactOutput } from './story-artifact-output.js';
 import { StoryProjectAccessDeniedError } from './story-errors.js';
+import type { StoryArtifactRepository } from '../ports/story-artifact-repository.js';
 import type { StoryProjectRepository } from '../ports/story-project-repository.js';
 
 const OPERATION_TYPE = 'CREATE_STORY_PROJECT';
@@ -13,6 +20,7 @@ const OPERATION_TYPE = 'CREATE_STORY_PROJECT';
 export class CreateStoryProject {
   constructor(
     private readonly projects: StoryProjectRepository,
+    private readonly artifacts: StoryArtifactRepository,
     private readonly spaces: SpaceRepository,
     private readonly memberships: TeamMembershipRepository,
     private readonly idempotency: IdempotencyRepository,
@@ -29,20 +37,19 @@ export class CreateStoryProject {
     tenantId: string | null;
     actorUserId: string;
     title: string;
+    creationMode: 'standard' | 'immersive';
     visibility: 'team' | 'private';
     spaceKind?: 'personal' | 'team';
     spaceId?: string;
     idempotencyKey: string;
     requestId: string;
   }) {
-    const personal =
-      input.spaceKind === 'personal' ||
-      input.tenantId === null ||
-      input.visibility === 'private';
-    const effectiveVisibility = personal ? 'private' : 'team';
+    const personal = input.spaceKind === 'personal' || input.tenantId === null;
+    const effectiveVisibility = personal ? 'private' : input.visibility;
     const requestHash = this.fingerprint.hash(
       JSON.stringify({
         title: input.title.trim(),
+        creationMode: input.creationMode,
         visibility: effectiveVisibility,
         spaceKind: personal ? 'personal' : 'team',
       }),
@@ -84,6 +91,10 @@ export class CreateStoryProject {
         });
         if (project === null)
           throw new Error('Idempotency result project is unavailable');
+        const modules = await this.artifacts.listForProject({
+          tenantId: project.tenantId,
+          projectId: project.id,
+        });
         return {
           project: projectOutput(project, {
             collaborator: false,
@@ -91,6 +102,12 @@ export class CreateStoryProject {
             canManageCollaborators:
               project.spaceKind === 'team' && project.visibility === 'team',
           }),
+          modules: modules
+            .sort(
+              (left, right) =>
+                storyModuleOrder(left.type) - storyModuleOrder(right.type),
+            )
+            .map(artifactOutput),
         };
       }
 
@@ -103,10 +120,24 @@ export class CreateStoryProject {
         createdByUserId: input.actorUserId,
         ownerUserId: input.actorUserId,
         title: input.title,
+        creationMode: input.creationMode,
         visibility: effectiveVisibility,
         createdAt: now,
       }).toSnapshot();
       await this.projects.create(project);
+      const modules = STORY_MODULE_DEFINITIONS.map(({ type, title }) =>
+        StoryArtifact.create({
+          id: this.ids.create(),
+          tenantId: project.tenantId,
+          projectId: project.id,
+          type,
+          title,
+          createdAt: now,
+        }).toSnapshot(),
+      );
+      for (const module of modules) {
+        await this.artifacts.create(module);
+      }
       await this.idempotency.create({
         id: this.ids.create(),
         tenantId: project.tenantId,
@@ -128,6 +159,7 @@ export class CreateStoryProject {
         beforeSummary: null,
         afterSummary: {
           title: project.title,
+          creationMode: project.creationMode,
           visibility: project.visibility,
           spaceKind: project.spaceKind,
         },
@@ -142,6 +174,7 @@ export class CreateStoryProject {
           canManageCollaborators:
             project.spaceKind === 'team' && project.visibility === 'team',
         }),
+        modules: modules.map(artifactOutput),
       };
     });
   }

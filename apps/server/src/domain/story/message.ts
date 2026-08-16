@@ -2,7 +2,7 @@ export type MessageAuthorType = 'user' | 'agent' | 'system';
 
 export interface MessageSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   conversationId: string;
   authorType: MessageAuthorType;
   authorUserId: string | null;
@@ -31,7 +31,7 @@ export class Message {
 
   static create(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
     authorType: MessageAuthorType;
     authorUserId: string | null;

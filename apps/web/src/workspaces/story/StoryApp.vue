@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, inject, watch} from 'vue';
+import { routerKey, type Router } from 'vue-router';
 
 import { ApiError } from '../../lib/server-api/api-error';
 import {
@@ -8,14 +9,20 @@ import {
 } from '../../lib/server-api/session-api';
 import {
   appendStoryMessage,
+  appendPersonalStoryMessage,
   confirmStoryDraft,
+  createPersonalStoryConversation,
+  createPersonalStoryImportJob,
   createStoryConversation,
+  createStoryImportJob,
+  createPersonalStoryProject,
   createStoryProject,
   discardStoryDraft,
   editStoryDraft,
   getStoryArtifact,
   getStoryGenerationRequest,
   getStoryProject,
+  listPersonalStoryProjects,
   listStoryArtifacts,
   listStoryProjects,
   retryStoryGeneration,
@@ -25,6 +32,7 @@ import {
   type StoryGenerationPipelineStage,
   type StoryProject,
 } from './story-api';
+import { toStoryRoutePath } from './router';
 import StoryStatusBar from './components/StoryStatusBar.vue';
 
 type StorySpeechRecognition = {
@@ -96,6 +104,8 @@ const props = defineProps<{
   projectId?: string;
 }>();
 
+const router = inject<Router | null>(routerKey, null);
+
 const session = ref<SessionSnapshot | null>(null);
 const projects = ref<StoryProject[]>([]);
 const realProjects = ref<StoryProject[]>([]);
@@ -157,11 +167,15 @@ const placeholderWorks = [
   },
 ] as const;
 
+const storyCreationAction = ref<'story' | 'immersive' | 'upload' | null>(null);
+const storyUploadInput = ref<HTMLInputElement | null>(null);
+
 const activeTeam = computed(
   () =>
     session.value?.teams.find((team) => team.id === selectedTeamId.value) ??
     null,
 );
+const activeSpaceTitle = computed(() => activeTeam.value?.name ?? '个人空间');
 const canEdit = computed(
   () =>
     project.value?.canEdit === true &&
@@ -201,15 +215,16 @@ const storyContent = computed<StoryGeneratedContent | null>(() => {
 const hasAppliedWorkConditions = computed(() =>
   Boolean(appliedSearch.value.query || appliedSearch.value.date),
 );
-const filteredPlaceholderWorks = computed(() => {
+const filteredProjects = computed(() => {
   const { query, date } = appliedSearch.value;
-  const filteredWorks = placeholderWorks.filter((work) => {
+  const filteredWorks = projects.value.filter((work) => {
     const matchesQuery =
       !query ||
-      [work.title, work.type, work.updated].some(
-        (value) => value.toLocaleLowerCase().includes(query),
-      );
-    const matchesDate = !date || work.updatedAt === date;
+      [
+        work.title,
+        work.creationMode === 'immersive' ? '沉浸式创作' : '故事创建',
+      ].some((value) => value.toLocaleLowerCase().includes(query));
+    const matchesDate = !date || work.updatedAt.slice(0, 10) === date;
     return matchesQuery && matchesDate;
   });
   return hasAppliedWorkConditions.value
@@ -232,10 +247,10 @@ const filteredRealWorks = computed(() => {
     })
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 });
-const recentPlaceholderWorkTitle = computed(() =>
+const recentProjectId = computed(() =>
   hasAppliedWorkConditions.value
     ? null
-    : (filteredPlaceholderWorks.value[0]?.title ?? null),
+    : (filteredProjects.value[0]?.id ?? null),
 );
 const statusBarMessage = computed(() => {
   if (viewState.value === 'loading') return '读取中…';
@@ -244,13 +259,19 @@ const statusBarMessage = computed(() => {
   if (actionMessage.value) return '已同步';
   return project.value ? '已连接' : '等待选择项目';
 });
+const storyCreationStatus = computed(() => {
+  if (storyPromptSubmitting.value) return '正在准备你的故事……';
+  if (storyCreationAction.value === 'upload') return '正在接收故事文件……';
+  if (storyCreationAction.value === 'immersive') return '正在进入沉浸式创作……';
+  if (storyCreationAction.value === 'story') return '正在创建故事……';
+  return '';
+});
 
 const artifactTypeLabels: Record<StoryArtifact['type'], string> = {
-  idea: '灵感',
-  world_setting: '世界观',
-  character: '人物',
   outline: '大纲',
-  script: '剧本',
+  roles: '角色资产',
+  worldview: '世界观',
+  story: '故事页',
 };
 
 const versionStatusLabels: Record<StoryArtifactVersion['status'], string> = {
@@ -261,23 +282,26 @@ const versionStatusLabels: Record<StoryArtifactVersion['status'], string> = {
 
 onMounted(loadWorkspace);
 
+watch(selectedTeamId, () => {
+  if (session.value !== null && projectMode.value === 'catalog') {
+    void loadCatalog();
+  }
+});
+
 async function loadWorkspace() {
   viewState.value = 'loading';
   errorMessage.value = '';
   actionMessage.value = '';
   try {
     session.value = await getSession();
-    selectedTeamId.value ??= session.value.teams[0]?.id ?? null;
-    if (selectedTeamId.value === null) {
-      projects.value = [];
-      project.value = null;
-      artifacts.value = [];
-      viewState.value = 'ready';
-      return;
-    }
 
     if (props.projectId) {
-      await loadProject(selectedTeamId.value, props.projectId);
+      const teamId = selectedTeamId.value ?? session.value.teams[0]?.id;
+      if (!teamId) {
+        throw new Error('个人项目请从故事模块页面继续编辑。');
+      }
+      selectedTeamId.value = teamId;
+      await loadProject(teamId, props.projectId);
     } else {
       try {
         const { items } = await listStoryProjects(selectedTeamId.value, 50);
@@ -286,7 +310,24 @@ async function loadWorkspace() {
         realProjects.value = [];
       }
       viewState.value = 'ready';
+      await loadCatalog();
     }
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+async function loadCatalog() {
+  viewState.value = 'loading';
+  errorMessage.value = '';
+  try {
+    const response = activeTeam.value
+      ? await listStoryProjects(activeTeam.value.id)
+      : await listPersonalStoryProjects();
+    projects.value = response.items;
+    project.value = null;
+    artifacts.value = [];
+    viewState.value = 'ready';
   } catch (error) {
     handleError(error);
   }
@@ -498,7 +539,6 @@ function createStoryTitle(prompt: string) {
 function audioSource(shot: StoryGeneratedAudio): string {
   return `data:${shot.mimeType};base64,${shot.audioBase64}`;
 }
-
 function videoSource(video: StoryGeneratedVideo): string {
   const fileName = video.outputPath.split(/[\\/]/).pop() ?? '';
   return `${agentServiceUrl}/v1/story-videos/files/${encodeURIComponent(fileName)}`;
@@ -508,18 +548,131 @@ function subtitleSource(video: StoryGeneratedVideo): string {
   const fileName = video.subtitlePath.split(/[\\/]/).pop() ?? '';
   return `${agentServiceUrl}/v1/story-videos/files/${encodeURIComponent(fileName)}`;
 }
-
 function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);
   return `${minutes}:${String(secs).padStart(2, '0')}`;
 }
 
+function storyModulePath(
+  mode: 'story' | 'immersive',
+  projectId: string,
+): string {
+  return mode === 'immersive'
+    ? `/stories/immersive/${encodeURIComponent(projectId)}/outline`
+    : `/stories/${encodeURIComponent(projectId)}/outline`;
+}
+
+function catalogProjectPath(project: StoryProject): string {
+  return storyModulePath(
+    project.creationMode === 'immersive' ? 'immersive' : 'story',
+    project.id,
+  );
+}
+
+function navigateStoryPath(path: string) {
+  if (router) {
+    void router.push(toStoryRoutePath(path));
+    return;
+  }
+  window.location.assign(path);
+}
+
+function handleStoryLink(event: MouseEvent, path: string) {
+  if (!router) return;
+  event.preventDefault();
+  navigateStoryPath(path);
+}
+
+function projectModeLabel(project: StoryProject): string {
+  return project.creationMode === 'immersive' ? '沉浸式创作' : '故事创建';
+}
+
+function rememberPendingStoryImport(
+  projectId: string,
+  importJobId: string,
+  file: File,
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(
+      `duoduo-story-import:${projectId}`,
+      JSON.stringify({
+        importJobId,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified,
+      }),
+    );
+  } catch {
+    // The editor can still be opened when session storage is unavailable.
+  }
+}
+
+async function createStoryAsset(mode: 'story' | 'immersive', file?: File) {
+  if (!session.value || storyCreationAction.value) return;
+  storyCreationAction.value = file ? 'upload' : mode;
+  errorMessage.value = '';
+  actionMessage.value = '';
+  try {
+    const title = mode === 'immersive' ? '未命名沉浸式故事' : '未命名故事';
+    const { project: createdProject } = activeTeam.value
+      ? await createStoryProject(activeTeam.value.id, {
+          title,
+          creationMode: mode === 'immersive' ? 'immersive' : 'standard',
+        })
+      : await createPersonalStoryProject({
+          title,
+          creationMode: mode === 'immersive' ? 'immersive' : 'standard',
+        });
+    if (file) {
+      const { importJob } = activeTeam.value
+        ? await createStoryImportJob(
+            activeTeam.value.id,
+            createdProject.id,
+            file,
+          )
+        : await createPersonalStoryImportJob(createdProject.id, file);
+      rememberPendingStoryImport(createdProject.id, importJob.id, file);
+    }
+    const nextPath = storyModulePath(mode, createdProject.id);
+    navigateStoryPath(file ? `${nextPath}?import=pending` : nextPath);
+  } catch (error) {
+    handleError(error);
+  } finally {
+    storyCreationAction.value = null;
+  }
+}
+
+function startStoryCreation(mode: 'story' | 'immersive') {
+  void createStoryAsset(mode);
+}
+
+function openStoryUpload() {
+  if (
+    !session.value ||
+    storyPromptSubmitting.value ||
+    storyCreationAction.value
+  )
+    return;
+  storyUploadInput.value?.click();
+}
+
+function handleStoryUpload(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  void createStoryAsset('story', file);
+}
+
 async function submitStoryPrompt() {
   const prompt = storyPrompt.value.trim();
-  if (!prompt || storyPromptSubmitting.value) return;
-  if (!activeTeam.value) {
-    actionMessage.value = '请先选择一个团队空间，再开始 AI 对话。';
+  if (!prompt || storyPromptSubmitting.value || storyCreationAction.value)
+    return;
+  if (!session.value) {
+    actionMessage.value = '正在连接创作空间，请稍后再试。';
     return;
   }
 
@@ -528,22 +681,36 @@ async function submitStoryPrompt() {
   actionMessage.value = '';
   const title = createStoryTitle(prompt);
   try {
-    const { project: createdProject } = await createStoryProject(
-      activeTeam.value.id,
-      { title },
-    );
-    const { conversation } = await createStoryConversation(
-      activeTeam.value.id,
-      createdProject.id,
-      { title: '第一次创作对话' },
-    );
-    const { generationRequest } = await appendStoryMessage(
-      activeTeam.value.id,
-      createdProject.id,
-      conversation.id,
-      prompt,
-    );
-    saveActiveGeneration(createdProject.id, conversation.id, generationRequest.id);
+    const { project: createdProject } = activeTeam.value
+      ? await createStoryProject(activeTeam.value.id, {
+          title,
+          creationMode: 'standard',
+        })
+      : await createPersonalStoryProject({
+          title,
+          creationMode: 'standard',
+        });
+    const { conversation } = activeTeam.value
+      ? await createStoryConversation(activeTeam.value.id, createdProject.id, {
+          title: '第一次创作对话',
+        })
+      : await createPersonalStoryConversation(createdProject.id, {
+          title: '第一次创作对话',
+        });
+    if (activeTeam.value) {
+      await appendStoryMessage(
+        activeTeam.value.id,
+        createdProject.id,
+        conversation.id,
+        prompt,
+      );
+    } else {
+      await appendPersonalStoryMessage(
+        createdProject.id,
+        conversation.id,
+        prompt,
+      );
+    }
     rememberRecentConversation({
       id: conversation.id,
       projectId: createdProject.id,
@@ -560,6 +727,11 @@ async function submitStoryPrompt() {
       requestId: generationRequest.id,
     };
     await pollGeneration();
+    navigateStoryPath(
+      activeTeam.value
+        ? `/stories/${createdProject.id}`
+        : `/stories/${createdProject.id}/outline`,
+    );
   } catch (error) {
     generationError.value = '创建故事项目失败，请重试。';
     handleError(error);
@@ -877,6 +1049,23 @@ function formatDate(value: string | undefined) {
               </button>
             </div>
           </section>
+          <div
+            class="story-creation-actions story-creation-actions-skeleton"
+            aria-hidden="true"
+          >
+            <div
+              v-for="index in 3"
+              :key="index"
+              class="story-creation-action-skeleton"
+            >
+              <span
+                class="story-creation-action-icon story-skeleton-shimmer"
+              ></span>
+              <span
+                class="story-creation-action-label story-skeleton-shimmer"
+              ></span>
+            </div>
+          </div>
         </div>
         <section
           id="story-works"
@@ -964,15 +1153,15 @@ function formatDate(value: string | undefined) {
               <div class="story-skeleton-card">
                 <div class="story-skeleton-cover story-skeleton-shimmer"></div>
                 <div class="story-skeleton-card-body">
-                  <span class="story-skeleton-type story-skeleton-shimmer"></span>
+                  <span
+                    class="story-skeleton-type story-skeleton-shimmer"
+                  ></span>
                   <span
                     class="story-skeleton-card-meta story-skeleton-shimmer"
                   ></span>
                 </div>
               </div>
-              <span
-                class="story-skeleton-title story-skeleton-shimmer"
-              ></span>
+              <span class="story-skeleton-title story-skeleton-shimmer"></span>
             </article>
           </div>
         </section>
@@ -1029,7 +1218,7 @@ function formatDate(value: string | undefined) {
                   rows="3"
                   placeholder="例如：一个失忆的急诊医生，在旧火车站发现了自己的死亡证明……"
                   aria-label="输入一个故事想法"
-                  :disabled="storyPromptSubmitting"
+                  :disabled="storyPromptSubmitting || storyCreationAction"
                   @keydown.enter.exact.prevent="submitStoryPrompt"
                 ></textarea>
                 <button
@@ -1042,7 +1231,10 @@ function formatDate(value: string | undefined) {
                     storyPromptSubmitting ? '正在准备故事' : '发送创作想法'
                   "
                   :disabled="
-                    !storyPrompt.trim() || storyPromptSubmitting || !activeTeam
+                    !storyPrompt.trim() ||
+                    storyPromptSubmitting ||
+                    storyCreationAction ||
+                    !session
                   "
                   @click="submitStoryPrompt"
                 >
@@ -1070,7 +1262,7 @@ function formatDate(value: string | undefined) {
                   :aria-label="voiceInputActive ? '停止语音输入' : '语音输入'"
                   :aria-pressed="voiceInputActive"
                   :title="voiceInputActive ? '停止语音输入' : '语音输入'"
-                  :disabled="storyPromptSubmitting"
+                  :disabled="storyPromptSubmitting || storyCreationAction"
                   @click="toggleVoiceInput"
                 >
                   <svg
@@ -1091,11 +1283,11 @@ function formatDate(value: string | undefined) {
                 </button>
               </div>
               <p
-                v-if="storyPromptSubmitting"
+                v-if="storyCreationStatus"
                 class="story-quick-input-status"
                 role="status"
               >
-                {{ generationError || generationStageLabel }}
+                {{ generationError || generationStageLabel ||storyCreationStatus }}
               </p>
               <div
                 v-if="generationError && activeGeneration"
@@ -1110,6 +1302,86 @@ function formatDate(value: string | undefined) {
                 </button>
               </div>
             </section>
+            <div class="story-creation-actions" aria-label="开始创作">
+              <button
+                class="story-creation-action story-creation-action-story"
+                type="button"
+                :disabled="
+                  !session || storyPromptSubmitting || storyCreationAction
+                "
+                @click="startStoryCreation('story')"
+              >
+                <span class="story-creation-action-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+                    <path
+                      d="M4 5.5A2.5 2.5 0 0 1 6.5 3H10l2 2h5.5A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-11Z"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span class="story-creation-action-label">故事创建</span>
+              </button>
+              <button
+                class="story-creation-action story-creation-action-immersive"
+                type="button"
+                :disabled="
+                  !session || storyPromptSubmitting || storyCreationAction
+                "
+                @click="startStoryCreation('immersive')"
+              >
+                <span class="story-creation-action-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+                    <rect
+                      x="3"
+                      y="5"
+                      width="18"
+                      height="14"
+                      rx="2"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                    />
+                    <path
+                      d="m8 5 2 14M14 5l2 14M3 9h18M3 15h18"
+                      stroke="currentColor"
+                      stroke-width="1.3"
+                    />
+                  </svg>
+                </span>
+                <span class="story-creation-action-label">沉浸式创作</span>
+              </button>
+              <button
+                class="story-creation-action story-creation-action-upload"
+                type="button"
+                :disabled="
+                  !session || storyPromptSubmitting || storyCreationAction
+                "
+                @click="openStoryUpload"
+              >
+                <span class="story-creation-action-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none">
+                    <path
+                      d="M12 15V4m0 0L8 8m4-4 4 4M5 14v4.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V14"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span class="story-creation-action-label">上传故事</span>
+              </button>
+              <input
+                ref="storyUploadInput"
+                class="story-creation-upload-input"
+                type="file"
+                accept=".txt,.md,.doc,.docx,.pdf"
+                tabindex="-1"
+                aria-hidden="true"
+                @change="handleStoryUpload"
+              />
+            </div>
           </div>
           <section
             id="story-works"
@@ -1119,7 +1391,7 @@ function formatDate(value: string | undefined) {
             <header class="story-works-header">
               <div class="story-works-heading">
                 <div class="story-works-title-row">
-                  <h1 id="story-works-title">个人空间</h1>
+                  <h1 id="story-works-title">{{ activeSpaceTitle }}</h1>
                   <label
                     v-if="session?.teams.length"
                     class="story-space-switcher"
@@ -1130,12 +1402,7 @@ function formatDate(value: string | undefined) {
                       aria-label="切换空间"
                       :disabled="storyPromptSubmitting"
                     >
-                      <option
-                        v-if="!(session?.teams.length ?? 0)"
-                        :value="null"
-                      >
-                        个人空间
-                      </option>
+                      <option :value="null">个人空间</option>
                       <option
                         v-for="team in session?.teams ?? []"
                         :key="team.id"
@@ -1202,7 +1469,7 @@ function formatDate(value: string | undefined) {
               </form>
             </div>
 
-            <div
+            <!-- <div
               v-if="filteredRealWorks.length"
               class="story-placeholder-grid"
             >
@@ -1233,15 +1500,21 @@ function formatDate(value: string | undefined) {
             >
               <article
                 v-for="work in filteredPlaceholderWorks"
-                :key="work.title"
+                :key="work.title" -->
+            <div v-if="filteredProjects.length" class="story-placeholder-grid">
+              <a
+                v-for="work in filteredProjects"
+                :key="work.id"
                 class="story-placeholder-item"
+                :class="{ 'is-archived': work.status === 'archived' }"
+                :href="catalogProjectPath(work)"
+                @click="handleStoryLink($event, catalogProjectPath(work))"
               >
                 <div class="story-placeholder-card">
                   <div class="story-placeholder-card-top">
                     <span
                       v-if="
-                        !hasAppliedWorkConditions &&
-                        work.title === recentPlaceholderWorkTitle
+                        !hasAppliedWorkConditions && work.id === recentProjectId
                       "
                       class="story-card-recent"
                     >
@@ -1252,16 +1525,24 @@ function formatDate(value: string | undefined) {
                     <strong>{{ work.title.slice(0, 1) }}</strong>
                   </div>
                   <div class="story-placeholder-card-body">
-                    <span class="story-placeholder-type">{{ work.type }}</span>
-                    <p>{{ work.updated }}</p>
+                    <span class="story-placeholder-type">{{
+                      projectModeLabel(work)
+                    }}</span>
+                    <p>{{ formatDate(work.updatedAt) }}</p>
                   </div>
                 </div>
                 <h3 class="story-placeholder-title">{{ work.title }}</h3>
-              </article>
+              </a>
             </div>
             <div v-else class="story-works-empty">
-              <strong>没有找到匹配的作品</strong>
-              <span>调整关键词或日期再试试。</span>
+              <strong>{{
+                hasAppliedWorkConditions ? '没有找到匹配的作品' : '还没有作品'
+              }}</strong>
+              <span>{{
+                hasAppliedWorkConditions
+                  ? '调整关键词或日期再试试。'
+                  : '从上方开始创建你的第一个故事。'
+              }}</span>
             </div>
           </section>
         </div>

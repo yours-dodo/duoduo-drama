@@ -83,6 +83,7 @@ describe('GenerateStoryDraft', () => {
     expect(fixture.messages.create).toHaveBeenCalledWith(
       expect.objectContaining({ authorType: 'agent' }),
     );
+    expect(fixture.artifacts.create).not.toHaveBeenCalled();
   });
 
   it('records a categorized Agent failure without creating a partial result', async () => {
@@ -355,6 +356,7 @@ function buildFixture(
       create: vi.fn(async (value) => value),
       update: vi.fn(async (value) => value),
       findById: vi.fn(async () => fixture.resultArtifact),
+      findActiveForProjectAndTypeLocked: vi.fn(async () => storyModule()),
       listForProject: vi.fn(async () => []),
     },
     artifactVersions: {
@@ -395,7 +397,6 @@ function buildFixture(
       create: vi
         .fn()
         .mockReturnValueOnce('agent-message-id')
-        .mockReturnValueOnce('artifact-id')
         .mockReturnValueOnce('version-id'),
     },
   };
@@ -410,9 +411,24 @@ function project() {
     createdByUserId: 'creator-id',
     ownerUserId: 'creator-id',
     title: '故事',
+    creationMode: 'standard' as const,
     visibility: 'team' as const,
     status: 'active' as const,
     revision: 1,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function storyModule() {
+  return {
+    id: 'artifact-id',
+    tenantId: 'team-id',
+    projectId: 'project-id',
+    type: 'outline' as const,
+    title: '大纲',
+    status: 'active' as const,
+    currentVersionId: null,
     createdAt: NOW,
     updatedAt: NOW,
   };

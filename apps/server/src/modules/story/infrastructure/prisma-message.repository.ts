@@ -10,7 +10,7 @@ import type { MessageRepository } from '../ports/message-repository.js';
 
 interface MessageRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   conversationId: string;
   authorType: string;
   authorUserId: string | null;
@@ -31,24 +31,19 @@ export class PrismaMessageRepository implements MessageRepository {
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     messageId: string;
   }): Promise<MessageSnapshot | null> {
     return this.database.withClient(async (client) => {
       const message = await client.message.findUnique({
-        where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.messageId,
-          },
-        },
+        where: { tenantId: request.tenantId, id: request.messageId },
       });
       return message === null ? null : readMessage(message);
     });
   }
 
   listForConversation(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
     page: { limit: number; after: { at: Date; id: string } | null };
   }) {
@@ -66,7 +61,7 @@ export class PrismaMessageRepository implements MessageRepository {
           message.body,
           message.created_at AS "createdAt"
         FROM messages AS message
-        WHERE message.tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId)}
           AND message.conversation_id = ${request.conversationId}::uuid
           ${after}
         ORDER BY message.created_at DESC, message.id DESC
@@ -83,6 +78,12 @@ export class PrismaMessageRepository implements MessageRepository {
       };
     });
   }
+}
+
+function tenantScope(tenantId: string | null) {
+  return tenantId === null
+    ? Prisma.sql`message.tenant_id IS NULL`
+    : Prisma.sql`message.tenant_id = ${tenantId}::uuid`;
 }
 
 function readMessage(row: MessageRow): MessageSnapshot {

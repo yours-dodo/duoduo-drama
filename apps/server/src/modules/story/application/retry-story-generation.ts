@@ -51,6 +51,7 @@ export class RetryStoryGeneration {
         this.conversations,
         {
           tenantId: input.tenantId,
+          actorUserId: input.actorUserId,
           projectId: input.projectId,
           conversationId: input.conversationId,
           membership,

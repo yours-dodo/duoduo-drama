@@ -9,7 +9,7 @@ import type { StoryArtifactVersionRepository } from '../ports/story-artifact-ver
 
 interface StoryArtifactVersionRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   artifactId: string;
   versionNumber: number;
   content: string;
@@ -43,10 +43,7 @@ export class PrismaStoryArtifactVersionRepository implements StoryArtifactVersio
     return this.database.withClient(async (client) => {
       const row = await client.storyArtifactVersion.update({
         where: {
-          tenantId_id: {
-            tenantId: version.tenantId,
-            id: version.id,
-          },
+          id: version.id,
         },
         data: version,
       });
@@ -55,24 +52,19 @@ export class PrismaStoryArtifactVersionRepository implements StoryArtifactVersio
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     versionId: string;
   }): Promise<StoryArtifactVersionSnapshot | null> {
     return this.database.withClient(async (client) => {
-      const row = await client.storyArtifactVersion.findUnique({
-        where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.versionId,
-          },
-        },
+      const row = await client.storyArtifactVersion.findFirst({
+        where: { tenantId: request.tenantId, id: request.versionId },
       });
       return row === null ? null : readVersion(row);
     });
   }
 
   listForArtifact(request: {
-    tenantId: string;
+    tenantId: string | null;
     artifactId: string;
   }): Promise<StoryArtifactVersionSnapshot[]> {
     return this.database.withClient(async (client) => {

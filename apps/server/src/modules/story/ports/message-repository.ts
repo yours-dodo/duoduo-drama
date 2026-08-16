@@ -9,11 +9,11 @@ export const MESSAGE_REPOSITORY = Symbol('MESSAGE_REPOSITORY');
 export interface MessageRepository {
   create(message: MessageSnapshot): Promise<MessageSnapshot>;
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     messageId: string;
   }): Promise<MessageSnapshot | null>;
   listForConversation(request: {
-    tenantId: string;
+    tenantId: string | null;
     conversationId: string;
     page: KeysetPageRequest;
   }): Promise<KeysetPage<MessageSnapshot>>;

@@ -79,6 +79,7 @@ export class StoryProjectsController {
         tenantId: tenant.tenantId,
         actorUserId: tenant.userId,
         title: body.title,
+        creationMode: body.creationMode,
         visibility: body.visibility,
         idempotencyKey: readIdempotencyKey(suppliedIdempotencyKey),
         requestId: readRequestId(request),

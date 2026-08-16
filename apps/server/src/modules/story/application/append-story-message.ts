@@ -38,7 +38,7 @@ export class AppendStoryMessage {
   ) {}
 
   execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     conversationId: string;
@@ -47,20 +47,28 @@ export class AppendStoryMessage {
   }) {
     const normalizedBody = input.body.trim();
     const requestHash = this.fingerprint.hash(normalizedBody);
-    const scopeKey = `tenant:${input.tenantId}:user:${input.actorUserId}:conversation:${input.conversationId}`;
+    const scopeKey = `${
+      input.tenantId === null ? 'personal' : `tenant:${input.tenantId}`
+    }:user:${input.actorUserId}:conversation:${input.conversationId}`;
 
     return this.transactions.run(async () => {
-      const membership = await this.memberships.findActive({
-        tenantId: input.tenantId,
-        userId: input.actorUserId,
-      });
-      if (membership === null) throw new StoryProjectAccessDeniedError();
+      const membership =
+        input.tenantId === null
+          ? null
+          : await this.memberships.findActive({
+              tenantId: input.tenantId,
+              userId: input.actorUserId,
+            });
+      if (input.tenantId !== null && membership === null) {
+        throw new StoryProjectAccessDeniedError();
+      }
       const access = await readConversationAccess(
         this.projects,
         this.collaborators,
         this.conversations,
         {
           tenantId: input.tenantId,
+          actorUserId: input.actorUserId,
           projectId: input.projectId,
           conversationId: input.conversationId,
           membership,

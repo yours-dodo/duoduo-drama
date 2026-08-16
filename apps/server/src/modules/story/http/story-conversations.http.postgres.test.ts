@@ -61,7 +61,7 @@ describe.skipIf(!databaseUrl)('story conversation HTTP PostgreSQL flow', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_artifact_versions", "story_artifacts", "story_import_jobs", "assets", "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users" CASCADE',
     );
     await insertUser(CREATOR_ID, 'creator@example.com');
     await insertUser(READER_ID, 'reader@example.com');

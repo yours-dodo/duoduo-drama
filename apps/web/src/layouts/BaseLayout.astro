@@ -13,9 +13,25 @@ interface Props {
   pageClass?: string;
   robots?: string;
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
+  showSiteHeader?: boolean;
+  storyModuleProjectId?: string;
+  storyModule?: string;
+  storyModuleImmersive?: boolean;
 }
 
-const { title, description, keywords, eyebrow, pageClass, robots, structuredData } = Astro.props;
+const {
+  title,
+  description,
+  keywords,
+  eyebrow,
+  pageClass,
+  robots,
+  structuredData,
+  showSiteHeader = true,
+  storyModuleProjectId,
+  storyModule,
+  storyModuleImmersive,
+} = Astro.props;
 const pageClasses = new Set((pageClass ?? '').split(/\s+/).filter(Boolean));
 const hasPageClass = (value: string) => pageClasses.has(value);
 const isLandingPage = hasPageClass('landing-page');
@@ -107,14 +123,23 @@ const tagline = isLandingPage ? '让灵感成为内容，让内容被听见，�
     </script>
   </head>
   <body class={pageClass}>
-    <SiteHeader
-      brandName={headerBrandName}
-      showThemeToggle={isLandingPage}
-      showStoryTools={isStoryCatalogPage}
-      showWorkspaceTools={isWorkspaceThemePage}
-      showPublicNav={!hasPageClass('login-page') && !hasPageClass('onboarding-page')}
-      showBackLink={hasPageClass('login-page') || hasPageClass('onboarding-page')}
-    />
+    {showSiteHeader && (
+      <SiteHeader
+        brandName={headerBrandName}
+        showThemeToggle={isLandingPage}
+        showStoryTools={isStoryCatalogPage}
+        showWorkspaceTools={isWorkspaceThemePage}
+        showPublicNav={
+          !hasPageClass('login-page') &&
+          !hasPageClass('onboarding-page') &&
+          !isStoryCatalogPage
+        }
+        showBackLink={hasPageClass('login-page') || hasPageClass('onboarding-page')}
+        storyModuleProjectId={storyModuleProjectId}
+        storyModule={storyModule}
+        storyModuleImmersive={storyModuleImmersive}
+      />
+    )}
     {eyebrow && <span class="sr-only">{eyebrow}</span>}
     <main>
       <slot />

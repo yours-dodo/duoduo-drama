@@ -18,6 +18,7 @@ model User {
   authoredMessages                  Message[]                               @relation("MessageAuthor")
   uploadedAssets                    Asset[]                                 @relation("AssetUploader")
   createdStoryArtifactVersions      StoryArtifactVersion[]                  @relation("StoryArtifactVersionCreator")
+  createdStoryImportJobs            StoryImportJob[]                        @relation("StoryImportJobCreator")
   ownedSpaces                       Space[]                                 @relation("SpaceOwnerUser")
 
   @@map("users")

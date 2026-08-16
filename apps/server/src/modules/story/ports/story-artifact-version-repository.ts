@@ -12,11 +12,11 @@ export interface StoryArtifactVersionRepository {
     version: StoryArtifactVersionSnapshot,
   ): Promise<StoryArtifactVersionSnapshot>;
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     versionId: string;
   }): Promise<StoryArtifactVersionSnapshot | null>;
   listForArtifact(request: {
-    tenantId: string;
+    tenantId: string | null;
     artifactId: string;
   }): Promise<StoryArtifactVersionSnapshot[]>;
 }

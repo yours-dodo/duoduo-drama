@@ -1,3 +1,4 @@
+import { storyModuleOrder } from '../../../domain/story/story-artifact.js';
 import type { TeamMembershipRepository } from '../../tenancy/ports/team-membership-repository.js';
 import { artifactOutput } from './story-artifact-output.js';
 import {
@@ -38,6 +39,13 @@ export class ListStoryArtifacts {
       tenantId: input.tenantId,
       projectId: input.projectId,
     });
-    return { items: artifacts.map(artifactOutput) };
+    return {
+      items: artifacts
+        .sort(
+          (left, right) =>
+            storyModuleOrder(left.type) - storyModuleOrder(right.type),
+        )
+        .map(artifactOutput),
+    };
   }
 }

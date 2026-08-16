@@ -23,6 +23,7 @@ describe('story project application', () => {
     await expect(
       new CreateStoryProject(
         fixture.projects,
+        fixture.artifacts,
         fixture.spaces,
         fixture.memberships,
         fixture.idempotency,
@@ -35,6 +36,7 @@ describe('story project application', () => {
         tenantId: 'team-id',
         actorUserId: 'creator-id',
         title: '  我的故事  ',
+        creationMode: 'standard',
         visibility: 'team',
         idempotencyKey: 'project-key',
         requestId: 'request-id',
@@ -47,6 +49,12 @@ describe('story project application', () => {
         status: 'active',
         revision: 1,
       },
+      modules: [
+        { type: 'outline', title: '大纲', currentVersionId: null },
+        { type: 'roles', title: '角色资产', currentVersionId: null },
+        { type: 'worldview', title: '世界观', currentVersionId: null },
+        { type: 'story', title: '故事页', currentVersionId: null },
+      ],
     });
     expect(fixture.projects.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -73,6 +81,7 @@ describe('story project application', () => {
     await expect(
       new CreateStoryProject(
         fixture.projects,
+        fixture.artifacts,
         fixture.spaces,
         fixture.memberships,
         fixture.idempotency,
@@ -85,6 +94,7 @@ describe('story project application', () => {
         tenantId: null,
         actorUserId: 'creator-id',
         title: '个人故事',
+        creationMode: 'standard',
         visibility: 'private',
         spaceKind: 'personal',
         idempotencyKey: 'personal-project-key',
@@ -326,6 +336,7 @@ function projectSnapshot(
     createdByUserId: 'creator-id',
     ownerUserId: 'creator-id',
     title: '故事',
+    creationMode: 'standard' as const,
     visibility: 'team' as const,
     status: 'active' as const,
     revision: 1,
@@ -385,6 +396,10 @@ function buildFixture(
           options.projectPage ?? { items: [projectSnapshot()], next: null },
       ),
     },
+    artifacts: {
+      create: vi.fn(async (value) => value),
+      listForProject: vi.fn(async () => []),
+    },
     spaces: {
       findPersonalByUserId: vi.fn(async () => ({
         id: 'personal-space-id',
@@ -438,6 +453,10 @@ function buildFixture(
       create: vi
         .fn()
         .mockReturnValueOnce('project-id')
+        .mockReturnValueOnce('module-outline-id')
+        .mockReturnValueOnce('module-roles-id')
+        .mockReturnValueOnce('module-worldview-id')
+        .mockReturnValueOnce('module-story-id')
         .mockReturnValueOnce('idempotency-id')
         .mockReturnValue('audit-id'),
     },

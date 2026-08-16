@@ -46,7 +46,7 @@ describe.skipIf(!databaseUrl)('story artifact PostgreSQL boundary', () => {
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE "story_artifact_versions", "story_artifacts", "assets", "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users"',
+      'TRUNCATE TABLE "story_artifact_versions", "story_artifacts", "story_import_jobs", "assets", "story_generation_requests", "messages", "conversations", "project_collaborators", "story_projects", "team_invitations", "audit_records", "idempotency_records", "team_memberships", "spaces", "teams", "identity_security_events", "sessions", "email_login_challenges", "users" CASCADE',
     );
     teamId = randomUUID();
     otherTeamId = randomUUID();
@@ -181,8 +181,8 @@ describe.skipIf(!databaseUrl)('story artifact PostgreSQL boundary', () => {
       id: randomUUID(),
       tenantId: teamId,
       projectId,
-      type: 'character',
-      title: '主角',
+      type: 'roles',
+      title: '角色资产',
       createdAt: NOW,
     }).toSnapshot();
     await artifacts.create(artifact);

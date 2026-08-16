@@ -22,6 +22,7 @@ export function projectOutput(
     createdByUserId: project.createdByUserId,
     ownerUserId: project.ownerUserId,
     title: project.title,
+    creationMode: project.creationMode,
     visibility: project.visibility,
     status: project.status,
     revision: project.revision,

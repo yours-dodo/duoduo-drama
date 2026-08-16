@@ -4,7 +4,7 @@ export type StoryArtifactVersionSource = 'user' | 'agent' | 'import';
 
 export interface StoryArtifactVersionSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   artifactId: string;
   versionNumber: number;
   content: string;
@@ -68,7 +68,7 @@ export class StoryArtifactVersion {
 
   static createDraft(input: {
     id: string;
-    tenantId: string;
+    tenantId: string | null;
     artifactId: string;
     versionNumber: number;
     content: string;

@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import type { StoryArtifactSnapshot } from '../../../domain/story/story-artifact.js';
+import { Prisma } from '../../../generated/prisma/client.js';
+import type {
+  StoryArtifactSnapshot,
+  StoryArtifactType,
+} from '../../../domain/story/story-artifact.js';
 import {
   DATABASE_CLIENT,
   type DatabaseClientProvider,
@@ -9,7 +13,7 @@ import type { StoryArtifactRepository } from '../ports/story-artifact-repository
 
 interface StoryArtifactRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   type: string;
   title: string;
@@ -36,10 +40,7 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
     return this.database.withClient(async (client) => {
       const row = await client.storyArtifact.update({
         where: {
-          tenantId_id: {
-            tenantId: artifact.tenantId,
-            id: artifact.id,
-          },
+          id: artifact.id,
         },
         data: artifact,
       });
@@ -48,24 +49,19 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     artifactId: string;
   }): Promise<StoryArtifactSnapshot | null> {
     return this.database.withClient(async (client) => {
-      const row = await client.storyArtifact.findUnique({
-        where: {
-          tenantId_id: {
-            tenantId: request.tenantId,
-            id: request.artifactId,
-          },
-        },
+      const row = await client.storyArtifact.findFirst({
+        where: { tenantId: request.tenantId, id: request.artifactId },
       });
       return row === null ? null : readArtifact(row);
     });
   }
 
   findByIdLocked(request: {
-    tenantId: string;
+    tenantId: string | null;
     artifactId: string;
   }): Promise<StoryArtifactSnapshot | null> {
     return this.database.withClient(async (client) => {
@@ -81,7 +77,7 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM story_artifacts
-        WHERE tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId)}
           AND id = ${request.artifactId}::uuid
         FOR UPDATE
       `;
@@ -90,8 +86,37 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
     });
   }
 
+  findActiveForProjectAndTypeLocked(request: {
+    tenantId: string | null;
+    projectId: string;
+    type: StoryArtifactType;
+  }): Promise<StoryArtifactSnapshot | null> {
+    return this.database.withClient(async (client) => {
+      const rows = await client.$queryRaw<StoryArtifactRow[]>`
+        SELECT
+          id,
+          tenant_id AS "tenantId",
+          project_id AS "projectId",
+          type,
+          title,
+          status,
+          current_version_id AS "currentVersionId",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM story_artifacts
+        WHERE ${tenantScope(request.tenantId)}
+          AND project_id = ${request.projectId}::uuid
+          AND type = ${request.type}
+          AND status = 'active'
+        FOR UPDATE
+      `;
+      const row = rows[0];
+      return row === undefined ? null : readArtifact(row);
+    });
+  }
+
   listForProject(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
   }): Promise<StoryArtifactSnapshot[]> {
     return this.database.withClient(async (client) => {
@@ -107,13 +132,18 @@ export class PrismaStoryArtifactRepository implements StoryArtifactRepository {
   }
 }
 
+function tenantScope(tenantId: string | null) {
+  return tenantId === null
+    ? Prisma.sql`tenant_id IS NULL`
+    : Prisma.sql`tenant_id = ${tenantId}::uuid`;
+}
+
 function readArtifact(row: StoryArtifactRow): StoryArtifactSnapshot {
   if (
-    row.type !== 'idea' &&
-    row.type !== 'world_setting' &&
-    row.type !== 'character' &&
     row.type !== 'outline' &&
-    row.type !== 'script'
+    row.type !== 'roles' &&
+    row.type !== 'worldview' &&
+    row.type !== 'story'
   ) {
     throw new Error('Database returned an invalid story artifact type');
   }
