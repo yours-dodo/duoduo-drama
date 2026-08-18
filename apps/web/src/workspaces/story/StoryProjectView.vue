@@ -74,9 +74,9 @@ const currentModule = computed<StoryModule>(() => {
   return isStoryModule(value) ? value : 'outline';
 });
 const currentTitleId = computed(() => {
+  if (currentModule.value === 'worldview') return undefined;
   if (currentModule.value === 'outline') return 'story-outline-workspace-title';
   if (currentModule.value === 'roles') return 'story-roles-workspace-title';
-  if (currentModule.value === 'worldview') return 'story-worldview-workspace-title';
   if (currentModule.value === 'story') return 'story-story-workspace-title';
   if (currentModule.value === 'basic') return 'story-basic-info-workspace-title';
   return `story-project-${currentModule.value}-title`;
@@ -112,6 +112,13 @@ const importPending = computed(
         </svg>
         <span>返回创作空间</span>
       </RouterLink>
+
+      <span
+        v-if="currentModule === 'worldview'"
+        class="story-worldview-kicker"
+      >
+        基础资产 / WORLDVIEW
+      </span>
 
       <div class="story-project-toolbar-actions" aria-label="项目操作">
         <button class="story-project-toolbar-action" type="button" disabled title="即将开放">

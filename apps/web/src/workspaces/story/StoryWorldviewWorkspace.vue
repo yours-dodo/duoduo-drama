@@ -1,121 +1,125 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 
+import StoryWorldviewEntityDrawer from './StoryWorldviewEntityDrawer.vue';
+import StoryWorldviewFactGraph from './StoryWorldviewFactGraph.vue';
+import StoryWorldviewFactLedger from './StoryWorldviewFactLedger.vue';
+import StoryWorldviewOntologyManager from './StoryWorldviewOntologyManager.vue';
+import {
+  createWorldviewEntity,
+  createWorldviewKnowledgeGraphSeed,
+  createWorldviewPredicateSchemaStatements,
+  getWorldviewEntities,
+  getWorldviewEntityReferences,
+  groupWorldviewEntities,
+  worldviewEntityDirectories,
+  worldviewRoleAssetOptions,
+  type WorldviewEntity,
+  type WorldviewEntityType,
+  type WorldviewFactStatement,
+  type WorldviewPredicateDefinition,
+  type WorldviewPredicateNode,
+} from './story-worldview-ontology';
+
 type WorldviewMode = 'document' | 'ontology';
 
 type WorldviewSection = {
   id: string;
   label: string;
-  description: string;
 };
 
-type WorldviewEntity = {
+type WorldviewSectionGroup = {
   id: string;
-  name: string;
-  type: string;
-  description: string;
+  label: string;
+  sections: WorldviewSection[];
 };
 
-const sections: WorldviewSection[] = [
+const sectionGroups = reactive<WorldviewSectionGroup[]>([
   {
-    id: 'overview',
-    label: '世界概述',
-    description: '一句话说明这个世界如何运转，以及故事为什么发生在这里。',
+    id: 'world-foundation',
+    label: '世界基础',
+    sections: [
+      { id: 'space-time', label: '时空背景' },
+      { id: 'society', label: '社会制度' },
+    ],
   },
   {
-    id: 'space-time',
-    label: '时空背景',
-    description: '记录时代、地理、空间尺度和故事发生的时间窗口。',
+    id: 'world-system',
+    label: '世界运行',
+    sections: [{ id: 'rules', label: '世界规则' }],
   },
   {
-    id: 'rules',
-    label: '世界规则',
-    description: '用叙事语言说明世界的限制、代价与不可违反的边界。',
+    id: 'story-expression',
+    label: '叙事表达',
+    sections: [{ id: 'tone', label: '风格与基调' }],
   },
-  {
-    id: 'society',
-    label: '社会制度',
-    description: '整理组织、阶层、权力和日常生活中的运行机制。',
-  },
-  {
-    id: 'tone',
-    label: '风格与基调',
-    description: '确定故事的情绪、审美、叙事速度和读者感受。',
-  },
-];
+]);
+
+const sections = computed(() =>
+  sectionGroups.flatMap((group) => group.sections),
+);
 
 const initialContents: Record<string, string> = {
-  overview:
-    '<h2>一个被档案包围的城市</h2><p>雾城依靠旧档案维持秩序。每一份被保存的记录，都可能改变一个人的身份和一座城市的记忆。</p><p>故事从一封未寄出的信开始，沿着被替换的档案，追问谁有权决定什么应该被记住。</p>',
   'space-time':
     '<h2>雾城，近未来</h2><p>故事发生在一座临海城市。旧城区被高架轨道切成两半，档案馆位于两种生活交界的地方。</p><ul><li>时间：近未来，城市经历过一次大规模信息迁移。</li><li>空间：档案馆、旧港区、新城区和地下储存库。</li></ul>',
   rules:
     '<h2>世界规则</h2><p>雾城相信“被记录的事实”才是事实。任何没有进入档案系统的记忆，都只能作为个人叙述存在。</p><ul><li>每次修改档案，都会留下不可见的时间戳。</li><li>公开真相会改变相关人物在系统中的身份权重。</li><li>没有证据的记忆不能直接改变城市规则。</li></ul>',
   society:
     '<h2>谁在管理记忆</h2><p>档案管理局掌握城市的公共记忆。修复师、调查员和普通居民都依赖同一套记录系统，但他们拥有不同的查看权限。</p>',
-  tone:
-    '<h2>冷静表面下的情绪暗流</h2><p>整体基调克制、潮湿、带有调查小说的悬疑感。重要情绪不直接说破，而通过空间、物件和被删改的句子显现。</p>',
+  tone: '<h2>冷静表面下的情绪暗流</h2><p>整体基调克制、潮湿、带有调查小说的悬疑感。重要情绪不直接说破，而通过空间、物件和被删改的句子显现。</p>',
 };
 
-const entities: WorldviewEntity[] = [
-  {
-    id: 'fog-city',
-    name: '雾城',
-    type: '地点',
-    description: '故事发生的临海城市，公共记忆由档案系统维持。',
-  },
-  {
-    id: 'archive-bureau',
-    name: '档案管理局',
-    type: '组织',
-    description: '负责保存、修复和授权城市公共档案。',
-  },
-  {
-    id: 'lin-yao',
-    name: '林遥',
-    type: '角色',
-    description: '地方档案馆修复师，相信证据胜过记忆。',
-  },
-  {
-    id: 'memory-law',
-    name: '记忆归档规则',
-    type: '规则',
-    description: '未被系统记录的记忆不能直接改变城市事实。',
-  },
-];
-
-const relations = [
-  { source: '林遥', relation: '工作于', target: '档案管理局', label: '角色 → 组织' },
-  { source: '档案管理局', relation: '位于', target: '雾城', label: '组织 → 地点' },
-  { source: '记忆归档规则', relation: '约束', target: '档案管理局', label: '规则 → 组织' },
-  { source: '林遥', relation: '试图改变', target: '记忆归档规则', label: '角色 → 规则' },
-];
-
 const mode = ref<WorldviewMode>('document');
-const currentSectionId = ref('overview');
+const currentSectionId = ref('space-time');
+const expandedSectionGroups = reactive<Record<string, boolean>>(
+  Object.fromEntries(sectionGroups.map((group) => [group.id, true])),
+);
+const expandedEntityGroups = reactive<Record<string, boolean>>(
+  Object.fromEntries(
+    worldviewEntityDirectories.map((group) => [group.id, true]),
+  ),
+);
 const editorContents = reactive({ ...initialContents });
 const editorStatus = ref('已保存到当前原型');
 const editorElement = ref<HTMLElement | null>(null);
-const entitySearch = ref('');
-const selectedEntityId = ref('lin-yao');
+const knowledgeGraph = reactive(createWorldviewKnowledgeGraphSeed());
+const selectedEntityId = ref<string | null>(null);
+const editingEntityId = ref<string | null>(null);
+const showOntologyManager = ref(false);
+const graphStatus = ref('统一知识图已保存到当前原型');
+let localEntitySequence = 0;
 
 const currentSection = computed(
-  () => sections.find((section) => section.id === currentSectionId.value) ?? sections[0],
+  () =>
+    sections.value.find((section) => section.id === currentSectionId.value) ??
+    sections.value[0],
 );
-const filteredEntities = computed(() => {
-  const keyword = entitySearch.value.trim().toLowerCase();
-  if (!keyword) return entities;
-  return entities.filter((entity) =>
-    `${entity.name}${entity.type}${entity.description}`.toLowerCase().includes(keyword),
-  );
-});
-const selectedEntity = computed(
-  () => entities.find((entity) => entity.id === selectedEntityId.value) ?? entities[0],
+const entities = computed(() => getWorldviewEntities(knowledgeGraph));
+const worldviewEntityGroups = computed(() =>
+  groupWorldviewEntities(entities.value),
+);
+const selectedEntity = computed(() =>
+  selectedEntityId.value
+    ? entities.value.find((entity) => entity.id === selectedEntityId.value)
+    : undefined,
+);
+const editingEntity = computed(() =>
+  editingEntityId.value
+    ? entities.value.find((entity) => entity.id === editingEntityId.value)
+    : undefined,
 );
 
 function selectSection(sectionId: string) {
   currentSectionId.value = sectionId;
   editorStatus.value = '已切换设定章节';
+}
+
+function toggleSectionGroup(groupId: string) {
+  expandedSectionGroups[groupId] = !expandedSectionGroups[groupId];
+}
+
+function toggleEntityGroup(groupId: string) {
+  expandedEntityGroups[groupId] = !expandedEntityGroups[groupId];
 }
 
 function handleEditorInput(event: Event) {
@@ -131,22 +135,151 @@ function formatEditor(command: string, value?: string) {
   editorStatus.value = '已更新当前段落';
 }
 
-function selectEntity(entityId: string) {
+function selectEntity(entityId: string | null) {
   selectedEntityId.value = entityId;
+  graphStatus.value = entityId
+    ? `已筛选「${entities.value.find((entity) => entity.id === entityId)?.name ?? '未知实体'}」的事实`
+    : '已恢复全部世界事实';
+}
+
+function editEntity(entityId: string) {
+  selectedEntityId.value = entityId;
+  editingEntityId.value = entityId;
+  graphStatus.value = '正在编辑实体属性';
+}
+
+function closeEntityEditor() {
+  editingEntityId.value = null;
+  graphStatus.value = selectedEntity.value
+    ? `已筛选「${selectedEntity.value.name}」的事实`
+    : '统一知识图已保存到当前原型';
+}
+
+function openOntologyManager() {
+  showOntologyManager.value = true;
+  graphStatus.value = '正在管理 Ontology 关系类型';
+}
+
+function closeOntologyManager() {
+  showOntologyManager.value = false;
+  graphStatus.value = selectedEntity.value
+    ? `已筛选「${selectedEntity.value.name}」的事实`
+    : '统一知识图已保存到当前原型';
+}
+
+function addWorldviewEntity(type: WorldviewEntityType, groupId: string) {
+  localEntitySequence += 1;
+  const typeCount =
+    entities.value.filter((entity) => entity.type === type).length + 1;
+  const entity = createWorldviewEntity(
+    type,
+    `worldview-local-${groupId}-${localEntitySequence}`,
+    typeCount,
+  );
+  knowledgeGraph.nodes.push(entity);
+  expandedEntityGroups[groupId] = true;
+  selectedEntityId.value = entity.id;
+  editingEntityId.value = entity.id;
+  graphStatus.value = `已新增${type}草稿 · 请完善必填字段`;
+}
+
+function markGraphDirty() {
+  graphStatus.value = '正在编辑 · 尚未保存';
+}
+
+function saveWorldviewEntity(entity: WorldviewEntity) {
+  const index = knowledgeGraph.nodes.findIndex(
+    (candidate) => candidate.kind === 'entity' && candidate.id === entity.id,
+  );
+  if (index < 0) return;
+  knowledgeGraph.nodes.splice(index, 1, entity);
+  graphStatus.value = '实体属性已保存到统一知识图';
+}
+
+function deleteEditingEntity() {
+  const entity = editingEntity.value;
+  if (!entity) return;
+  const references = getWorldviewEntityReferences(entity.id, knowledgeGraph);
+  if (references.length) {
+    graphStatus.value = `无法删除：请先处理${references.join('、')}`;
+    return;
+  }
+
+  const index = knowledgeGraph.nodes.findIndex(
+    (candidate) => candidate.kind === 'entity' && candidate.id === entity.id,
+  );
+  if (index < 0) return;
+  knowledgeGraph.nodes.splice(index, 1);
+  if (selectedEntityId.value === entity.id) selectedEntityId.value = null;
+  editingEntityId.value = null;
+  graphStatus.value = `已删除${entity.type}「${entity.name}」`;
+}
+
+function saveFact(fact: WorldviewFactStatement) {
+  const index = knowledgeGraph.statements.findIndex(
+    (statement) => statement.kind === 'fact' && statement.id === fact.id,
+  );
+  if (index >= 0) knowledgeGraph.statements.splice(index, 1, fact);
+  else knowledgeGraph.statements.push(fact);
+  graphStatus.value = '事实关系已保存到统一知识图';
+}
+
+function deleteFact(factId: string) {
+  const index = knowledgeGraph.statements.findIndex(
+    (statement) => statement.kind === 'fact' && statement.id === factId,
+  );
+  if (index < 0) return;
+  knowledgeGraph.statements.splice(index, 1);
+  graphStatus.value = '事实关系已从统一知识图移除';
+}
+
+function savePredicateDefinition(definition: WorldviewPredicateDefinition) {
+  const nodeIndex = knowledgeGraph.nodes.findIndex(
+    (node) => node.kind === 'predicate' && node.id === definition.predicate.id,
+  );
+  if (nodeIndex >= 0) {
+    knowledgeGraph.nodes.splice(nodeIndex, 1, definition.predicate);
+  } else {
+    knowledgeGraph.nodes.push(definition.predicate);
+  }
+
+  for (
+    let index = knowledgeGraph.statements.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const statement = knowledgeGraph.statements[index];
+    if (
+      statement?.kind === 'schema' &&
+      statement.subjectId === definition.predicate.id
+    ) {
+      knowledgeGraph.statements.splice(index, 1);
+    }
+  }
+  knowledgeGraph.statements.push(
+    ...createWorldviewPredicateSchemaStatements(definition),
+  );
+  graphStatus.value = `Ontology 已保存关系类型「${definition.predicate.label}」`;
+}
+
+function togglePredicate(predicateId: string) {
+  const predicate = knowledgeGraph.nodes.find(
+    (node): node is WorldviewPredicateNode =>
+      node.kind === 'predicate' && node.id === predicateId,
+  );
+  if (!predicate || predicate.scope !== 'project') return;
+  predicate.status = predicate.status === 'active' ? 'inactive' : 'active';
+  graphStatus.value = `已${predicate.status === 'active' ? '启用' : '停用'}关系类型「${predicate.label}」`;
 }
 </script>
 
 <template>
-  <section class="story-worldview-workspace" aria-labelledby="story-worldview-workspace-title">
-    <header class="story-worldview-header">
-      <div>
-        <span class="story-worldview-kicker">基础资产 / WORLDVIEW</span>
-        <h2 id="story-worldview-workspace-title">世界观底稿</h2>
-        <p>把世界写成可阅读的设定，也把其中的对象与关系整理成 AI 可以引用的语义基础。</p>
-      </div>
-    </header>
-
-    <div class="story-worldview-mode-tabs" role="tablist" aria-label="世界观工作区">
+  <section class="story-worldview-workspace" aria-label="世界观工作区">
+    <div
+      class="story-worldview-mode-tabs"
+      role="tablist"
+      aria-label="世界观工作区"
+    >
       <button
         class="story-worldview-mode-tab"
         :class="{ 'is-active': mode === 'document' }"
@@ -167,50 +300,124 @@ function selectEntity(entityId: string) {
         @click="mode = 'ontology'"
       >
         <strong>世界构成</strong>
-        <span>整理人物、地点与组织</span>
+        <span>用事实关系描述实体之间如何连接</span>
       </button>
     </div>
 
     <div v-if="mode === 'document'" class="story-worldview-document-layout">
-      <aside class="story-worldview-toc" aria-label="设定文档目录">
+      <aside class="story-worldview-toc" aria-label="设定目录">
         <div class="story-worldview-toc-header">
-          <span class="story-worldview-label">文档目录</span>
-          <span>05 节</span>
+          <span class="story-worldview-label">设定目录</span>
         </div>
-        <nav>
-          <button
-            v-for="(section, index) in sections"
-            :key="section.id"
-            class="story-worldview-toc-item"
-            :class="{ 'is-active': currentSectionId === section.id }"
-            type="button"
-            :aria-current="currentSectionId === section.id ? 'page' : undefined"
-            @click="selectSection(section.id)"
+        <button class="story-worldview-toc-create" type="button">
+          新增设定
+        </button>
+        <nav class="story-worldview-toc-tree">
+          <div
+            v-for="group in sectionGroups"
+            :key="group.id"
+            class="story-worldview-toc-group"
           >
-            <span class="story-worldview-toc-index">{{ String(index + 1).padStart(2, '0') }}</span>
-            <span>
-              <strong>{{ section.label }}</strong>
-              <small>{{ section.description }}</small>
-            </span>
-          </button>
+            <button
+              class="story-worldview-toc-group-toggle"
+              :class="{ 'is-expanded': expandedSectionGroups[group.id] }"
+              type="button"
+              :aria-expanded="expandedSectionGroups[group.id]"
+              :aria-controls="`story-worldview-group-${group.id}`"
+              :aria-label="`${expandedSectionGroups[group.id] ? '收起' : '展开'}${group.label}`"
+              @click="toggleSectionGroup(group.id)"
+            >
+              <svg
+                class="story-worldview-toc-chevron"
+                viewBox="0 0 12 12"
+                aria-hidden="true"
+              >
+                <path d="m4 2.5 3.5 3.5L4 9.5" />
+              </svg>
+              <strong>{{ group.label }}</strong>
+              <span class="story-worldview-toc-group-add" aria-hidden="true"
+                >+</span
+              >
+            </button>
+
+            <div
+              v-show="expandedSectionGroups[group.id]"
+              :id="`story-worldview-group-${group.id}`"
+              class="story-worldview-toc-children"
+            >
+              <button
+                v-for="section in group.sections"
+                :key="section.id"
+                class="story-worldview-toc-item"
+                :class="{ 'is-active': currentSectionId === section.id }"
+                type="button"
+                :aria-current="
+                  currentSectionId === section.id ? 'page' : undefined
+                "
+                @click="selectSection(section.id)"
+              >
+                <span class="story-worldview-toc-item-label">
+                  <strong>{{ section.label }}</strong>
+                </span>
+                <span class="story-worldview-toc-delete" aria-hidden="true">
+                  <svg viewBox="0 0 12 12">
+                    <path
+                      d="M3.5 4.5v4.3c0 .7.4 1.1 1.1 1.1h2.8c.7 0 1.1-.4 1.1-1.1V4.5M2.5 4.5h7M4.2 2.8h3.6l.5 1.7H3.7l.5-1.7Z"
+                    />
+                  </svg>
+                </span>
+              </button>
+            </div>
+          </div>
         </nav>
       </aside>
 
       <article class="story-worldview-editor-panel" aria-label="设定文档编辑器">
-        <header class="story-worldview-editor-header">
-          <div>
-            <span class="story-worldview-label">设定文档 / {{ currentSection.label }}</span>
-            <h3>{{ currentSection.label }}</h3>
-          </div>
-          <span class="story-worldview-editor-state">{{ editorStatus }}</span>
-        </header>
-
-        <div class="story-worldview-editor-toolbar" role="toolbar" aria-label="富文本工具栏">
-          <button type="button" title="加粗" aria-label="加粗" @click="formatEditor('bold')"><strong>B</strong></button>
-          <button type="button" title="斜体" aria-label="斜体" @click="formatEditor('italic')"><em>I</em></button>
-          <button type="button" title="二级标题" aria-label="二级标题" @click="formatEditor('formatBlock', '<h2>')">H2</button>
-          <button type="button" title="项目列表" aria-label="项目列表" @click="formatEditor('insertUnorderedList')">• —</button>
-          <button type="button" title="引用" aria-label="引用" @click="formatEditor('formatBlock', '<blockquote>')">“ ”</button>
+        <div
+          class="story-worldview-editor-toolbar"
+          role="toolbar"
+          aria-label="富文本工具栏"
+        >
+          <button
+            type="button"
+            title="加粗"
+            aria-label="加粗"
+            @click="formatEditor('bold')"
+          >
+            <strong>B</strong>
+          </button>
+          <button
+            type="button"
+            title="斜体"
+            aria-label="斜体"
+            @click="formatEditor('italic')"
+          >
+            <em>I</em>
+          </button>
+          <button
+            type="button"
+            title="二级标题"
+            aria-label="二级标题"
+            @click="formatEditor('formatBlock', '<h2>')"
+          >
+            H2
+          </button>
+          <button
+            type="button"
+            title="项目列表"
+            aria-label="项目列表"
+            @click="formatEditor('insertUnorderedList')"
+          >
+            • —
+          </button>
+          <button
+            type="button"
+            title="引用"
+            aria-label="引用"
+            @click="formatEditor('formatBlock', '<blockquote>')"
+          >
+            “ ”
+          </button>
         </div>
 
         <div
@@ -225,69 +432,159 @@ function selectEntity(entityId: string) {
           v-html="editorContents[currentSectionId]"
           @input="handleEditorInput"
         ></div>
-
-        <footer class="story-worldview-editor-footer">
-          <span>富文本原型 · 内容暂存于当前页面</span>
-          <span>{{ currentSection.description }}</span>
-        </footer>
       </article>
     </div>
 
     <div v-else class="story-worldview-ontology-layout">
-      <section class="story-worldview-entities-panel" aria-labelledby="story-worldview-entities-title">
+      <section class="story-worldview-entities-panel" aria-label="世界要素目录">
         <header class="story-worldview-panel-header">
           <div>
-            <span class="story-worldview-label">世界构成 / 要素</span>
-            <h3 id="story-worldview-entities-title">世界要素</h3>
+            <span class="story-worldview-label">世界构成 / 实体目录</span>
           </div>
-          <span>{{ entities.length }} 个要素</span>
-        </header>
-        <label class="story-worldview-search">
-          <span class="sr-only">搜索实体</span>
-          <span aria-hidden="true">⌕</span>
-          <input v-model="entitySearch" type="search" placeholder="搜索实体…" />
-        </label>
-        <div class="story-worldview-entity-list">
           <button
-            v-for="entity in filteredEntities"
-            :key="entity.id"
-            class="story-worldview-entity-item"
-            :class="{ 'is-active': selectedEntityId === entity.id }"
+            v-if="selectedEntityId"
+            class="story-worldview-directory-clear"
             type="button"
-            @click="selectEntity(entity.id)"
+            @click="selectEntity(null)"
           >
-            <span class="story-worldview-entity-type">{{ entity.type }}</span>
-            <strong>{{ entity.name }}</strong>
-            <small>{{ entity.description }}</small>
+            清除筛选
           </button>
-          <p v-if="!filteredEntities.length" class="story-worldview-empty">没有匹配的实体。</p>
-        </div>
+        </header>
+
+        <nav class="story-worldview-toc-tree" aria-label="世界要素目录">
+          <div
+            v-for="group in worldviewEntityGroups"
+            :key="group.id"
+            class="story-worldview-toc-group"
+          >
+            <div class="story-worldview-entity-group-header">
+              <button
+                class="story-worldview-toc-group-toggle"
+                :class="{ 'is-expanded': expandedEntityGroups[group.id] }"
+                type="button"
+                :aria-expanded="expandedEntityGroups[group.id]"
+                :aria-controls="`story-worldview-entity-group-${group.id}`"
+                :aria-label="`${expandedEntityGroups[group.id] ? '收起' : '展开'}${group.label}`"
+                @click="toggleEntityGroup(group.id)"
+              >
+                <svg
+                  class="story-worldview-toc-chevron"
+                  viewBox="0 0 12 12"
+                  aria-hidden="true"
+                >
+                  <path d="m4 2.5 3.5 3.5L4 9.5" />
+                </svg>
+                <strong>{{ group.label }}</strong>
+              </button>
+              <button
+                class="story-worldview-toc-group-add"
+                type="button"
+                :aria-label="`新增${group.label}`"
+                @click="addWorldviewEntity(group.label, group.id)"
+              >
+                +
+              </button>
+            </div>
+
+            <div
+              v-show="expandedEntityGroups[group.id]"
+              :id="`story-worldview-entity-group-${group.id}`"
+              class="story-worldview-toc-children"
+            >
+              <div
+                v-for="entity in group.entities"
+                :key="entity.id"
+                class="story-worldview-entity-row"
+              >
+                <button
+                  class="story-worldview-toc-item"
+                  :class="{ 'is-active': selectedEntityId === entity.id }"
+                  type="button"
+                  :aria-current="
+                    selectedEntityId === entity.id ? 'page' : undefined
+                  "
+                  @click="selectEntity(entity.id)"
+                >
+                  <span class="story-worldview-toc-item-label">
+                    <strong>{{ entity.name }}</strong>
+                  </span>
+                </button>
+                <button
+                  class="story-worldview-entity-edit"
+                  type="button"
+                  :aria-label="`编辑${entity.name}属性`"
+                  @click="editEntity(entity.id)"
+                >
+                  编辑
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
       </section>
 
-      <section class="story-worldview-relations-panel" aria-labelledby="story-worldview-relations-title">
-        <header class="story-worldview-panel-header">
+      <section
+        class="story-worldview-relations-panel story-worldview-facts-panel"
+        aria-labelledby="story-worldview-facts-title"
+      >
+        <header
+          class="story-worldview-panel-header story-worldview-structure-header"
+        >
           <div>
-            <span class="story-worldview-label">世界构成 / 关系</span>
-            <h3 id="story-worldview-relations-title">关系图</h3>
+            <span class="story-worldview-label">世界构成 / 统一知识图</span>
+            <h3 id="story-worldview-facts-title">世界事实</h3>
           </div>
-          <span>{{ relations.length }} 条关系</span>
+          <div class="story-worldview-fact-actions">
+            <button
+              v-if="selectedEntity"
+              type="button"
+              @click="editEntity(selectedEntity.id)"
+            >
+              编辑实体属性
+            </button>
+            <button type="button" @click="openOntologyManager">
+              Ontology 管理
+            </button>
+          </div>
         </header>
 
-        <div class="story-worldview-selected-entity">
-          <span class="story-worldview-entity-type">当前要素 · {{ selectedEntity.type }}</span>
-          <strong>{{ selectedEntity.name }}</strong>
-          <p>{{ selectedEntity.description }}</p>
-        </div>
-
-        <div class="story-worldview-relation-list">
-          <div v-for="relation in relations" :key="`${relation.source}-${relation.target}`" class="story-worldview-relation-item">
-            <span>{{ relation.source }}</span>
-            <strong>{{ relation.relation }}</strong>
-            <span>{{ relation.target }}</span>
-            <small>{{ relation.label }}</small>
-          </div>
-        </div>
+        <StoryWorldviewFactGraph
+          :state="knowledgeGraph"
+          :selected-entity-id="selectedEntityId"
+          @select-entity="selectEntity"
+        />
+        <StoryWorldviewFactLedger
+          :state="knowledgeGraph"
+          :selected-entity-id="selectedEntityId"
+          :status="graphStatus"
+          @clear-filter="selectEntity(null)"
+          @delete-fact="deleteFact"
+          @dirty="markGraphDirty"
+          @save-fact="saveFact"
+        />
       </section>
     </div>
+
+    <StoryWorldviewEntityDrawer
+      v-if="editingEntity"
+      :entity="editingEntity"
+      :entities="entities"
+      :role-assets="worldviewRoleAssetOptions"
+      :status="graphStatus"
+      @close="closeEntityEditor"
+      @delete="deleteEditingEntity"
+      @dirty="markGraphDirty"
+      @save="saveWorldviewEntity"
+    />
+
+    <StoryWorldviewOntologyManager
+      v-if="showOntologyManager"
+      :state="knowledgeGraph"
+      :status="graphStatus"
+      @close="closeOntologyManager"
+      @dirty="markGraphDirty"
+      @save-definition="savePredicateDefinition"
+      @toggle-predicate="togglePredicate"
+    />
   </section>
 </template>
