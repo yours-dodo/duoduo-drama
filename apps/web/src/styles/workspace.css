@@ -9657,30 +9657,22 @@ html[data-story-sidebar]
 /* Story worldview: narrative settings plus an ontology object/link view. */
 .story-worldview-workspace {
   min-width: 0;
+  min-height: calc(100dvh - 136px);
+  height: calc(100dvh - 136px);
+  display: flex;
+  flex-direction: column;
   color: var(--story-entry-ink);
-}
-
-.story-worldview-header {
-  padding-bottom: 28px;
-  border-bottom: 1px solid var(--story-entry-line);
-}
-
-.story-worldview-header h2 {
-  margin: 12px 0 10px;
-  color: var(--story-entry-ink);
-  font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: clamp(1.75rem, 3vw, 2.6rem);
-  font-weight: 400;
-  letter-spacing: -0.04em;
-  line-height: 1.15;
-}
-
-.story-worldview-header p {
-  max-width: 700px;
-  margin: 0;
-  color: var(--story-entry-muted);
-  font-size: 0.8rem;
-  line-height: 1.8;
+  --story-worldview-border: color-mix(
+    in srgb,
+    var(--story-entry-ink) 32%,
+    var(--story-entry-line)
+  );
+  --story-worldview-border-strong: color-mix(
+    in srgb,
+    var(--story-entry-ink) 58%,
+    var(--story-entry-line)
+  );
+  --story-worldview-sidebar-width: minmax(220px, 284px);
 }
 
 .story-worldview-kicker,
@@ -9692,23 +9684,27 @@ html[data-story-sidebar]
   text-transform: uppercase;
 }
 
+.story-worldview-workspace :focus-visible {
+  outline: none;
+}
+
 .story-worldview-mode-tabs {
   display: flex;
-  gap: 28px;
-  margin-top: 28px;
-  border-bottom: 1px solid var(--story-entry-line);
+  gap: 20px;
+  border-bottom: 2px solid var(--story-worldview-border-strong);
 }
 
 .story-worldview-mode-tab {
   display: grid;
-  min-width: 150px;
-  gap: 4px;
-  padding: 0 0 16px;
+  min-width: 132px;
+  gap: 3px;
+  justify-items: center;
+  padding: 0 0 10px;
   border: 0;
   color: var(--story-entry-muted);
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
 }
 
 .story-worldview-mode-tab strong {
@@ -9726,31 +9722,35 @@ html[data-story-sidebar]
 .story-worldview-mode-tab:focus-visible,
 .story-worldview-mode-tab.is-active {
   color: var(--story-entry-ink);
-  outline: none;
-}
-
-.story-worldview-mode-tab.is-active {
-  border-bottom: 2px solid var(--story-entry-blue);
 }
 
 .story-worldview-document-layout {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
-  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
-  gap: 24px;
-  margin-top: 24px;
+  min-height: 0;
+  grid-template-columns: var(--story-worldview-sidebar-width) minmax(0, 1fr);
+  gap: 0;
 }
 
 .story-worldview-toc {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding-right: 20px;
-  border-right: 1px solid var(--story-entry-line);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 12px 0;
+  border-right: 2px solid var(--story-worldview-border-strong);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.story-worldview-toc::-webkit-scrollbar {
+  display: none;
 }
 
 .story-worldview-toc-header,
-.story-worldview-editor-header,
-.story-worldview-panel-header,
-.story-worldview-editor-footer {
+.story-worldview-panel-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -9758,92 +9758,301 @@ html[data-story-sidebar]
 }
 
 .story-worldview-toc-header {
-  padding-bottom: 12px;
+  padding: 0 2px 10px 0;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--story-worldview-border) 72%, transparent);
   color: var(--story-entry-muted);
   font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
   font-size: 0.58rem;
   letter-spacing: 0.06em;
 }
 
-.story-worldview-toc nav {
-  display: grid;
-  gap: 2px;
+.story-worldview-toc-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 2px solid var(--story-entry-blue);
+  color: var(--story-entry-paper);
+  background: var(--story-entry-blue);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
-.story-worldview-toc-item {
+.story-worldview-toc-create:hover,
+.story-worldview-toc-create:focus-visible {
+  border-color: color-mix(in srgb, var(--story-entry-blue) 80%, white);
+  background: color-mix(in srgb, var(--story-entry-blue) 80%, white);
+}
+
+.story-worldview-toc-tree {
   display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 10px;
+  gap: 8px;
+  padding: 10px 0 0;
+}
+
+.story-worldview-toc-group {
+  position: relative;
   min-width: 0;
-  padding: 13px 0;
+}
+
+.story-worldview-entity-group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--story-worldview-border);
+}
+
+.story-worldview-entity-group-header .story-worldview-toc-group-toggle {
+  grid-template-columns: 16px minmax(0, 1fr);
+  border-bottom: 0;
+}
+
+.story-worldview-toc-group-toggle {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 0;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--story-entry-line) 70%, transparent);
+  border-bottom: 1px solid var(--story-worldview-border);
+  color: var(--story-entry-ink);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.story-worldview-toc-group-toggle:hover,
+.story-worldview-toc-group-toggle:focus-visible {
+  color: var(--story-entry-blue);
+  border-bottom-color: var(--story-worldview-border-strong);
+}
+
+.story-worldview-toc-group:has(.story-worldview-toc-item.is-active)
+  .story-worldview-toc-group-toggle {
+  color: var(--story-entry-blue);
+  border-bottom-color: var(--story-worldview-border-strong);
+}
+
+.story-worldview-toc-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--story-entry-blue);
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.4;
+  transform: rotate(0deg);
+}
+
+.story-worldview-toc-group-toggle.is-expanded > .story-worldview-toc-chevron {
+  transform: rotate(90deg);
+}
+
+.story-worldview-toc-group-toggle strong {
+  color: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.story-worldview-toc-group-add {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--story-worldview-border-strong);
+  color: var(--story-entry-blue);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+  font-size: 0.76rem;
+  line-height: 0.9;
+  text-align: center;
+}
+
+.story-worldview-toc-children {
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 4px 0 8px 7px;
+  padding: 3px 0 3px 17px;
+  border-left: 1px solid var(--story-worldview-border);
+}
+
+.story-worldview-entity-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.story-worldview-entity-row .story-worldview-toc-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.story-worldview-entity-edit,
+.story-worldview-directory-clear,
+.story-worldview-fact-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--story-worldview-border-strong);
   color: var(--story-entry-muted);
   background: transparent;
   cursor: pointer;
+  font: inherit;
+  font-size: 0.6rem;
+}
+
+.story-worldview-entity-edit {
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.story-worldview-entity-row:hover .story-worldview-entity-edit,
+.story-worldview-entity-row:focus-within .story-worldview-entity-edit {
+  opacity: 1;
+}
+
+.story-worldview-entity-edit:hover,
+.story-worldview-entity-edit:focus-visible,
+.story-worldview-directory-clear:hover,
+.story-worldview-directory-clear:focus-visible,
+.story-worldview-fact-actions button:hover,
+.story-worldview-fact-actions button:focus-visible {
+  border-color: var(--story-entry-blue);
+  color: var(--story-entry-blue);
+}
+
+.story-worldview-toc-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--story-entry-muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
   text-align: left;
+}
+
+.story-worldview-toc-item::before {
+  position: absolute;
+  top: 50%;
+  left: -16px;
+  width: 14px;
+  border-top: 1px solid var(--story-worldview-border-strong);
+  content: '';
 }
 
 .story-worldview-toc-item:hover,
 .story-worldview-toc-item:focus-visible,
 .story-worldview-toc-item.is-active {
   color: var(--story-entry-ink);
-  outline: none;
+  background: color-mix(
+    in srgb,
+    var(--story-entry-blue) 6%,
+    var(--story-entry-paper)
+  );
 }
 
-.story-worldview-toc-item.is-active .story-worldview-toc-index,
+.story-worldview-toc-item.is-active {
+  border-left-color: var(--story-entry-blue);
+}
+
 .story-worldview-toc-item.is-active strong {
   color: var(--story-entry-blue);
 }
 
-.story-worldview-toc-index {
-  padding-top: 2px;
-  color: var(--story-entry-muted);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
-  font-size: 0.58rem;
+.story-worldview-toc-item.is-active::before {
+  border-color: var(--story-entry-blue);
 }
 
-.story-worldview-toc-item strong,
-.story-worldview-toc-item small {
+.story-worldview-toc-item strong {
   display: block;
+}
+
+.story-worldview-toc-item-label {
+  min-width: 0;
+}
+
+.story-worldview-toc-delete {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid transparent;
+  color: var(--story-entry-muted);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.story-worldview-toc-delete svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.1;
+}
+
+.story-worldview-toc-item:hover .story-worldview-toc-delete,
+.story-worldview-toc-item:focus-visible .story-worldview-toc-delete {
+  border-color: var(--story-worldview-border-strong);
+  color: var(--story-entry-blue);
+  opacity: 1;
+  visibility: visible;
 }
 
 .story-worldview-toc-item strong {
   color: inherit;
-  font-size: 0.78rem;
-  font-weight: 400;
-}
-
-.story-worldview-toc-item small {
-  margin-top: 5px;
-  color: var(--story-entry-muted);
-  font-size: 0.64rem;
-  line-height: 1.55;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .story-worldview-editor-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  min-height: 620px;
-  border: 1px solid var(--story-entry-line);
-  background: color-mix(in srgb, var(--story-entry-paper) 72%, var(--story-entry-canvas));
+  min-height: 0;
+  height: 100%;
 }
 
-.story-worldview-editor-header {
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--story-entry-line);
-}
-
-.story-worldview-editor-header h3,
 .story-worldview-panel-header h3 {
-  margin: 10px 0 0;
+  margin: 7px 0 0;
   color: var(--story-entry-ink);
   font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 400;
   letter-spacing: -0.03em;
 }
 
-.story-worldview-editor-state,
 .story-worldview-panel-header > span {
   padding-top: 2px;
   color: var(--story-entry-muted);
@@ -9855,15 +10064,15 @@ html[data-story-sidebar]
 .story-worldview-editor-toolbar {
   display: flex;
   gap: 4px;
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--story-entry-line);
+  padding: 8px 18px;
+  border-bottom: 2px solid var(--story-worldview-border);
 }
 
 .story-worldview-editor-toolbar button {
   display: inline-grid;
-  min-width: 32px;
-  height: 30px;
-  padding: 0 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 5px;
   place-items: center;
   border: 1px solid transparent;
   color: var(--story-entry-muted);
@@ -9876,228 +10085,222 @@ html[data-story-sidebar]
 .story-worldview-editor-toolbar button:focus-visible {
   border-color: var(--story-entry-line);
   color: var(--story-entry-blue);
-  outline: none;
 }
 
 .story-worldview-rich-editor {
-  min-height: 430px;
-  padding: 38px clamp(24px, 6vw, 72px) 52px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px clamp(20px, 4vw, 56px) 36px;
   color: var(--story-entry-ink);
   caret-color: var(--story-entry-blue);
   font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 1rem;
-  line-height: 2;
+  font-size: 0.95rem;
+  line-height: 1.8;
   outline: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.story-worldview-rich-editor:focus {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--story-entry-blue) 55%, transparent);
+.story-worldview-rich-editor::-webkit-scrollbar {
+  display: none;
 }
 
 .story-worldview-rich-editor h2 {
-  margin: 0 0 24px;
+  margin: 0 0 18px;
   color: var(--story-entry-ink);
   font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: clamp(1.45rem, 3vw, 2.1rem);
+  font-size: clamp(1.3rem, 2.6vw, 1.85rem);
   font-weight: 400;
   line-height: 1.35;
 }
 
 .story-worldview-rich-editor p {
   max-width: 720px;
-  margin: 0 0 18px;
+  margin: 0 0 14px;
 }
 
 .story-worldview-rich-editor ul {
   max-width: 720px;
-  margin: 12px 0 20px;
+  margin: 10px 0 16px;
   padding-left: 22px;
 }
 
 .story-worldview-rich-editor blockquote {
-  margin: 24px 0;
-  padding-left: 18px;
+  margin: 18px 0;
+  padding-left: 14px;
   border-left: 2px solid var(--story-entry-blue);
   color: var(--story-entry-muted);
 }
 
-.story-worldview-editor-footer {
-  padding: 13px 24px;
-  border-top: 1px solid var(--story-entry-line);
-  color: var(--story-entry-muted);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
-  font-size: 0.56rem;
-  line-height: 1.5;
-}
-
-.story-worldview-editor-footer span:last-child {
-  max-width: 48%;
-  text-align: right;
-}
-
 .story-worldview-ontology-layout {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
-  grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.4fr);
-  gap: 24px;
-  margin-top: 24px;
+  min-height: 0;
+  grid-template-columns: var(--story-worldview-sidebar-width) minmax(0, 1fr);
+  gap: 0;
 }
 
 .story-worldview-entities-panel,
 .story-worldview-relations-panel {
   min-width: 0;
-  min-height: 560px;
-  padding: 22px 24px;
-  border: 1px solid var(--story-entry-line);
-  background: color-mix(in srgb, var(--story-entry-paper) 72%, var(--story-entry-canvas));
-}
-
-.story-worldview-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 24px;
-  padding: 0 0 10px;
-  border-bottom: 1px solid var(--story-entry-line);
-  color: var(--story-entry-blue);
-}
-
-.story-worldview-search input {
-  width: 100%;
-  border: 0;
-  color: var(--story-entry-ink);
+  min-height: 0;
+  height: 100%;
   background: transparent;
-  font: inherit;
-  font-size: 0.76rem;
-  outline: none;
 }
 
-.story-worldview-entity-list,
-.story-worldview-relation-list {
-  display: grid;
-  gap: 0;
-  margin-top: 16px;
-}
-
-.story-worldview-entity-item {
-  display: grid;
-  gap: 6px;
-  padding: 15px 0;
+.story-worldview-entities-panel {
+  overflow-y: auto;
+  padding: 0 16px 12px 0;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--story-entry-line) 70%, transparent);
+  border-right: 2px solid var(--story-worldview-border-strong);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.story-worldview-facts-panel {
+  display: block;
+}
+
+.story-worldview-fact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.story-worldview-entities-panel::-webkit-scrollbar,
+.story-worldview-relations-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.story-worldview-relations-panel {
+  overflow-y: auto;
+  padding: 0 0 12px 24px;
+  border: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.story-worldview-entities-panel .story-worldview-panel-header,
+.story-worldview-relations-panel .story-worldview-panel-header {
+  padding: 14px 0 10px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--story-worldview-border) 72%, transparent);
+}
+
+.story-worldview-structure-header {
+  align-items: center;
+}
+
+.story-worldview-delete-entity {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid var(--story-worldview-border-strong);
   color: var(--story-entry-muted);
   background: transparent;
   cursor: pointer;
-  text-align: left;
+  font: inherit;
+  font-size: 0.62rem;
 }
 
-.story-worldview-entity-item:hover,
-.story-worldview-entity-item:focus-visible,
-.story-worldview-entity-item.is-active {
-  color: var(--story-entry-ink);
-  outline: none;
-}
-
-.story-worldview-entity-item.is-active {
-  padding-left: 12px;
-  border-left: 2px solid var(--story-entry-blue);
-}
-
-.story-worldview-entity-type {
+.story-worldview-delete-entity:hover,
+.story-worldview-delete-entity:focus-visible {
+  border-color: var(--story-entry-blue);
   color: var(--story-entry-blue);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
-  font-size: 0.56rem;
-  letter-spacing: 0.08em;
 }
 
-.story-worldview-entity-item strong {
-  color: inherit;
-  font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 400;
+.story-worldview-ontology-editor-tabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--story-worldview-border-strong);
 }
 
-.story-worldview-entity-item small,
-.story-worldview-selected-entity p {
-  color: var(--story-entry-muted);
-  font-size: 0.68rem;
-  line-height: 1.65;
-}
-
-.story-worldview-selected-entity {
-  margin-top: 24px;
-  padding: 18px;
-  border-left: 2px solid var(--story-entry-blue);
-  background: color-mix(in srgb, var(--story-entry-blue) 8%, transparent);
-}
-
-.story-worldview-selected-entity strong {
-  display: block;
-  margin-top: 10px;
-  color: var(--story-entry-ink);
-  font-family: 'Noto Serif SC', Georgia, serif;
-  font-size: 1.25rem;
-  font-weight: 400;
-}
-
-.story-worldview-selected-entity p {
-  margin: 8px 0 0;
-}
-
-.story-worldview-relation-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 12px;
+.story-worldview-ontology-editor-tabs button {
+  display: flex;
+  gap: 7px;
   align-items: center;
-  padding: 16px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--story-entry-line) 70%, transparent);
+  min-height: 40px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--story-entry-muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.story-worldview-ontology-editor-tabs button:hover,
+.story-worldview-ontology-editor-tabs button:focus-visible,
+.story-worldview-ontology-editor-tabs button.is-active {
+  border-bottom-color: var(--story-entry-blue);
   color: var(--story-entry-ink);
-  font-size: 0.76rem;
 }
 
-.story-worldview-relation-item span:last-of-type {
-  text-align: right;
-}
-
-.story-worldview-relation-item strong {
+.story-worldview-ontology-editor-tabs span {
   color: var(--story-entry-blue);
   font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
-  font-size: 0.58rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
+  font-size: 0.52rem;
 }
 
-.story-worldview-relation-item small {
-  grid-column: 1 / -1;
+.story-worldview-empty-state {
+  display: grid;
+  gap: 8px;
+  min-height: 280px;
+  place-content: center;
   color: var(--story-entry-muted);
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', monospace;
-  font-size: 0.54rem;
-}
-
-.story-worldview-empty {
-  margin: 28px 0;
-  color: var(--story-entry-muted);
-  font-size: 0.72rem;
   text-align: center;
 }
 
+.story-worldview-empty-state strong {
+  color: var(--story-entry-ink);
+  font-family: 'Noto Serif SC', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+.story-worldview-empty-state p {
+  margin: 0;
+  font-size: 0.68rem;
+}
+
 @media (max-width: 980px) {
+  .story-worldview-workspace {
+    min-height: 0;
+    height: auto;
+  }
+
   .story-worldview-document-layout,
   .story-worldview-ontology-layout {
+    flex: initial;
+    min-height: auto;
     grid-template-columns: 1fr;
   }
 
-  .story-worldview-toc {
-    padding-right: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--story-entry-line);
-    padding-bottom: 18px;
+  .story-worldview-editor-panel,
+  .story-worldview-entities-panel,
+  .story-worldview-relations-panel {
+    height: auto;
   }
 
-  .story-worldview-toc nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 20px;
+  .story-worldview-entities-panel {
+    padding: 0 0 16px;
+    border-right: 0;
+    border-bottom: 2px solid var(--story-worldview-border-strong);
+  }
+
+  .story-worldview-relations-panel {
+    padding: 16px 0 0;
+  }
+
+  .story-worldview-toc {
+    padding: 12px 0;
+  }
+
+  .story-worldview-toc-tree {
+    gap: 4px;
   }
 }
 
@@ -10108,20 +10311,6 @@ html[data-story-sidebar]
 
   .story-worldview-mode-tab {
     min-width: 0;
-  }
-
-  .story-worldview-toc nav {
-    grid-template-columns: 1fr;
-  }
-
-  .story-worldview-editor-header,
-  .story-worldview-editor-footer {
-    flex-direction: column;
-  }
-
-  .story-worldview-editor-footer span:last-child {
-    max-width: none;
-    text-align: left;
   }
 
   .story-worldview-editor-toolbar {
@@ -10136,7 +10325,20 @@ html[data-story-sidebar]
   .story-worldview-entities-panel,
   .story-worldview-relations-panel {
     min-height: auto;
-    padding: 18px;
+  }
+
+  .story-worldview-entity-edit {
+    opacity: 1;
+  }
+
+  .story-worldview-fact-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .story-worldview-structure-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
