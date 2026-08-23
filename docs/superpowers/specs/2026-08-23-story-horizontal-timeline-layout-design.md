@@ -176,3 +176,26 @@ Other outline views retain their existing fit-view behavior.
 6. Initial and automatic framing keeps cards readable; users pan horizontally for wide graphs.
 7. Decorative hierarchy branches use the reference's orthogonal, rounded tree connectors.
 8. Existing outline interactions and all non-horizontal views continue to work.
+
+## Prompt refinement: orthogonal tree constraints
+
+The approved reference is refined to require a document-wide fixed primary-axis
+pitch. The pitch is calculated once from the maximum branch depth, node width,
+depth gap, and collision padding, then reused for every primary node. A larger
+subtree can increase that one pitch, but cannot make individual primary gaps
+vary. The primary nodes always remain on one Y coordinate.
+
+Horizontal timeline layout is therefore performed in this order:
+
+1. Build parent-child groups and classify primary nodes.
+2. Measure every branch subtree, including depth and vertical span.
+3. Calculate one fixed primary pitch from the widest required branch zone.
+4. Place all primary nodes on the axis using that pitch.
+5. Place each branch group in an independent TOP or BOTTOM zone using the
+   measured subtree span.
+6. Generate shared-spine orthogonal routes with rounded elbows.
+7. Validate bounds, collisions, and route orientation before rendering.
+
+Sibling cards use a vertical center gap of at least the card height plus a
+visible blank margin. Same-depth cards within a branch zone share the same X
+column relative to their primary anchor; descendants always move rightward.
