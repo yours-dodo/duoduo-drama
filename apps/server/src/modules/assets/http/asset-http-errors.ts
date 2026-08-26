@@ -4,6 +4,7 @@ import { ObjectStorageUnavailableError } from '../../../platform/object-storage/
 import { ApplicationError } from '../../../platform/http/application-error.js';
 import {
   AssetNotFoundError,
+  AssetInUseError,
   AssetStateConflictError,
   AssetUploadExpiredError,
   AssetUploadInvalidError,
@@ -52,6 +53,13 @@ export function throwAssetHttpError(error: unknown): never {
     throw assetError(
       'ASSET_STATE_CONFLICT',
       'Asset is not in a state that supports this operation',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof AssetInUseError) {
+    throw assetError(
+      'ASSET_IN_USE',
+      'Asset is currently referenced by a story role',
       HttpStatus.CONFLICT,
     );
   }

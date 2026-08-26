@@ -248,6 +248,7 @@ HarmonyOS 客户端 ─┘
 
 ## 项目文档
 
+- [`故事基础信息页面与数据库设计`](2026-08-20-story-basic-info-persistence-design.md)：审查故事基础信息页面，并定义故事名、故事描述、封面资产、并发保存和个人/团队项目资产的持久化边界。
 - [`C 端用户体系数据库表设计`](docs/architecture/2026-08-13-c-end-user-database-schema-design.md)：将个人空间、团队空间、成员、邀请、项目所有权、协作者权限和迁移约束落到 PostgreSQL 表模型。
 - [`C 端用户体系与权限设计`](docs/architecture/2026-08-13-c-end-user-system-and-permissions.md)：定义用户、空间、团队、项目和权限的产品规则与授权边界。
 - [`PROJECT-PLAN.md`](PROJECT-PLAN.md)：项目级规划、已确认决策和讨论记录。

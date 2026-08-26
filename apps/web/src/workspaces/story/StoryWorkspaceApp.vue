@@ -8,6 +8,10 @@ import {
 } from 'vue-router';
 
 import { createStoryRouter, toStoryRoutePath } from './router';
+import {
+  createStoryWorldviewStateRegistry,
+  storyWorldviewStateRegistryKey,
+} from './story-worldview-state';
 import StoryChatPanel from './StoryChatPanel.vue';
 import StorySidebar from './StorySidebar.vue';
 import StoryWorkspaceHeader from './StoryWorkspaceHeader.vue';
@@ -16,6 +20,7 @@ const props = defineProps<{
   initialPath?: string;
 }>();
 
+const worldviewStateRegistry = createStoryWorldviewStateRegistry();
 const router = createStoryRouter();
 if (props.initialPath) {
   await router.replace(toStoryRoutePath(props.initialPath));
@@ -36,6 +41,7 @@ for (const key of Object.keys(initialRoute)) {
 provide(routerKey, router);
 provide(routeLocationKey, reactiveRoute as never);
 provide(routerViewLocationKey, routeState);
+provide(storyWorldviewStateRegistryKey, worldviewStateRegistry);
 
 watch(router.currentRoute, (nextRoute) => {
   routeState.value = nextRoute;
@@ -46,7 +52,10 @@ watch(router.currentRoute, (nextRoute) => {
   <div class="story-workspace-app">
     <StoryWorkspaceHeader />
     <StorySidebar v-if="!isProjectRoute" />
-    <main class="story-workspace-app-content" :class="{ 'is-project': isProjectRoute }">
+    <main
+      class="story-workspace-app-content"
+      :class="{ 'is-project': isProjectRoute }"
+    >
       <div class="story-workspace-app-route">
         <RouterView />
       </div>

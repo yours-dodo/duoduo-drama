@@ -29,11 +29,13 @@ export const storyModules = [
 
 export type StoryModule = (typeof storyModules)[number];
 export type StoryCreationMode = 'story' | 'immersive';
+export type StoryWorldviewView = 'settings' | 'composition';
 
 export type StoryRouteMeta = {
   mode?: StoryCreationMode;
   page?: 'catalog' | 'immersive' | 'templates' | 'project' | 'not-found';
   module?: StoryModule;
+  worldviewView?: StoryWorldviewView;
 };
 
 export const storyRoutes: RouteRecordRaw[] = [
@@ -73,6 +75,50 @@ export const storyRoutes: RouteRecordRaw[] = [
     name: 'stories-project',
     redirect: (to) => `${to.path}/outline`,
     meta: { mode: 'story', page: 'project' } satisfies StoryRouteMeta,
+  },
+  {
+    path: '/:projectId/worldview',
+    name: 'stories-project-worldview',
+    redirect: (to) =>
+      `/${encodeURIComponent(String(to.params.projectId))}/worldview/settings`,
+    meta: {
+      mode: 'story',
+      page: 'project',
+      module: 'worldview',
+    } satisfies StoryRouteMeta,
+  },
+  {
+    path: '/:projectId/worldview/composition/:entityId/edit',
+    name: 'stories-project-worldview-entity-edit',
+    component: () => import('./StoryWorldviewEntityEditView.vue'),
+    meta: {
+      mode: 'story',
+      page: 'project',
+      module: 'worldview',
+      worldviewView: 'composition',
+    } satisfies StoryRouteMeta,
+  },
+  {
+    path: '/:projectId/worldview/:worldviewView',
+    name: 'stories-project-worldview-view',
+    component: () => import('./StoryProjectView.vue'),
+    beforeEnter: validateWorldviewView,
+    meta: {
+      mode: 'story',
+      page: 'project',
+      module: 'worldview',
+    } satisfies StoryRouteMeta,
+  },
+  {
+    path: '/:projectId/roles/:roleId/edit',
+    name: 'stories-project-role-edit',
+    component: () => import('./StoryRoleEditView.vue'),
+    beforeEnter: validateRoleId,
+    meta: {
+      mode: 'story',
+      page: 'project',
+      module: 'roles',
+    } satisfies StoryRouteMeta,
   },
   {
     path: '/:projectId/:module',
@@ -134,6 +180,21 @@ function validateProjectModule(
   const prefix = mode === 'immersive' ? '/immersive/' : '/';
   return `${prefix}${encodeURIComponent(String(to.params.projectId))}/outline`;
 }
+
+function validateWorldviewView(to: RouteLocationNormalized) {
+  const view = String(to.params.worldviewView);
+  if (view === 'settings' || view === 'composition') return true;
+  return `/${encodeURIComponent(String(to.params.projectId))}/worldview/settings`;
+}
+
+function validateRoleId(to: RouteLocationNormalized) {
+  const roleId = String(to.params.roleId);
+  if (UUID_V4_PATTERN.test(roleId)) return true;
+  return `/${encodeURIComponent(String(to.params.projectId))}/roles`;
+}
+
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isStoryModule(value: string): value is StoryModule {
   return storyModules.includes(value as StoryModule);

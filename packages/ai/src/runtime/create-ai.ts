@@ -215,6 +215,8 @@ export interface AiRuntime<TScopeHandle = unknown> {
 }
 
 export interface CreateAiOptions<TScopeHandle = unknown> {
+  /** Injectable clock for deterministic image/video generation expiry checks. */
+  readonly clock?: Readonly<{ now(): number }>;
   readonly commonDefaults?: Readonly<{
     maxOutputTokens?: number;
     temperature?: number;
@@ -450,6 +452,7 @@ export function createAi<TScopeHandle = unknown>(
     generationOperationCodec: options.generationOperationCodec,
     operationCredentialVerifier: options.operationCredentialVerifier,
     generationOperationPolicy: options.generationOperationPolicy,
+    now: options.clock?.now,
     resolveAuth: async ({
       binding,
       provider,
@@ -541,6 +544,7 @@ export function createAi<TScopeHandle = unknown>(
     generationOperationCodec: options.generationOperationCodec,
     operationCredentialVerifier: options.operationCredentialVerifier,
     generationOperationPolicy: options.generationOperationPolicy,
+    now: options.clock?.now,
     resolveAuth: async ({
       binding,
       provider,

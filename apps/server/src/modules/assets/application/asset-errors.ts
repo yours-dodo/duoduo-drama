@@ -39,3 +39,10 @@ export class AssetStateConflictError extends Error {
     this.name = 'AssetStateConflictError';
   }
 }
+
+export class AssetInUseError extends Error {
+  constructor() {
+    super('The asset is currently referenced by a story role');
+    this.name = 'AssetInUseError';
+  }
+}

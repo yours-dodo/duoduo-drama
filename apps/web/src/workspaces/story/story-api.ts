@@ -3,6 +3,7 @@ import { requestJson } from '../../lib/server-api/http-client';
 export type StoryProjectVisibility = 'team' | 'private';
 export type StoryProjectStatus = 'active' | 'archived';
 export type StoryCreationMode = 'standard' | 'immersive';
+export type StoryProjectEra = '现代' | '古代';
 export type StoryArtifactType = 'outline' | 'roles' | 'worldview' | 'story';
 export type StoryArtifactStatus = 'active' | 'archived';
 export type StoryArtifactContentFormat = 'markdown' | 'text' | 'json';
@@ -17,16 +18,23 @@ export interface StoryProject {
   createdByUserId: string;
   ownerUserId: string;
   title: string;
+  description: string;
+  era: StoryProjectEra;
+  tags: string[];
   coverUrl?: string | null;
   creationMode: StoryCreationMode;
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
+  archivedAt: string | null;
+  purgeAt: string | null;
   revision: number;
   createdAt: string;
   updatedAt: string;
   collaborator: boolean;
   canEdit: boolean;
   canManageCollaborators: boolean;
+  canArchive: boolean;
+  canRestore: boolean;
 }
 
 export interface StoryArtifact {
@@ -127,11 +135,7 @@ export interface StoryMessageAppendResponse {
 }
 
 export type StoryGenerationPipelineStage =
-  | 'queued'
-  | 'script'
-  | 'images'
-  | 'speech'
-  | 'video';
+  'queued' | 'script' | 'images' | 'speech' | 'video';
 
 export interface StoryGenerationRequestOutput {
   id: string;
@@ -165,6 +169,146 @@ export interface StoryGenerationRequestResponse {
 export interface StoryArtifactMutationResponse {
   artifact: StoryArtifact;
   version: StoryArtifactVersion;
+}
+
+export interface StoryOutlineResponse {
+  artifact: StoryArtifact;
+  currentVersion: StoryArtifactVersion | null;
+}
+
+export type StoryRoleCategory =
+  'protagonists' | 'core' | 'supporting' | 'background';
+export type StoryRoleGender = '男' | '女' | '未设定';
+export type StoryRoleCamp = '主角方' | '对立方' | '中立' | '未明确';
+export type StoryRoleAppearanceFrequency =
+  '高频' | '中频' | '低频' | '仅被提及';
+
+export interface StoryRoleDialogueExample {
+  context: string;
+  line: string;
+}
+
+export interface StoryRoleSpeechProfile {
+  style: string;
+  habits: string[];
+  dialogueExamples: StoryRoleDialogueExample[];
+}
+
+export interface StoryRoleAsset {
+  id: string;
+  tenantId: string | null;
+  projectId: string;
+  category: StoryRoleCategory;
+  name: string;
+  occupation: string;
+  personalityCore: string;
+  motivationConflict: string;
+  mainlineRelation: string;
+  gender: StoryRoleGender;
+  camp: StoryRoleCamp;
+  appearanceFrequency: StoryRoleAppearanceFrequency;
+  speechProfile: StoryRoleSpeechProfile;
+  coverAssetId: string | null;
+  coverAsset: StoryRoleCoverAsset | null;
+  viewAssetId: string | null;
+  viewAsset: StoryRoleCoverAsset | null;
+  revision: number;
+  createdByUserId: string;
+  updatedByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+export interface StoryRoleCoverAsset {
+  id: string;
+  originalFileName: string;
+  contentType: string;
+  byteSize: number;
+  downloadUrl: string;
+  downloadUrlExpiresAt: string;
+}
+
+export interface StoryAsset {
+  id: string;
+  tenantId: string | null;
+  projectId: string;
+  uploadedByUserId: string;
+  originalFileName: string;
+  contentType: string;
+  byteSize: number;
+  checksum: string | null;
+  status: 'pending_upload' | 'uploaded' | 'failed' | 'deleted';
+  uploadExpiresAt: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoryAssetUploadResponse {
+  asset: StoryAsset;
+  uploadUrl: string;
+  expiresAt: string;
+  requiredHeaders: Record<string, string>;
+}
+
+export interface StoryAssetResponse {
+  asset: StoryAsset;
+}
+
+export interface StoryAssetsResponse {
+  items: StoryAsset[];
+  nextCursor: string | null;
+}
+
+export interface StoryAssetDownloadResponse {
+  asset: StoryAsset;
+  downloadUrl: string;
+  expiresAt: string;
+}
+
+export type CreateStoryRoleAssetInput = Pick<
+  StoryRoleAsset,
+  'category' | 'name'
+> &
+  Partial<
+    Pick<
+      StoryRoleAsset,
+      | 'occupation'
+      | 'personalityCore'
+      | 'motivationConflict'
+      | 'mainlineRelation'
+      | 'gender'
+      | 'camp'
+      | 'appearanceFrequency'
+      | 'speechProfile'
+    >
+  >;
+
+export type UpdateStoryRoleAssetInput = Partial<
+  Pick<
+    StoryRoleAsset,
+    | 'category'
+    | 'name'
+    | 'occupation'
+    | 'personalityCore'
+    | 'motivationConflict'
+    | 'mainlineRelation'
+    | 'gender'
+    | 'camp'
+    | 'appearanceFrequency'
+    | 'speechProfile'
+    | 'coverAssetId'
+    | 'viewAssetId'
+  >
+> & { expectedRevision: number };
+
+export interface StoryRoleAssetsResponse {
+  items: StoryRoleAsset[];
+}
+
+export interface StoryRoleAssetResponse {
+  roleAsset: StoryRoleAsset;
 }
 
 export function createIdempotencyKey(prefix: string): string {
@@ -229,6 +373,52 @@ export function createPersonalStoryProject(
   );
 }
 
+export function archiveStoryProject(
+  teamId: string,
+  projectId: string,
+  expectedRevision: number,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/archive`,
+    'POST',
+    { expectedRevision },
+  );
+}
+
+export function archivePersonalStoryProject(
+  projectId: string,
+  expectedRevision: number,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/me/story-projects/${projectId}/archive`,
+    'POST',
+    { expectedRevision },
+  );
+}
+
+export function restoreStoryProject(
+  teamId: string,
+  projectId: string,
+  expectedRevision: number,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/restore`,
+    'POST',
+    { expectedRevision },
+  );
+}
+
+export function restorePersonalStoryProject(
+  projectId: string,
+  expectedRevision: number,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/me/story-projects/${projectId}/restore`,
+    'POST',
+    { expectedRevision },
+  );
+}
+
 export function createStoryImportJob(
   teamId: string,
   projectId: string,
@@ -262,6 +452,247 @@ export function createPersonalStoryImportJob(
     },
     { 'Idempotency-Key': idempotencyKey },
   );
+}
+
+export function listStoryRoleAssets(
+  teamId: string,
+  projectId: string,
+): Promise<StoryRoleAssetsResponse> {
+  return requestJson<StoryRoleAssetsResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/role-assets`,
+  );
+}
+
+export function listPersonalStoryRoleAssets(
+  projectId: string,
+): Promise<StoryRoleAssetsResponse> {
+  return requestJson<StoryRoleAssetsResponse>(
+    `v1/me/story-projects/${projectId}/role-assets`,
+  );
+}
+
+export function createStoryRoleAsset(
+  teamId: string,
+  projectId: string,
+  input: CreateStoryRoleAssetInput,
+  idempotencyKey = createIdempotencyKey('create-story-role-asset'),
+): Promise<StoryRoleAssetResponse> {
+  return sendJson<StoryRoleAssetResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/role-assets`,
+    'POST',
+    input,
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function createPersonalStoryRoleAsset(
+  projectId: string,
+  input: CreateStoryRoleAssetInput,
+  idempotencyKey = createIdempotencyKey('create-personal-story-role-asset'),
+): Promise<StoryRoleAssetResponse> {
+  return sendJson<StoryRoleAssetResponse>(
+    `v1/me/story-projects/${projectId}/role-assets`,
+    'POST',
+    input,
+    { 'Idempotency-Key': idempotencyKey },
+  );
+}
+
+export function getStoryRoleAsset(
+  teamId: string,
+  projectId: string,
+  roleId: string,
+): Promise<StoryRoleAssetResponse> {
+  return requestJson<StoryRoleAssetResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/role-assets/${roleId}`,
+  );
+}
+
+export function getPersonalStoryRoleAsset(
+  projectId: string,
+  roleId: string,
+): Promise<StoryRoleAssetResponse> {
+  return requestJson<StoryRoleAssetResponse>(
+    `v1/me/story-projects/${projectId}/role-assets/${roleId}`,
+  );
+}
+
+export function updateStoryRoleAsset(
+  teamId: string,
+  projectId: string,
+  roleId: string,
+  input: UpdateStoryRoleAssetInput,
+): Promise<StoryRoleAssetResponse> {
+  return sendJson<StoryRoleAssetResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/role-assets/${roleId}`,
+    'PATCH',
+    input,
+  );
+}
+
+export function updatePersonalStoryRoleAsset(
+  projectId: string,
+  roleId: string,
+  input: UpdateStoryRoleAssetInput,
+): Promise<StoryRoleAssetResponse> {
+  return sendJson<StoryRoleAssetResponse>(
+    `v1/me/story-projects/${projectId}/role-assets/${roleId}`,
+    'PATCH',
+    input,
+  );
+}
+
+export function archiveStoryRoleAsset(
+  teamId: string,
+  projectId: string,
+  roleId: string,
+  expectedRevision: number,
+): Promise<void> {
+  return requestJson<void>(
+    `v1/teams/${teamId}/story-projects/${projectId}/role-assets/${roleId}?expectedRevision=${expectedRevision}`,
+    { method: 'DELETE' },
+  );
+}
+
+export function archivePersonalStoryRoleAsset(
+  projectId: string,
+  roleId: string,
+  expectedRevision: number,
+): Promise<void> {
+  return requestJson<void>(
+    `v1/me/story-projects/${projectId}/role-assets/${roleId}?expectedRevision=${expectedRevision}`,
+    { method: 'DELETE' },
+  );
+}
+
+export function createStoryAssetUploadUrl(
+  teamId: string,
+  projectId: string,
+  input: { fileName: string; contentType: string; byteSize: number },
+): Promise<StoryAssetUploadResponse> {
+  return createAssetUploadUrl(
+    `v1/teams/${teamId}/story-projects/${projectId}/assets/upload-url`,
+    input,
+  );
+}
+
+export function createPersonalStoryAssetUploadUrl(
+  projectId: string,
+  input: { fileName: string; contentType: string; byteSize: number },
+): Promise<StoryAssetUploadResponse> {
+  return createAssetUploadUrl(
+    `v1/me/story-projects/${projectId}/assets/upload-url`,
+    input,
+  );
+}
+
+export function completeStoryAssetUpload(
+  teamId: string,
+  projectId: string,
+  assetId: string,
+): Promise<StoryAssetResponse> {
+  return requestJson<StoryAssetResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/assets/${assetId}/complete`,
+    { method: 'POST' },
+  );
+}
+
+export function completePersonalStoryAssetUpload(
+  projectId: string,
+  assetId: string,
+): Promise<StoryAssetResponse> {
+  return requestJson<StoryAssetResponse>(
+    `v1/me/story-projects/${projectId}/assets/${assetId}/complete`,
+    { method: 'POST' },
+  );
+}
+
+export function createStoryAssetDownloadUrl(
+  teamId: string,
+  projectId: string,
+  assetId: string,
+): Promise<StoryAssetDownloadResponse> {
+  return requestJson<StoryAssetDownloadResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/assets/${assetId}/download-url`,
+  );
+}
+
+export function listStoryAssets(
+  teamId: string,
+  projectId: string,
+  cursor?: string,
+): Promise<StoryAssetsResponse> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return requestJson<StoryAssetsResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}/assets${query}`,
+  );
+}
+
+export function listPersonalStoryAssets(
+  projectId: string,
+  cursor?: string,
+): Promise<StoryAssetsResponse> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return requestJson<StoryAssetsResponse>(
+    `v1/me/story-projects/${projectId}/assets${query}`,
+  );
+}
+
+export function createPersonalStoryAssetDownloadUrl(
+  projectId: string,
+  assetId: string,
+): Promise<StoryAssetDownloadResponse> {
+  return requestJson<StoryAssetDownloadResponse>(
+    `v1/me/story-projects/${projectId}/assets/${assetId}/download-url`,
+  );
+}
+
+export function uploadStoryAssetFile(
+  uploadUrl: string,
+  file: Blob,
+  requiredHeaders: Readonly<Record<string, string>> = {},
+  onProgress?: (percentage: number) => void,
+): Promise<void> {
+  if (typeof XMLHttpRequest === 'undefined') {
+    return fetch(uploadUrl, {
+      method: 'PUT',
+      headers: requiredHeaders,
+      body: file,
+    }).then((response) => {
+      if (!response.ok) throw new Error('Asset upload failed');
+      onProgress?.(100);
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('PUT', uploadUrl);
+    Object.entries(requiredHeaders).forEach(([key, value]) =>
+      request.setRequestHeader(key, value),
+    );
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else {
+        reject(new Error('Asset upload failed'));
+      }
+    };
+    request.onerror = () => reject(new Error('Asset upload failed'));
+    request.send(file);
+  });
+}
+
+function createAssetUploadUrl(
+  path: string,
+  input: { fileName: string; contentType: string; byteSize: number },
+): Promise<StoryAssetUploadResponse> {
+  return sendJson<StoryAssetUploadResponse>(path, 'POST', input);
 }
 
 export function createStoryConversation(
@@ -327,7 +758,7 @@ export function retryStoryGeneration(
     `v1/teams/${teamId}/story-projects/${projectId}/conversations/${conversationId}/generation-requests/${requestId}/retry`,
     'POST',
     {},
-);
+  );
 }
 
 export function appendPersonalStoryMessage(
@@ -353,6 +784,60 @@ export function getStoryProject(
   );
 }
 
+export function getPersonalStoryProject(
+  projectId: string,
+): Promise<StoryProjectResponse> {
+  return requestJson<StoryProjectResponse>(`v1/me/story-projects/${projectId}`);
+}
+
+export interface StoryProjectUpdateInput {
+  title?: string;
+  description?: string;
+  era?: StoryProjectEra;
+  tags?: string[];
+  expectedRevision: number;
+}
+
+export function updateStoryProject(
+  teamId: string,
+  projectId: string,
+  input: StoryProjectUpdateInput,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/teams/${teamId}/story-projects/${projectId}`,
+    'PATCH',
+    input,
+  );
+}
+
+export function updatePersonalStoryProject(
+  projectId: string,
+  input: StoryProjectUpdateInput,
+): Promise<StoryProjectResponse> {
+  return sendJson<StoryProjectResponse>(
+    `v1/me/story-projects/${projectId}`,
+    'PATCH',
+    input,
+  );
+}
+
+export interface StoryProjectTagGenerationInput {
+  expectedRevision: number;
+  title: string;
+  description: string;
+}
+
+export function generateStoryProjectTags(
+  teamId: string | null,
+  projectId: string,
+  input: StoryProjectTagGenerationInput,
+): Promise<StoryProjectResponse> {
+  const path = teamId
+    ? `v1/teams/${teamId}/story-projects/${projectId}/tags/generate`
+    : `v1/me/story-projects/${projectId}/tags/generate`;
+  return sendJson<StoryProjectResponse>(path, 'POST', input);
+}
+
 export function listStoryArtifacts(
   teamId: string,
   projectId: string,
@@ -360,6 +845,29 @@ export function listStoryArtifacts(
   return requestJson<StoryArtifactsResponse>(
     `v1/teams/${teamId}/story-projects/${projectId}/artifacts`,
   );
+}
+
+export function getStoryOutline(scope: {
+  teamId?: string | null;
+  projectId: string;
+}): Promise<StoryOutlineResponse> {
+  const path = scope.teamId
+    ? `v1/teams/${scope.teamId}/story-projects/${scope.projectId}/outline`
+    : `v1/me/story-projects/${scope.projectId}/outline`;
+  return requestJson<StoryOutlineResponse>(path);
+}
+
+export function saveStoryOutline(
+  scope: { teamId?: string | null; projectId: string },
+  input: { content: string; expectedVersionNumber?: number },
+  idempotencyKey = createIdempotencyKey('save-story-outline'),
+): Promise<StoryArtifactMutationResponse> {
+  const path = scope.teamId
+    ? `v1/teams/${scope.teamId}/story-projects/${scope.projectId}/outline`
+    : `v1/me/story-projects/${scope.projectId}/outline`;
+  return sendJson<StoryArtifactMutationResponse>(path, 'PUT', input, {
+    'Idempotency-Key': idempotencyKey,
+  });
 }
 
 export function getStoryArtifact(
@@ -432,7 +940,7 @@ export function discardStoryDraft(
 
 function sendJson<T>(
   path: string,
-  method: 'PATCH' | 'POST',
+  method: 'PATCH' | 'POST' | 'PUT',
   body: unknown,
   headers: Record<string, string> = {},
 ): Promise<T> {

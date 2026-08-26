@@ -1,7 +1,4 @@
-import {
-  createAi,
-  type AiRuntime,
-} from '@duoduo/ai';
+import { createAi, type AiRuntime } from '@duoduo/ai';
 import { createAllowlistNetworkPolicy } from '@duoduo/ai/transport';
 import { deepseekProvider } from '@duoduo/ai/providers/deepseek';
 
@@ -132,7 +129,12 @@ function toAiContext(messages: StoryTextMessage[]) {
 /** Deterministic local-development fallback used when no provider is configured. */
 export function createMockStoryTextGenerator(): StoryTextGenerator {
   return {
-    async generateText() {
+    async generateText(messages) {
+      if (
+        messages.some((message) => message.content.includes('STORY_TAGS_JSON'))
+      ) {
+        return JSON.stringify({ era: '现代', tags: ['悬疑', '情感'] });
+      }
       return JSON.stringify({
         title: '潮声之后',
         logline: '她必须在潮水淹没证据前，证明那个最爱她的人正在杀死她。',
@@ -196,8 +198,7 @@ export function createMockStoryTextGenerator(): StoryTextGenerator {
                     speaker: '林晚',
                     line: '你说过，潮水退了以后，所有东西都会回来。',
                     lineDelivery: '平静中带着压抑',
-                    visualPrompt:
-                      '特写，女主角侧脸，逆光，海面反光',
+                    visualPrompt: '特写，女主角侧脸，逆光，海面反光',
                     durationSeconds: 5,
                   },
                   {
@@ -207,8 +208,7 @@ export function createMockStoryTextGenerator(): StoryTextGenerator {
                     speaker: '周叙',
                     line: '但有些人，不该回来。',
                     lineDelivery: '低沉，意味深长',
-                    visualPrompt:
-                      '中景，男主角下车，背光，表情看不清',
+                    visualPrompt: '中景，男主角下车，背光，表情看不清',
                     durationSeconds: 4,
                   },
                 ],

@@ -9,9 +9,10 @@ import type { TeamMembershipRepository } from '../../tenancy/ports/team-membersh
 import { StoryProjectAccessDeniedError } from '../../story/application/story-errors.js';
 
 export async function requireAssetProjectEdit(input: {
-  tenantId: string;
+  tenantId: string | null;
   actorUserId: string;
   projectId: string;
+  lock?: boolean;
   projects: StoryProjectRepository;
   memberships: TeamMembershipRepository;
   collaborators: ProjectCollaboratorRepository;
@@ -22,7 +23,7 @@ export async function requireAssetProjectEdit(input: {
 }
 
 export async function requireAssetProjectView(input: {
-  tenantId: string;
+  tenantId: string | null;
   actorUserId: string;
   projectId: string;
   projects: StoryProjectRepository;
@@ -35,23 +36,29 @@ export async function requireAssetProjectView(input: {
 }
 
 async function readAssetProjectAccess(input: {
-  tenantId: string;
+  tenantId: string | null;
   actorUserId: string;
   projectId: string;
+  lock?: boolean;
   projects: StoryProjectRepository;
   memberships: TeamMembershipRepository;
   collaborators: ProjectCollaboratorRepository;
 }) {
-  const membership = await input.memberships.findActive({
-    tenantId: input.tenantId,
-    userId: input.actorUserId,
-  });
-  if (membership === null) throw new StoryProjectAccessDeniedError();
+  const membership =
+    input.tenantId === null
+      ? null
+      : await input.memberships.findActive({
+          tenantId: input.tenantId,
+          userId: input.actorUserId,
+        });
+  if (input.tenantId !== null && membership === null) {
+    throw new StoryProjectAccessDeniedError();
+  }
 
   return readProjectAccess(input.projects, input.collaborators, {
     tenantId: input.tenantId,
     projectId: input.projectId,
     membership,
-    lock: false,
+    lock: input.lock ?? false,
   });
 }

@@ -5,9 +5,11 @@ import {
   ObjectStorageUnavailableError,
 } from '../../../platform/object-storage/object-storage.js';
 import { CompleteAssetUpload } from './complete-asset-upload.js';
+import { CreateAssetDownloadUrl } from './create-asset-download-url.js';
 import { CreateAssetUploadUrl } from './create-asset-upload-url.js';
 import { DeleteAsset } from './delete-asset.js';
 import {
+  AssetInUseError,
   AssetUploadMissingObjectError,
   AssetUploadMismatchError,
 } from './asset-errors.js';
@@ -264,6 +266,7 @@ describe('DeleteAsset', () => {
     const deleted = { ...asset, status: 'deleted' as const };
     const assets = {
       findById: vi.fn().mockResolvedValue(asset),
+      hasRoleReferences: vi.fn().mockResolvedValue(false),
       transition: vi.fn().mockResolvedValue(deleted),
     };
     const objectStorage = {
@@ -276,6 +279,7 @@ describe('DeleteAsset', () => {
       access.memberships as never,
       access.collaborators as never,
       objectStorage as never,
+      { run: async <T>(operation: () => Promise<T>) => operation() },
     );
 
     await expect(useCase.execute(assetRequest())).resolves.toEqual({
@@ -290,12 +294,82 @@ describe('DeleteAsset', () => {
       to: 'deleted',
     });
   });
+
+  it('refuses to delete an asset still bound to an active role', async () => {
+    const asset = { ...pendingAsset(), status: 'uploaded' as const };
+    const assets = {
+      findById: vi.fn().mockResolvedValue(asset),
+      hasRoleReferences: vi.fn().mockResolvedValue(true),
+      transition: vi.fn(),
+    };
+    const objectStorage = { deleteObject: vi.fn() };
+    const access = projectAccess();
+    const useCase = new DeleteAsset(
+      assets as never,
+      access.projects as never,
+      access.memberships as never,
+      access.collaborators as never,
+      objectStorage as never,
+      { run: async <T>(operation: () => Promise<T>) => operation() },
+    );
+
+    await expect(useCase.execute(assetRequest())).rejects.toBeInstanceOf(
+      AssetInUseError,
+    );
+    expect(objectStorage.deleteObject).not.toHaveBeenCalled();
+    expect(assets.transition).not.toHaveBeenCalled();
+  });
+});
+
+describe('CreateAssetDownloadUrl', () => {
+  it('authorizes the project and returns a short-lived download URL', async () => {
+    const access = projectAccess();
+    const asset = { ...pendingAsset(), status: 'uploaded' as const };
+    const assets = { findById: vi.fn().mockResolvedValue(asset) };
+    const objectStorage = {
+      createDownloadUrl: vi.fn().mockResolvedValue({
+        url: 'https://cdn.test/asset',
+        expiresAt: EXPIRES_AT.toISOString(),
+      }),
+    };
+    const useCase = new CreateAssetDownloadUrl(
+      assets as never,
+      access.projects as never,
+      access.memberships as never,
+      access.collaborators as never,
+      objectStorage as never,
+      objectStorageConfig(),
+    );
+
+    await expect(useCase.execute(assetRequest())).resolves.toMatchObject({
+      asset: { id: ASSET_ID, status: 'uploaded' },
+      downloadUrl: 'https://cdn.test/asset',
+      expiresAt: EXPIRES_AT.toISOString(),
+    });
+    expect(objectStorage.createDownloadUrl).toHaveBeenCalledWith({
+      objectKey: asset.objectKey,
+      expiresInSeconds: 600,
+    });
+  });
 });
 
 function projectAccess() {
   return {
     projects: {
       findById: vi.fn().mockResolvedValue({
+        id: PROJECT_ID,
+        tenantId: TENANT_ID,
+        spaceId: 'space-1',
+        ownerUserId: ACTOR_ID,
+        createdByUserId: ACTOR_ID,
+        title: 'Project',
+        visibility: 'private',
+        status: 'active',
+        revision: 1,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+      findByIdLocked: vi.fn().mockResolvedValue({
         id: PROJECT_ID,
         tenantId: TENANT_ID,
         spaceId: 'space-1',

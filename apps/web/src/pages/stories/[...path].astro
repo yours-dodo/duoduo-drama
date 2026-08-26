@@ -15,6 +15,6 @@ const initialPath = `${Astro.url.pathname}${Astro.url.search}${Astro.url.hash}`;
   showSiteHeader={false}
 >
   <AuthGate>
-    <StoryWorkspaceApp client:load initialPath={initialPath} />
+    <StoryWorkspaceApp client:only="vue" initialPath={initialPath} />
   </AuthGate>
 </BaseLayout>

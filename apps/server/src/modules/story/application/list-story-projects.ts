@@ -1,6 +1,8 @@
 import {
   canEditProject,
+  canArchiveProject,
   canManageProjectCollaborators,
+  canRestoreProject,
   canViewProject,
 } from '../../../domain/story/project-access-policy.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
@@ -54,6 +56,9 @@ export class ListStoryProjects {
       actorRole: membership?.role ?? null,
       page: input.page,
     });
+    const now = this.databaseClock
+      ? await this.databaseClock.now()
+      : new Date();
     if (
       membership?.role === 'admin' &&
       input.tenantId !== null &&
@@ -110,6 +115,24 @@ export class ListStoryProjects {
               collaboratorRole: project.collaboratorRole,
               permissionOverrides: [],
             }),
+            canArchive: canArchiveProject(project, {
+              userId: input.actorUserId,
+              role: membership?.role ?? null,
+              collaborator: project.collaborator,
+              collaboratorRole: project.collaboratorRole,
+              permissionOverrides: [],
+            }),
+            canRestore: canRestoreProject(
+              project,
+              {
+                userId: input.actorUserId,
+                role: membership?.role ?? null,
+                collaborator: project.collaborator,
+                collaboratorRole: project.collaboratorRole,
+                permissionOverrides: [],
+              },
+              now,
+            ),
           }),
         ),
       next: page.next,

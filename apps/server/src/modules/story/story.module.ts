@@ -2,13 +2,23 @@ import { randomUUID } from 'node:crypto';
 
 import { Module } from '@nestjs/common';
 
-import { SERVER_CONFIG, type ServerConfig } from '../../config/server-config.js';
+import {
+  OBJECT_STORAGE_CONFIG,
+  SERVER_CONFIG,
+  type ObjectStorageConfig,
+  type ServerConfig,
+} from '../../config/server-config.js';
 import { AGENT_GATEWAY } from '../../integrations/agent/agent-gateway.js';
 import type { AgentGateway } from '../../integrations/agent/agent-contracts.js';
 import { HttpAgentGateway } from '../../integrations/agent/http-agent-gateway.js';
 import { MockAgentGateway } from '../../integrations/agent/mock-agent-gateway.js';
 import { DatabaseClock } from '../../platform/database/database-clock.js';
 import { DatabaseModule } from '../../platform/database/database.module.js';
+import {
+  OBJECT_STORAGE,
+  type ObjectStorage,
+} from '../../platform/object-storage/object-storage.js';
+import { ObjectStorageModule } from '../../platform/object-storage/object-storage.module.js';
 import { TransactionRunner } from '../../platform/database/transaction-runner.js';
 import { AuditModule } from '../audit/audit.module.js';
 import {
@@ -37,50 +47,71 @@ import {
 } from '../tenancy/ports/team-membership-repository.js';
 import { AddProjectCollaborator } from './application/add-project-collaborator.js';
 import { AppendStoryMessage } from './application/append-story-message.js';
+import { ArchiveStoryRoleAsset } from './application/archive-story-role-asset.js';
 import { ArchiveStoryProject } from './application/archive-story-project.js';
+import { RestoreStoryProject } from './application/restore-story-project.js';
+import { PurgeArchivedStoryProjects } from './application/purge-archived-story-projects.js';
 import { ArchiveStoryConversation } from './application/archive-story-conversation.js';
 import { ConfirmStoryDraft } from './application/confirm-story-draft.js';
 import { CreateStoryConversation } from './application/create-story-conversation.js';
 import { CreateStoryImportJob } from './application/create-story-import-job.js';
 import { CreateStoryProject } from './application/create-story-project.js';
+import { CreateStoryRoleAsset } from './application/create-story-role-asset.js';
 import { DiscardStoryDraft } from './application/discard-story-draft.js';
 import { EditStoryDraft } from './application/edit-story-draft.js';
 import { GenerateStoryDraft } from './application/generate-story-draft.js';
+import { GenerateStoryProjectTags } from './application/generate-story-project-tags.js';
 import { GetStoryArtifact } from './application/get-story-artifact.js';
 import { GetStoryProject } from './application/get-story-project.js';
+import { GetStoryRoleAsset } from './application/get-story-role-asset.js';
 import { ListStoryArtifacts } from './application/list-story-artifacts.js';
+import { GetStoryOutline } from './application/get-story-outline.js';
+import { SaveStoryOutline } from './application/save-story-outline.js';
 import { ListStoryVersions } from './application/list-story-versions.js';
 import { ListProjectAuditRecords } from './application/list-project-audit-records.js';
 import { ListProjectCollaborators } from './application/list-project-collaborators.js';
 import { ListConversationMessages } from './application/list-conversation-messages.js';
 import { ListStoryConversations } from './application/list-story-conversations.js';
 import { ListStoryProjects } from './application/list-story-projects.js';
+import { ListStoryRoleAssets } from './application/list-story-role-assets.js';
 import { RemoveProjectCollaborator } from './application/remove-project-collaborator.js';
 import { SetProjectCollaboratorPermissionOverride } from './application/set-project-collaborator-permission-override.js';
 import { UpdateProjectCollaboratorRole } from './application/update-project-collaborator-role.js';
 import { RollbackStoryArtifact } from './application/rollback-story-artifact.js';
 import { RetryStoryGeneration } from './application/retry-story-generation.js';
 import { UpdateStoryProject } from './application/update-story-project.js';
+import { UpdateStoryRoleAsset } from './application/update-story-role-asset.js';
 import { UpdateStoryConversation } from './application/update-story-conversation.js';
 import { ConversationsController } from './http/conversations.controller.js';
 import { GenerationRequestsController } from './http/generation-requests.controller.js';
 import { MessagesController } from './http/messages.controller.js';
 import { StoryArtifactsController } from './http/story-artifacts.controller.js';
+import { StoryOutlineController } from './http/story-outline.controller.js';
+import { MeStoryOutlineController } from './http/me-story-outline.controller.js';
 import { ProjectCollaboratorsController } from './http/project-collaborators.controller.js';
 import { StoryProjectsController } from './http/story-projects.controller.js';
 import { MeStoryProjectsController } from './http/me-story-projects.controller.js';
 import { MeStoryConversationsController } from './http/me-story-conversations.controller.js';
 import { MeStoryImportJobsController } from './http/me-story-import-jobs.controller.js';
 import { MeStoryMessagesController } from './http/me-story-messages.controller.js';
+import { MeStoryRoleAssetsController } from './http/me-story-role-assets.controller.js';
 import { StoryImportJobsController } from './http/story-import-jobs.controller.js';
+import { StoryRoleAssetsController } from './http/story-role-assets.controller.js';
 import { PrismaProjectCollaboratorRepository } from './infrastructure/prisma-project-collaborator.repository.js';
 import { PrismaConversationRepository } from './infrastructure/prisma-conversation.repository.js';
 import { PrismaMessageRepository } from './infrastructure/prisma-message.repository.js';
 import { PrismaStoryArtifactRepository } from './infrastructure/prisma-story-artifact.repository.js';
 import { PrismaStoryArtifactVersionRepository } from './infrastructure/prisma-story-artifact-version.repository.js';
 import { PrismaStoryProjectRepository } from './infrastructure/prisma-story-project.repository.js';
+import { PrismaStoryProjectRetentionRepository } from './infrastructure/prisma-story-project-retention.repository.js';
+import { StoryProjectRetentionService } from './infrastructure/story-project-retention.service.js';
+import { PrismaAssetRepository } from '../assets/infrastructure/prisma-asset.repository.js';
 import { PrismaStoryGenerationRequestRepository } from './infrastructure/prisma-story-generation-request.repository.js';
 import { PrismaStoryImportJobRepository } from './infrastructure/prisma-story-import-job.repository.js';
+import {
+  NoopStoryRoleAssetReferenceRepository,
+  PrismaStoryRoleAssetRepository,
+} from './infrastructure/prisma-story-role-asset.repository.js';
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
@@ -98,6 +129,10 @@ import {
   type StoryProjectRepository,
 } from './ports/story-project-repository.js';
 import {
+  STORY_PROJECT_RETENTION_REPOSITORY,
+  type StoryProjectRetentionRepository,
+} from './ports/story-project-retention-repository.js';
+import {
   STORY_GENERATION_REQUEST_REPOSITORY,
   type StoryGenerationRequestRepository,
 } from './ports/story-generation-request-repository.js';
@@ -113,9 +148,25 @@ import {
   STORY_IMPORT_JOB_REPOSITORY,
   type StoryImportJobRepository,
 } from './ports/story-import-job-repository.js';
+import {
+  STORY_ROLE_ASSET_REFERENCE_REPOSITORY,
+  STORY_ROLE_ASSET_REPOSITORY,
+  type StoryRoleAssetReferenceRepository,
+  type StoryRoleAssetRepository,
+} from './ports/story-role-asset-repository.js';
+import {
+  ASSET_REPOSITORY,
+  type AssetRepository,
+} from '../assets/ports/asset-repository.js';
 
 @Module({
-  imports: [DatabaseModule, AuditModule, IdentityModule, SpacesModule],
+  imports: [
+    DatabaseModule,
+    AuditModule,
+    IdentityModule,
+    SpacesModule,
+    ObjectStorageModule,
+  ],
   controllers: [
     StoryProjectsController,
     MeStoryProjectsController,
@@ -123,11 +174,15 @@ import {
     MeStoryMessagesController,
     StoryImportJobsController,
     MeStoryImportJobsController,
+    StoryRoleAssetsController,
+    MeStoryRoleAssetsController,
     ProjectCollaboratorsController,
     ConversationsController,
     GenerationRequestsController,
     MessagesController,
     StoryArtifactsController,
+    StoryOutlineController,
+    MeStoryOutlineController,
   ],
   providers: [
     PrismaTeamMembershipRepository,
@@ -146,6 +201,11 @@ import {
     {
       provide: STORY_PROJECT_REPOSITORY,
       useExisting: PrismaStoryProjectRepository,
+    },
+    PrismaStoryProjectRetentionRepository,
+    {
+      provide: STORY_PROJECT_RETENTION_REPOSITORY,
+      useExisting: PrismaStoryProjectRetentionRepository,
     },
     PrismaProjectCollaboratorRepository,
     {
@@ -182,6 +242,189 @@ import {
       provide: STORY_IMPORT_JOB_REPOSITORY,
       useExisting: PrismaStoryImportJobRepository,
     },
+    PrismaStoryRoleAssetRepository,
+    {
+      provide: STORY_ROLE_ASSET_REPOSITORY,
+      useExisting: PrismaStoryRoleAssetRepository,
+    },
+    PrismaAssetRepository,
+    {
+      provide: ASSET_REPOSITORY,
+      useExisting: PrismaAssetRepository,
+    },
+    NoopStoryRoleAssetReferenceRepository,
+    {
+      provide: STORY_ROLE_ASSET_REFERENCE_REPOSITORY,
+      useExisting: NoopStoryRoleAssetReferenceRepository,
+    },
+    {
+      provide: ListStoryRoleAssets,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ROLE_ASSET_REPOSITORY,
+        ASSET_REPOSITORY,
+        OBJECT_STORAGE,
+        OBJECT_STORAGE_CONFIG,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        roles: StoryRoleAssetRepository,
+        assets: AssetRepository,
+        objectStorage: ObjectStorage,
+        objectStorageConfig: ObjectStorageConfig,
+      ) =>
+        new ListStoryRoleAssets(projects, memberships, collaborators, roles, {
+          assets,
+          objectStorage,
+          objectStorageConfig,
+        }),
+    },
+    {
+      provide: GetStoryRoleAsset,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ROLE_ASSET_REPOSITORY,
+        ASSET_REPOSITORY,
+        OBJECT_STORAGE,
+        OBJECT_STORAGE_CONFIG,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        roles: StoryRoleAssetRepository,
+        assets: AssetRepository,
+        objectStorage: ObjectStorage,
+        objectStorageConfig: ObjectStorageConfig,
+      ) =>
+        new GetStoryRoleAsset(projects, memberships, collaborators, roles, {
+          assets,
+          objectStorage,
+          objectStorageConfig,
+        }),
+    },
+    {
+      provide: CreateStoryRoleAsset,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ROLE_ASSET_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+        ASSET_REPOSITORY,
+        OBJECT_STORAGE,
+        OBJECT_STORAGE_CONFIG,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        roles: StoryRoleAssetRepository,
+        idempotency: IdempotencyRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+        assets: AssetRepository,
+        objectStorage: ObjectStorage,
+        objectStorageConfig: ObjectStorageConfig,
+      ) =>
+        new CreateStoryRoleAsset(
+          projects,
+          memberships,
+          collaborators,
+          roles,
+          idempotency,
+          audit,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+          { assets, objectStorage, objectStorageConfig },
+        ),
+    },
+    {
+      provide: UpdateStoryRoleAsset,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ROLE_ASSET_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        ASSET_REPOSITORY,
+        OBJECT_STORAGE,
+        OBJECT_STORAGE_CONFIG,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        roles: StoryRoleAssetRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        assets: AssetRepository,
+        objectStorage: ObjectStorage,
+        objectStorageConfig: ObjectStorageConfig,
+      ) =>
+        new UpdateStoryRoleAsset(
+          projects,
+          memberships,
+          collaborators,
+          roles,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+          { assets, objectStorage, objectStorageConfig },
+        ),
+    },
+    {
+      provide: ArchiveStoryRoleAsset,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ROLE_ASSET_REPOSITORY,
+        STORY_ROLE_ASSET_REFERENCE_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        roles: StoryRoleAssetRepository,
+        references: StoryRoleAssetReferenceRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new ArchiveStoryRoleAsset(
+          projects,
+          memberships,
+          collaborators,
+          roles,
+          references,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
     MockAgentGateway,
     {
       provide: AGENT_GATEWAY,
@@ -192,6 +435,37 @@ import {
         return new MockAgentGateway();
       },
       inject: [SERVER_CONFIG],
+    },
+    {
+      provide: GenerateStoryProjectTags,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        AGENT_GATEWAY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        gateway: AgentGateway,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new GenerateStoryProjectTags(
+          projects,
+          memberships,
+          collaborators,
+          gateway,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
     },
     {
       provide: ListStoryArtifacts,
@@ -208,6 +482,70 @@ import {
         artifacts: StoryArtifactRepository,
       ) =>
         new ListStoryArtifacts(projects, memberships, collaborators, artifacts),
+    },
+    {
+      provide: GetStoryOutline,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+      ) =>
+        new GetStoryOutline(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+        ),
+    },
+    {
+      provide: SaveStoryOutline,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        STORY_ARTIFACT_REPOSITORY,
+        STORY_ARTIFACT_VERSION_REPOSITORY,
+        IDEMPOTENCY_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+        NodeRequestFingerprint,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        artifacts: StoryArtifactRepository,
+        versions: StoryArtifactVersionRepository,
+        idempotency: IdempotencyRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+        fingerprint: NodeRequestFingerprint,
+      ) =>
+        new SaveStoryOutline(
+          projects,
+          memberships,
+          collaborators,
+          artifacts,
+          versions,
+          idempotency,
+          audit,
+          transactions,
+          databaseClock,
+          fingerprint,
+          ids(),
+        ),
     },
     {
       provide: GetStoryArtifact,
@@ -437,6 +775,60 @@ import {
           ids(),
         ),
     },
+    {
+      provide: RestoreStoryProject,
+      inject: [
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new RestoreStoryProject(
+          projects,
+          memberships,
+          collaborators,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    {
+      provide: PurgeArchivedStoryProjects,
+      inject: [
+        STORY_PROJECT_RETENTION_REPOSITORY,
+        OBJECT_STORAGE,
+        AUDIT_REPOSITORY,
+        TransactionRunner,
+        DatabaseClock,
+      ],
+      useFactory: (
+        retention: StoryProjectRetentionRepository,
+        objectStorage: ObjectStorage,
+        audit: AuditRepository,
+        transactions: TransactionRunner,
+        databaseClock: DatabaseClock,
+      ) =>
+        new PurgeArchivedStoryProjects(
+          retention,
+          objectStorage,
+          audit,
+          transactions,
+          databaseClock,
+          ids(),
+        ),
+    },
+    StoryProjectRetentionService,
     {
       provide: AddProjectCollaborator,
       inject: [

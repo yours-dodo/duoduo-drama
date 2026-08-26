@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import { AddProjectCollaborator } from './add-project-collaborator.js';
 import { ArchiveStoryProject } from './archive-story-project.js';
+import { RestoreStoryProject } from './restore-story-project.js';
 import { CreateStoryProject } from './create-story-project.js';
 import { ListStoryProjects } from './list-story-projects.js';
 import { RemoveProjectCollaborator } from './remove-project-collaborator.js';
@@ -251,6 +252,41 @@ describe('story project application', () => {
     ).rejects.toBeInstanceOf(StoryProjectNotFoundError);
   });
 
+  it('restores a project during its retention window', async () => {
+    const fixture = buildFixture({
+      project: projectSnapshot({
+        status: 'archived',
+        archivedAt: new Date('2026-08-01T02:00:00.000Z'),
+        purgeAt: new Date('2026-08-31T02:00:00.000Z'),
+      }),
+    });
+    const result = await new RestoreStoryProject(
+      fixture.projects,
+      fixture.memberships,
+      fixture.collaborators,
+      fixture.audit,
+      fixture.transactions,
+      fixture.clock,
+      fixture.ids,
+    ).execute({
+      tenantId: 'team-id',
+      actorUserId: 'creator-id',
+      projectId: 'project-id',
+      expectedRevision: 1,
+      requestId: 'restore-request',
+    });
+
+    expect(result.project).toMatchObject({
+      status: 'active',
+      archivedAt: null,
+      purgeAt: null,
+      revision: 2,
+    });
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'STORY_PROJECT_RESTORED' }),
+    );
+  });
+
   it('lets the project creator manage collaborators and audits the change', async () => {
     const fixture = buildFixture({
       project: projectSnapshot({}),
@@ -339,6 +375,9 @@ function projectSnapshot(
     creationMode: 'standard' as const,
     visibility: 'team' as const,
     status: 'active' as const,
+    archivedAt: null,
+    purgeAt: null,
+    purgeStartedAt: null,
     revision: 1,
     createdAt: NOW,
     updatedAt: NOW,

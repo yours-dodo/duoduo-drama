@@ -1,0 +1,37 @@
+model StoryRoleAsset {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String?         @map("tenant_id") @db.Uuid
+  projectId           String          @map("project_id") @db.Uuid
+  category            String          @db.VarChar(32)
+  name                String          @db.VarChar(100)
+  occupation          String          @default("") @db.VarChar(200)
+  personalityCore     String          @default("") @map("personality_core") @db.Text
+  motivationConflict  String          @default("") @map("motivation_conflict") @db.Text
+  mainlineRelation    String          @default("") @map("mainline_relation") @db.Text
+  gender              String          @default("未设定") @db.VarChar(16)
+  camp                String          @default("中立") @db.VarChar(32)
+  appearanceFrequency String          @default("低频") @map("appearance_frequency") @db.VarChar(16)
+  speechProfile       Json            @default("{\"style\":\"\",\"habits\":[],\"dialogueExamples\":[]}") @map("speech_profile") @db.JsonB
+  revision            Int             @default(1)
+  createdByUserId     String          @map("created_by_user_id") @db.Uuid
+  updatedByUserId     String          @map("updated_by_user_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  archivedAt          DateTime?       @map("archived_at") @db.Timestamptz(3)
+  team                Team?           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  project             StoryProject?   @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict)
+  coverAssetId        String?         @map("cover_asset_id") @db.Uuid
+  coverAsset          Asset?          @relation("StoryRoleAssetCover", fields: [tenantId, coverAssetId], references: [tenantId, id], onDelete: Restrict)
+  viewAssetId         String?         @map("view_asset_id") @db.Uuid
+  viewAsset           Asset?          @relation("StoryRoleAssetView", fields: [tenantId, viewAssetId], references: [tenantId, id], onDelete: Restrict)
+  createdBy           User            @relation("StoryRoleAssetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy           User            @relation("StoryRoleAssetUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  createdByMembership TeamMembership? @relation("StoryRoleAssetCreatorMembership", fields: [tenantId, createdByUserId], references: [tenantId, userId], onDelete: Restrict)
+  updatedByMembership TeamMembership? @relation("StoryRoleAssetUpdaterMembership", fields: [tenantId, updatedByUserId], references: [tenantId, userId], onDelete: Restrict)
+
+  @@index([projectId, archivedAt, category, createdAt, id], map: "story_role_assets_project_archived_category_created_id_idx")
+  @@index([tenantId, projectId, id], map: "story_role_assets_tenant_project_id_idx")
+  @@index([tenantId, coverAssetId], map: "story_role_assets_tenant_cover_asset_id_idx")
+  @@index([tenantId, viewAssetId], map: "story_role_assets_tenant_view_asset_id_idx")
+  @@map("story_role_assets")
+}

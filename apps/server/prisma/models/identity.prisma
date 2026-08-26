@@ -19,6 +19,8 @@ model User {
   uploadedAssets                    Asset[]                                 @relation("AssetUploader")
   createdStoryArtifactVersions      StoryArtifactVersion[]                  @relation("StoryArtifactVersionCreator")
   createdStoryImportJobs            StoryImportJob[]                        @relation("StoryImportJobCreator")
+  createdStoryRoleAssets            StoryRoleAsset[]                        @relation("StoryRoleAssetCreator")
+  updatedStoryRoleAssets            StoryRoleAsset[]                        @relation("StoryRoleAssetUpdater")
   ownedSpaces                       Space[]                                 @relation("SpaceOwnerUser")
 
   @@map("users")

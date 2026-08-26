@@ -117,6 +117,8 @@ export interface VideoProtocolRequest<TProtocol extends string = string> {
   readonly options: Readonly<ResolvedVideoGenerationOptions<TProtocol>>;
   readonly transport: RequestTransport;
   readonly signal: AbortSignal;
+  /** Runtime clock, injectable so protocol expiry checks are deterministic. */
+  readonly now?: () => number;
 }
 
 export interface VideoProtocolContract<TProtocol extends string = string> {
@@ -163,6 +165,8 @@ export interface VideoResumeRequest<TProtocol extends string = string> {
   readonly pollTransport: RequestTransport;
   readonly cancelTransport?: RequestTransport;
   readonly signal: AbortSignal;
+  /** Runtime clock, injectable so protocol expiry checks are deterministic. */
+  readonly now?: () => number;
 }
 
 export interface VideoCancelRequest<TProtocol extends string = string> {

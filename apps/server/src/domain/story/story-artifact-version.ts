@@ -114,6 +114,16 @@ export class StoryArtifactVersion {
     };
   }
 
+  updateDraftContent(
+    content: string,
+    contentFormat: StoryArtifactContentFormat,
+  ): boolean {
+    this.assertDraft();
+    this.snapshot.content = normalizeContent(content);
+    this.snapshot.contentFormat = normalizeContentFormat(contentFormat);
+    return true;
+  }
+
   confirm(): boolean {
     if (this.snapshot.status === 'confirmed') return false;
     this.assertDraft();

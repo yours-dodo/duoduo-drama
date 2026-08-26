@@ -25,9 +25,15 @@ interface StoryProjectRow {
   createdByUserId: string;
   ownerUserId: string;
   title: string;
+  description: string;
+  era: string;
+  tags: string[];
   creationMode: string;
   visibility: string;
   status: string;
+  archivedAt: Date | null;
+  purgeAt: Date | null;
+  purgeStartedAt: Date | null;
   revision: number;
   createdAt: Date;
   updatedAt: Date;
@@ -88,9 +94,15 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
           story_projects.created_by_user_id AS "createdByUserId",
           story_projects.owner_user_id AS "ownerUserId",
           story_projects.title,
+          story_projects.description,
+          story_projects.era,
+          story_projects.tags,
           story_projects.creation_mode AS "creationMode",
           story_projects.visibility,
           story_projects.status,
+          story_projects.archived_at AS "archivedAt",
+          story_projects.purge_at AS "purgeAt",
+          story_projects.purge_started_at AS "purgeStartedAt",
           story_projects.revision,
           story_projects.created_at AS "createdAt",
           story_projects.updated_at AS "updatedAt"
@@ -128,9 +140,15 @@ export class PrismaStoryProjectRepository implements StoryProjectRepository {
           project.created_by_user_id AS "createdByUserId",
           project.owner_user_id AS "ownerUserId",
           project.title,
+          project.description,
+          project.era,
+          project.tags,
           project.creation_mode AS "creationMode",
           project.visibility,
           project.status,
+          project.archived_at AS "archivedAt",
+          project.purge_at AS "purgeAt",
+          project.purge_started_at AS "purgeStartedAt",
           project.revision,
           project.created_at AS "createdAt",
           project.updated_at AS "updatedAt",
@@ -202,9 +220,16 @@ function readProject(row: StoryProjectRow): StoryProjectSnapshot {
     createdByUserId: row.createdByUserId,
     ownerUserId: row.ownerUserId,
     title: row.title,
+    description: row.description ?? '',
+    era: readEra(row.era ?? '现代'),
+    tags: Array.isArray(row.tags) ? [...row.tags] : [],
     creationMode: readCreationMode(row.creationMode),
     visibility: readVisibility(row.visibility),
     status: readStatus(row.status),
+    archivedAt: row.archivedAt === null ? null : new Date(row.archivedAt),
+    purgeAt: row.purgeAt === null ? null : new Date(row.purgeAt),
+    purgeStartedAt:
+      row.purgeStartedAt === null ? null : new Date(row.purgeStartedAt),
     revision: Number(row.revision),
     createdAt: new Date(row.createdAt),
     updatedAt: new Date(row.updatedAt),
@@ -243,6 +268,13 @@ function readCreationMode(value: string): 'standard' | 'immersive' {
   return value;
 }
 
+function readEra(value: string): '现代' | '古代' {
+  if (value !== '现代' && value !== '古代') {
+    throw new Error('Database returned an invalid story project era');
+  }
+  return value;
+}
+
 function readSpaceKind(value: string): 'personal' | 'team' {
   if (value !== 'personal' && value !== 'team') {
     throw new Error('Database returned an invalid story project space kind');
@@ -251,7 +283,12 @@ function readSpaceKind(value: string): 'personal' | 'team' {
 }
 
 function toPersistence(project: StoryProjectSnapshot) {
-  const persisted = { ...project };
+  const persisted = {
+    ...project,
+    description: project.description ?? '',
+    era: project.era ?? '现代',
+    tags: [...(project.tags ?? [])],
+  };
   delete persisted.spaceKind;
   return persisted;
 }

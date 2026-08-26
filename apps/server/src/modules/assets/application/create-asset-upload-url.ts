@@ -22,7 +22,7 @@ export class CreateAssetUploadUrl {
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     fileName: string;

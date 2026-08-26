@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, inject, watch} from 'vue';
+import { computed, onMounted, onUnmounted, ref, inject, watch } from 'vue';
 import { routerKey, type Router } from 'vue-router';
 
 import { ApiError } from '../../lib/server-api/api-error';
@@ -10,6 +10,8 @@ import {
 import {
   appendStoryMessage,
   appendPersonalStoryMessage,
+  archivePersonalStoryProject,
+  archiveStoryProject,
   confirmStoryDraft,
   createPersonalStoryConversation,
   createPersonalStoryImportJob,
@@ -26,6 +28,8 @@ import {
   listStoryArtifacts,
   listStoryProjects,
   retryStoryGeneration,
+  restorePersonalStoryProject,
+  restoreStoryProject,
   type StoryArtifact,
   type StoryArtifactContentFormat,
   type StoryArtifactVersion,
@@ -121,6 +125,8 @@ const viewState = ref<'loading' | 'ready' | 'error' | 'auth-required'>(
 );
 const errorMessage = ref('');
 const actionMessage = ref('');
+const projectAction = ref<'archiving' | 'restoring' | null>(null);
+const projectActionError = ref('');
 const saving = ref(false);
 const confirming = ref(false);
 const discarding = ref(false);
@@ -239,9 +245,7 @@ const filteredRealWorks = computed(() => {
     .filter((work) => {
       const matchesQuery =
         !query ||
-        [work.title].some((value) =>
-          value.toLocaleLowerCase().includes(query),
-        );
+        [work.title].some((value) => value.toLocaleLowerCase().includes(query));
       const matchesDate = !date || work.updatedAt.startsWith(date);
       return matchesQuery && matchesDate;
     })
@@ -564,10 +568,13 @@ function storyModulePath(
 }
 
 function catalogProjectPath(project: StoryProject): string {
-  return storyModulePath(
+  const path = storyModulePath(
     project.creationMode === 'immersive' ? 'immersive' : 'story',
     project.id,
   );
+  return activeTeam.value
+    ? `${path}?teamId=${encodeURIComponent(activeTeam.value.id)}`
+    : path;
 }
 
 function navigateStoryPath(path: string) {
@@ -582,6 +589,62 @@ function handleStoryLink(event: MouseEvent, path: string) {
   if (!router) return;
   event.preventDefault();
   navigateStoryPath(path);
+}
+
+function projectTeamId(target: StoryProject): string | null {
+  return target.tenantId === null ? null : (activeTeam.value?.id ?? null);
+}
+
+async function archiveProject(target: StoryProject): Promise<void> {
+  if (!target.canArchive || projectAction.value !== null) return;
+  projectAction.value = 'archiving';
+  projectActionError.value = '';
+  try {
+    const teamId = projectTeamId(target);
+    const response = teamId
+      ? await archiveStoryProject(teamId, target.id, target.revision)
+      : await archivePersonalStoryProject(target.id, target.revision);
+    if (project.value?.id === target.id) project.value = response.project;
+    projects.value = projects.value.map((item) =>
+      item.id === target.id ? response.project : item,
+    );
+    actionMessage.value = '故事已归档，保留期为 30 天。';
+  } catch (error) {
+    projectActionError.value =
+      error instanceof Error ? error.message : '归档失败，请稍后重试。';
+  } finally {
+    projectAction.value = null;
+  }
+}
+
+async function restoreProject(target: StoryProject): Promise<void> {
+  if (!target.canRestore || projectAction.value !== null) return;
+  projectAction.value = 'restoring';
+  projectActionError.value = '';
+  try {
+    const teamId = projectTeamId(target);
+    const response = teamId
+      ? await restoreStoryProject(teamId, target.id, target.revision)
+      : await restorePersonalStoryProject(target.id, target.revision);
+    if (project.value?.id === target.id) project.value = response.project;
+    projects.value = projects.value.map((item) =>
+      item.id === target.id ? response.project : item,
+    );
+    actionMessage.value = '故事已恢复，可以继续创作。';
+  } catch (error) {
+    projectActionError.value =
+      error instanceof Error ? error.message : '恢复失败，请稍后重试。';
+  } finally {
+    projectAction.value = null;
+  }
+}
+
+function handleStoryProjectLink(event: MouseEvent, target: StoryProject) {
+  if (target.status === 'archived') {
+    event.preventDefault();
+    return;
+  }
+  handleStoryLink(event, catalogProjectPath(target));
 }
 
 function projectModeLabel(project: StoryProject): string {
@@ -729,7 +792,7 @@ async function submitStoryPrompt() {
     await pollGeneration();
     navigateStoryPath(
       activeTeam.value
-        ? `/stories/${createdProject.id}`
+        ? `/stories/${createdProject.id}/outline?teamId=${encodeURIComponent(activeTeam.value.id)}`
         : `/stories/${createdProject.id}/outline`,
     );
   } catch (error) {
@@ -759,8 +822,7 @@ async function pollGeneration() {
     }
     if (generationRequest.status === 'failed') {
       storyPromptSubmitting.value = false;
-      generationError.value =
-        'AI 生成失败，可以点击「重试」重新生成。';
+      generationError.value = 'AI 生成失败，可以点击「重试」重新生成。';
       return;
     }
   } catch {
@@ -1287,7 +1349,9 @@ function formatDate(value: string | undefined) {
                 class="story-quick-input-status"
                 role="status"
               >
-                {{ generationError || generationStageLabel ||storyCreationStatus }}
+                {{
+                  generationError || generationStageLabel || storyCreationStatus
+                }}
               </p>
               <div
                 v-if="generationError && activeGeneration"
@@ -1508,7 +1572,7 @@ function formatDate(value: string | undefined) {
                 class="story-placeholder-item"
                 :class="{ 'is-archived': work.status === 'archived' }"
                 :href="catalogProjectPath(work)"
-                @click="handleStoryLink($event, catalogProjectPath(work))"
+                @click="handleStoryProjectLink($event, work)"
               >
                 <div class="story-placeholder-card">
                   <div class="story-placeholder-card-top">
@@ -1520,6 +1584,16 @@ function formatDate(value: string | undefined) {
                     >
                       最近编辑
                     </span>
+                    <button
+                      v-if="work.status === 'active' && work.canArchive"
+                      class="story-project-card-action story-project-card-action-top"
+                      type="button"
+                      :disabled="projectAction !== null"
+                      :aria-label="`归档${work.title}`"
+                      @click.stop.prevent="archiveProject(work)"
+                    >
+                      {{ projectAction === 'archiving' ? '归档中…' : '归档' }}
+                    </button>
                   </div>
                   <div class="story-placeholder-cover" aria-hidden="true">
                     <strong>{{ work.title.slice(0, 1) }}</strong>
@@ -1532,6 +1606,15 @@ function formatDate(value: string | undefined) {
                   </div>
                 </div>
                 <h3 class="story-placeholder-title">{{ work.title }}</h3>
+                <button
+                  v-if="work.status === 'archived' && work.canRestore"
+                  class="story-project-card-action"
+                  type="button"
+                  :disabled="projectAction !== null"
+                  @click.stop.prevent="restoreProject(work)"
+                >
+                  {{ projectAction === 'restoring' ? '恢复中…' : '恢复故事' }}
+                </button>
               </a>
             </div>
             <div v-else class="story-works-empty">
@@ -1561,6 +1644,30 @@ function formatDate(value: string | undefined) {
               >{{ project?.status === 'active' ? '创作中' : '已归档' }} · 第
               {{ project?.revision }} 次更新</span
             >
+            <p
+              v-if="project?.status === 'archived' && project?.purgeAt"
+              class="project-retention-note"
+            >
+              将于 {{ formatDate(project.purgeAt) }} 后永久删除成果与角色资产
+            </p>
+            <div v-if="project" class="story-project-actions">
+              <button
+                v-if="project.status === 'archived' && project.canRestore"
+                class="story-project-action"
+                type="button"
+                :disabled="projectAction !== null"
+                @click="restoreProject(project)"
+              >
+                {{ projectAction === 'restoring' ? '恢复中…' : '恢复故事' }}
+              </button>
+              <p
+                v-if="projectActionError"
+                class="story-project-action-error"
+                role="alert"
+              >
+                {{ projectActionError }}
+              </p>
+            </div>
           </div>
           <div class="story-sidebar-divider"></div>
           <span class="panel-label">已确认成果</span>
@@ -1671,13 +1778,9 @@ function formatDate(value: string | undefined) {
                     <div class="story-preview-meta">
                       <span>
                         视频
-                        {{
-                          formatDuration(storyContent.video.durationSeconds)
-                        }}
+                        {{ formatDuration(storyContent.video.durationSeconds) }}
                         ·
-                        {{
-                          Math.round(storyContent.video.sizeBytes / 1024)
-                        }}
+                        {{ Math.round(storyContent.video.sizeBytes / 1024) }}
                         KB
                       </span>
                       <a
@@ -1713,7 +1816,9 @@ function formatDate(value: string | undefined) {
                     v-if="storyContent.audio.length"
                     class="story-preview-section"
                   >
-                    <strong>对白配音（{{ storyContent.audio.length }} 段）</strong>
+                    <strong
+                      >对白配音（{{ storyContent.audio.length }} 段）</strong
+                    >
                     <div class="story-preview-audio">
                       <div
                         v-for="shot in storyContent.audio"
@@ -1753,7 +1858,9 @@ function formatDate(value: string | undefined) {
                             <template v-if="shot.type === 'dialogue'"
                               >{{ shot.speaker }}：{{ shot.line }}</template
                             >
-                            <template v-else>（旁白）{{ shot.narration }}</template>
+                            <template v-else
+                              >（旁白）{{ shot.narration }}</template
+                            >
                           </li>
                         </ul>
                       </div>

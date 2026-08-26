@@ -9,6 +9,7 @@ import { SESSION_REPOSITORY } from '../../identity/ports/session-repository.js';
 import { TEAM_MEMBERSHIP_REPOSITORY } from '../../tenancy/ports/team-membership-repository.js';
 import { AddProjectCollaborator } from '../application/add-project-collaborator.js';
 import { ArchiveStoryProject } from '../application/archive-story-project.js';
+import { RestoreStoryProject } from '../application/restore-story-project.js';
 import { CreateStoryProject } from '../application/create-story-project.js';
 import { GetStoryProject } from '../application/get-story-project.js';
 import { ListProjectAuditRecords } from '../application/list-project-audit-records.js';
@@ -50,6 +51,7 @@ describe('story project HTTP API', () => {
       get: executable({ project: { id: PROJECT_ID } }),
       update: executable({ project: { id: PROJECT_ID, revision: 2 } }),
       archive: executable({ project: { id: PROJECT_ID, status: 'archived' } }),
+      restore: executable({ project: { id: PROJECT_ID, status: 'active' } }),
       projectAudit: executable({ items: [], next: null }),
       collaboratorList: executable({ items: [], next: null }),
       collaboratorAdd: executable({ collaborator: { id: 'collaborator-id' } }),
@@ -63,6 +65,7 @@ describe('story project HTTP API', () => {
         { token: GetStoryProject, value: useCases.get },
         { token: UpdateStoryProject, value: useCases.update },
         { token: ArchiveStoryProject, value: useCases.archive },
+        { token: RestoreStoryProject, value: useCases.restore },
         { token: ListProjectAuditRecords, value: useCases.projectAudit },
         { token: ListProjectCollaborators, value: useCases.collaboratorList },
         { token: AddProjectCollaborator, value: useCases.collaboratorAdd },
@@ -137,6 +140,11 @@ describe('story project HTTP API', () => {
       request(app.getHttpServer()).post(`${projectPath}/${PROJECT_ID}/archive`),
     )
       .send({ expectedRevision: 2 })
+      .expect(200);
+    await write(
+      request(app.getHttpServer()).post(`${projectPath}/${PROJECT_ID}/restore`),
+    )
+      .send({ expectedRevision: 3 })
       .expect(200);
 
     const collaboratorsPath = `${projectPath}/${PROJECT_ID}/collaborators`;

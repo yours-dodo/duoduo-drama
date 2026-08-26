@@ -21,6 +21,8 @@ export interface ProjectAccessSnapshot {
   visibility: StoryProjectVisibility;
   status: StoryProjectStatus;
   spaceKind?: 'personal' | 'team';
+  purgeAt?: Date | null;
+  purgeStartedAt?: Date | null;
 }
 
 function isPersonalProject(project: ProjectAccessSnapshot): boolean {
@@ -92,6 +94,30 @@ export function canArchiveProject(
   subject: ProjectAccessSubject,
 ): boolean {
   if (project.status !== 'active') return false;
+  return canManageProjectArchive(project, subject);
+}
+
+export function canRestoreProject(
+  project: ProjectAccessSnapshot,
+  subject: ProjectAccessSubject,
+  now = new Date(),
+): boolean {
+  if (
+    project.status !== 'archived' ||
+    (project.purgeStartedAt !== null && project.purgeStartedAt !== undefined) ||
+    project.purgeAt === null ||
+    project.purgeAt === undefined ||
+    project.purgeAt.getTime() <= now.getTime()
+  ) {
+    return false;
+  }
+  return canManageProjectArchive(project, subject);
+}
+
+function canManageProjectArchive(
+  project: ProjectAccessSnapshot,
+  subject: ProjectAccessSubject,
+): boolean {
   if (project.ownerUserId === subject.userId) {
     return true;
   }

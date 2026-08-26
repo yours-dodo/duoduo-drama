@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import {
-  Inject,
-  Injectable,
-  OnApplicationShutdown,
-} from '@nestjs/common';
+import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 
 import {
   createAiStoryTextGenerator,
@@ -23,6 +19,10 @@ import {
   StoryScriptWorkflow,
   StoryScriptWorkflowError,
 } from './workflows/story-script/story-script.workflow.js';
+import {
+  StoryTagsWorkflow,
+  type StoryTagsResult,
+} from './workflows/story-tags/story-tags.workflow.js';
 
 export interface GenerateStoryScriptInput {
   requestId?: string;
@@ -46,6 +46,7 @@ export const STORY_SCRIPT_WORKFLOW = Symbol('STORY_SCRIPT_WORKFLOW');
 export class StoryScriptsService implements OnApplicationShutdown {
   private readonly handle: StoryTextGeneratorHandle;
   private readonly workflow: StoryScriptWorkflow;
+  private readonly tagsWorkflow: StoryTagsWorkflow;
 
   constructor(
     @Inject(STORY_SCRIPT_CONFIG) config: StoryScriptConfig,
@@ -53,7 +54,15 @@ export class StoryScriptsService implements OnApplicationShutdown {
   ) {
     this.handle = createAiStoryTextGenerator(config);
     this.workflow = new StoryScriptWorkflow(this.handle.generator);
+    this.tagsWorkflow = new StoryTagsWorkflow(this.handle.generator);
     this.voiceCatalog = speechConfig.voiceCatalog;
+  }
+
+  async summarizeTags(input: {
+    title: string;
+    description: string;
+  }): Promise<StoryTagsResult> {
+    return this.tagsWorkflow.summarize(input);
   }
 
   private readonly voiceCatalog: string;

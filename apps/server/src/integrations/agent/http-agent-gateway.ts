@@ -6,6 +6,8 @@ import type {
   StoryGenerationFailureCode,
   StoryTaskRef,
   StoryTaskSnapshot,
+  StoryTagGenerationRequest,
+  StoryTagGenerationResult,
 } from './agent-contracts.js';
 
 interface AgentTaskResult {
@@ -27,6 +29,11 @@ interface AgentErrorBody {
   error?: { code?: string; message?: string };
 }
 
+interface AgentTagResponse {
+  era?: unknown;
+  tags?: unknown;
+}
+
 /**
  * Real gateway to the Agent service's linear story-script workflow.
  * Replaces MockAgentGateway for story generation; it persists the structured
@@ -42,19 +49,20 @@ export class HttpAgentGateway implements AgentGateway {
   async startStory(
     request: StoryGenerationAgentRequest,
   ): Promise<StoryTaskRef> {
-    const payload = await this.postJson<AgentTaskResponse>(
-      '/v1/story-tasks',
-      {
-        requestId: request.requestId,
-        userPrompt: request.userPrompt,
-        previousArtifacts: formatArtifacts(request),
-        history: formatHistory(request),
-      },
-    );
+    const payload = await this.postJson<AgentTaskResponse>('/v1/story-tasks', {
+      requestId: request.requestId,
+      userPrompt: request.userPrompt,
+      previousArtifacts: formatArtifacts(request),
+      history: formatHistory(request),
+    });
     if (!payload.taskId || !payload.status || !payload.stage) {
       throw new AgentGatewayError('protocol_error');
     }
-    return { taskId: payload.taskId, status: payload.status, stage: payload.stage };
+    return {
+      taskId: payload.taskId,
+      status: payload.status,
+      stage: payload.stage,
+    };
   }
 
   async getStoryTask(taskId: string): Promise<StoryTaskSnapshot> {
@@ -91,6 +99,29 @@ export class HttpAgentGateway implements AgentGateway {
     };
   }
 
+  async summarizeStoryTags(
+    request: StoryTagGenerationRequest,
+  ): Promise<StoryTagGenerationResult> {
+    const payload = await this.postJson<AgentTagResponse>(
+      '/v1/story-tags/generate',
+      request,
+    );
+    if (
+      (payload.era !== '现代' && payload.era !== '古代') ||
+      !Array.isArray(payload.tags) ||
+      payload.tags.some((tag) => typeof tag !== 'string')
+    ) {
+      throw new AgentGatewayError('protocol_error');
+    }
+    return {
+      era: payload.era,
+      tags: payload.tags
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .slice(0, 16),
+    };
+  }
+
   private async postJson<T>(path: string, body: unknown): Promise<T> {
     const response = await fetch(`${this.agentServiceUrl}${path}`, {
       method: 'POST',
@@ -119,7 +150,8 @@ export class HttpAgentGateway implements AgentGateway {
     status: number,
     body: AgentErrorBody,
   ): AgentGatewayError {
-    if (status === 504 || status === 408) return new AgentGatewayError('timeout');
+    if (status === 504 || status === 408)
+      return new AgentGatewayError('timeout');
     if (status >= 500) return new AgentGatewayError('agent_unavailable');
     const code = body?.error?.code;
     if (code === 'timeout') return new AgentGatewayError('timeout');
@@ -130,7 +162,9 @@ export class HttpAgentGateway implements AgentGateway {
   }
 }
 
-function inferFailureCode(error: string | undefined): StoryGenerationFailureCode {
+function inferFailureCode(
+  error: string | undefined,
+): StoryGenerationFailureCode {
   if (error?.toLowerCase().includes('timeout')) return 'timeout';
   return 'agent_unavailable';
 }
@@ -138,9 +172,7 @@ function inferFailureCode(error: string | undefined): StoryGenerationFailureCode
 function assembleResult(result: AgentTaskResult): StoryGenerationAgentResult {
   const images = result.images ?? [];
   const audio = result.audio ?? [];
-  const video = result.video as
-    | { durationSeconds?: number }
-    | undefined;
+  const video = result.video as { durationSeconds?: number } | undefined;
   const content = JSON.stringify({
     script: result.script,
     images,
@@ -182,7 +214,11 @@ function formatArtifacts(request: StoryGenerationAgentRequest): string {
 function formatHistory(request: StoryGenerationAgentRequest): string {
   const lines = request.messages.map((message) => {
     const prefix =
-      message.authorType === 'user' ? '用户' : message.authorType === 'agent' ? '助手' : '系统';
+      message.authorType === 'user'
+        ? '用户'
+        : message.authorType === 'agent'
+          ? '助手'
+          : '系统';
     return `${prefix}：${message.body}`;
   });
   return lines.join('\n');

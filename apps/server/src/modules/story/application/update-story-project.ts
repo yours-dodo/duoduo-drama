@@ -1,4 +1,12 @@
-import { StoryProject } from '../../../domain/story/story-project.js';
+import {
+  StoryProject,
+  type StoryProjectEra,
+} from '../../../domain/story/story-project.js';
+import {
+  canArchiveProject,
+  canRestoreProject,
+} from '../../../domain/story/project-access-policy.js';
+import type { ProjectCollaboratorRole } from '../../../domain/story/project-collaborator.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import { projectOutput } from './project-output.js';
 import {
@@ -31,6 +39,9 @@ export class UpdateStoryProject {
     actorUserId: string;
     projectId: string;
     title?: string;
+    description?: string;
+    era?: StoryProjectEra;
+    tags?: string[];
     visibility?: 'team' | 'private';
     expectedRevision: number;
     requestId: string;
@@ -69,7 +80,13 @@ export class UpdateStoryProject {
       const project = StoryProject.restore(before);
       const now = await this.databaseClock.now();
       const changed = project.update(
-        { title: input.title, visibility: input.visibility },
+        {
+          title: input.title,
+          description: input.description,
+          era: input.era,
+          tags: input.tags,
+          visibility: input.visibility,
+        },
         input.expectedRevision,
         now,
       );
@@ -102,11 +119,17 @@ export class UpdateStoryProject {
         targetId: updated.id,
         beforeSummary: {
           title: before.title,
+          description: before.description ?? '',
+          era: before.era ?? '现代',
+          tags: before.tags ?? [],
           visibility: before.visibility,
           revision: before.revision,
         },
         afterSummary: {
           title: updated.title,
+          description: updated.description ?? '',
+          era: updated.era ?? '现代',
+          tags: updated.tags ?? [],
           visibility: updated.visibility,
           revision: updated.revision,
         },
@@ -120,6 +143,8 @@ export class UpdateStoryProject {
           collaboratorRole: null,
           canEdit: true,
           canManageCollaborators: updated.visibility === 'team',
+          canArchive: canArchiveProject(updated, access.subject),
+          canRestore: canRestoreProject(updated, access.subject, now),
         }),
       };
     });
@@ -127,11 +152,17 @@ export class UpdateStoryProject {
 }
 
 function accessOutput(access: {
-    project: { visibility: 'team' | 'private'; ownerUserId: string };
-    subject: {
-      collaborator: boolean;
-      collaboratorRole?: string | null;
-      role: 'admin' | 'member' | null;
+  project: {
+    visibility: 'team' | 'private';
+    ownerUserId: string;
+    status: 'active' | 'archived';
+    purgeAt?: Date | null;
+    purgeStartedAt?: Date | null;
+  };
+  subject: {
+    collaborator: boolean;
+    collaboratorRole?: ProjectCollaboratorRole | null;
+    role: 'admin' | 'member' | null;
     userId: string;
   };
 }) {
@@ -144,5 +175,7 @@ function accessOutput(access: {
       owner.visibility === 'team' &&
       (access.subject.role === 'admin' ||
         owner.ownerUserId === access.subject.userId),
+    canArchive: canArchiveProject(access.project, access.subject),
+    canRestore: canRestoreProject(access.project, access.subject),
   };
 }

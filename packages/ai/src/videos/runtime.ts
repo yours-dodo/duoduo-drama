@@ -495,6 +495,7 @@ export function createVideosApi<TScopeHandle>(
             options: resolvedOptions,
             transport,
             signal: generationStream.signal,
+            now,
           };
 
           let adapterTerminal: import('./contracts.js').VideoProtocolTerminal;
@@ -1035,6 +1036,7 @@ export function createVideosApi<TScopeHandle>(
               pollTransport,
               ...(cancelTransport ? { cancelTransport } : {}),
               signal: generationStream.signal,
+              now,
             },
             {
               publish: async (event) => {

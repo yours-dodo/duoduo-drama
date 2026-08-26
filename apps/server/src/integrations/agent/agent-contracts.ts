@@ -42,11 +42,7 @@ export interface StoryGenerationAgentResult {
 }
 
 export type StoryGenerationStage =
-  | 'queued'
-  | 'script'
-  | 'images'
-  | 'speech'
-  | 'video';
+  'queued' | 'script' | 'images' | 'speech' | 'video';
 
 export type StoryTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
@@ -62,9 +58,24 @@ export interface StoryTaskSnapshot extends StoryTaskRef {
   failureCode?: StoryGenerationFailureCode;
 }
 
+export type StoryProjectEra = '现代' | '古代';
+
+export interface StoryTagGenerationRequest {
+  title: string;
+  description: string;
+}
+
+export interface StoryTagGenerationResult {
+  era: StoryProjectEra;
+  tags: string[];
+}
+
 export interface AgentGateway {
   startStory(request: StoryGenerationAgentRequest): Promise<StoryTaskRef>;
   getStoryTask(taskId: string): Promise<StoryTaskSnapshot>;
+  summarizeStoryTags(
+    request: StoryTagGenerationRequest,
+  ): Promise<StoryTagGenerationResult>;
 }
 
 export type AgentGatewayFailureCode = StoryGenerationFailureCode;

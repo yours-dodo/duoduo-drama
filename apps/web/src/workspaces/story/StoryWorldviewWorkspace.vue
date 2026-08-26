@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 
 import StoryWorldviewEntityDrawer from './StoryWorldviewEntityDrawer.vue';
 import StoryWorldviewFactGraph from './StoryWorldviewFactGraph.vue';
 import StoryWorldviewFactLedger from './StoryWorldviewFactLedger.vue';
 import StoryWorldviewOntologyManager from './StoryWorldviewOntologyManager.vue';
 import {
-  createWorldviewEntity,
-  createWorldviewKnowledgeGraphSeed,
   createWorldviewPredicateSchemaStatements,
   getWorldviewEntities,
-  getWorldviewEntityReferences,
   groupWorldviewEntities,
   worldviewEntityDirectories,
   worldviewRoleAssetOptions,
@@ -20,6 +18,7 @@ import {
   type WorldviewPredicateDefinition,
   type WorldviewPredicateNode,
 } from './story-worldview-ontology';
+import { useStoryWorldviewStateRegistry } from './story-worldview-state';
 
 type WorldviewMode = 'document' | 'ontology';
 
@@ -69,7 +68,26 @@ const initialContents: Record<string, string> = {
   tone: '<h2>冷静表面下的情绪暗流</h2><p>整体基调克制、潮湿、带有调查小说的悬疑感。重要情绪不直接说破，而通过空间、物件和被删改的句子显现。</p>',
 };
 
-const mode = ref<WorldviewMode>('document');
+const route = useRoute();
+const router = useRouter();
+const worldviewStateRegistry = useStoryWorldviewStateRegistry();
+const projectId = computed(() => String(route.params.projectId ?? ''));
+const isImmersive = computed(() => route.meta.mode === 'immersive');
+const localImmersiveMode = ref<WorldviewMode>('document');
+const mode = computed<WorldviewMode>(() => {
+  if (isImmersive.value) return localImmersiveMode.value;
+  const view = String(
+    route.params.worldviewView ?? route.meta.worldviewView ?? 'settings',
+  );
+  return view === 'composition' ? 'ontology' : 'document';
+});
+const worldviewBasePath = computed(
+  () => `/${encodeURIComponent(projectId.value)}/worldview`,
+);
+const settingsPath = computed(() => `${worldviewBasePath.value}/settings`);
+const compositionPath = computed(
+  () => `${worldviewBasePath.value}/composition`,
+);
 const currentSectionId = ref('space-time');
 const expandedSectionGroups = reactive<Record<string, boolean>>(
   Object.fromEntries(sectionGroups.map((group) => [group.id, true])),
@@ -82,12 +100,11 @@ const expandedEntityGroups = reactive<Record<string, boolean>>(
 const editorContents = reactive({ ...initialContents });
 const editorStatus = ref('已保存到当前原型');
 const editorElement = ref<HTMLElement | null>(null);
-const knowledgeGraph = reactive(createWorldviewKnowledgeGraphSeed());
+const knowledgeGraph = worldviewStateRegistry.getGraph(projectId.value);
 const selectedEntityId = ref<string | null>(null);
 const editingEntityId = ref<string | null>(null);
 const showOntologyManager = ref(false);
 const graphStatus = ref('统一知识图已保存到当前原型');
-let localEntitySequence = 0;
 
 const currentSection = computed(
   () =>
@@ -108,7 +125,6 @@ const editingEntity = computed(() =>
     ? entities.value.find((entity) => entity.id === editingEntityId.value)
     : undefined,
 );
-
 function selectSection(sectionId: string) {
   currentSectionId.value = sectionId;
   editorStatus.value = '已切换设定章节';
@@ -143,9 +159,15 @@ function selectEntity(entityId: string | null) {
 }
 
 function editEntity(entityId: string) {
-  selectedEntityId.value = entityId;
-  editingEntityId.value = entityId;
-  graphStatus.value = '正在编辑实体属性';
+  if (isImmersive.value) {
+    selectedEntityId.value = entityId;
+    editingEntityId.value = entityId;
+    graphStatus.value = '正在编辑实体属性';
+    return;
+  }
+  void router.push(
+    `${compositionPath.value}/${encodeURIComponent(entityId)}/edit`,
+  );
 }
 
 function closeEntityEditor() {
@@ -168,19 +190,14 @@ function closeOntologyManager() {
 }
 
 function addWorldviewEntity(type: WorldviewEntityType, groupId: string) {
-  localEntitySequence += 1;
-  const typeCount =
-    entities.value.filter((entity) => entity.type === type).length + 1;
-  const entity = createWorldviewEntity(
+  const entity = worldviewStateRegistry.createEntity(
+    projectId.value,
     type,
-    `worldview-local-${groupId}-${localEntitySequence}`,
-    typeCount,
+    groupId,
   );
-  knowledgeGraph.nodes.push(entity);
   expandedEntityGroups[groupId] = true;
   selectedEntityId.value = entity.id;
-  editingEntityId.value = entity.id;
-  graphStatus.value = `已新增${type}草稿 · 请完善必填字段`;
+  editEntity(entity.id);
 }
 
 function markGraphDirty() {
@@ -188,31 +205,33 @@ function markGraphDirty() {
 }
 
 function saveWorldviewEntity(entity: WorldviewEntity) {
-  const index = knowledgeGraph.nodes.findIndex(
-    (candidate) => candidate.kind === 'entity' && candidate.id === entity.id,
-  );
-  if (index < 0) return;
-  knowledgeGraph.nodes.splice(index, 1, entity);
+  if (!worldviewStateRegistry.saveEntity(projectId.value, entity)) {
+    graphStatus.value = '保存失败：实体已经不存在';
+    return;
+  }
   graphStatus.value = '实体属性已保存到统一知识图';
 }
 
 function deleteEditingEntity() {
   const entity = editingEntity.value;
   if (!entity) return;
-  const references = getWorldviewEntityReferences(entity.id, knowledgeGraph);
-  if (references.length) {
-    graphStatus.value = `无法删除：请先处理${references.join('、')}`;
+  const result = worldviewStateRegistry.deleteEntity(
+    projectId.value,
+    entity.id,
+  );
+  if (!result.deleted) {
+    graphStatus.value = result.references.length
+      ? `无法删除：请先处理${result.references.join('、')}`
+      : '删除失败：实体已经不存在';
     return;
   }
-
-  const index = knowledgeGraph.nodes.findIndex(
-    (candidate) => candidate.kind === 'entity' && candidate.id === entity.id,
-  );
-  if (index < 0) return;
-  knowledgeGraph.nodes.splice(index, 1);
   if (selectedEntityId.value === entity.id) selectedEntityId.value = null;
   editingEntityId.value = null;
   graphStatus.value = `已删除${entity.type}「${entity.name}」`;
+}
+
+function selectImmersiveMode(nextMode: WorldviewMode) {
+  localImmersiveMode.value = nextMode;
 }
 
 function saveFact(fact: WorldviewFactStatement) {
@@ -280,28 +299,52 @@ function togglePredicate(predicateId: string) {
       role="tablist"
       aria-label="世界观工作区"
     >
-      <button
-        class="story-worldview-mode-tab"
-        :class="{ 'is-active': mode === 'document' }"
-        type="button"
-        role="tab"
-        :aria-selected="mode === 'document'"
-        @click="mode = 'document'"
-      >
-        <strong>设定文档</strong>
-        <span>用文字建立世界的边界</span>
-      </button>
-      <button
-        class="story-worldview-mode-tab"
-        :class="{ 'is-active': mode === 'ontology' }"
-        type="button"
-        role="tab"
-        :aria-selected="mode === 'ontology'"
-        @click="mode = 'ontology'"
-      >
-        <strong>世界构成</strong>
-        <span>用事实关系描述实体之间如何连接</span>
-      </button>
+      <template v-if="!isImmersive">
+        <RouterLink
+          class="story-worldview-mode-tab"
+          :class="{ 'is-active': mode === 'document' }"
+          :to="settingsPath"
+          role="tab"
+          :aria-selected="mode === 'document'"
+        >
+          <strong>设定文档</strong>
+          <span>用文字建立世界的边界</span>
+        </RouterLink>
+        <RouterLink
+          class="story-worldview-mode-tab"
+          :class="{ 'is-active': mode === 'ontology' }"
+          :to="compositionPath"
+          role="tab"
+          :aria-selected="mode === 'ontology'"
+        >
+          <strong>世界构成</strong>
+          <span>用事实关系描述实体之间如何连接</span>
+        </RouterLink>
+      </template>
+      <template v-else>
+        <button
+          class="story-worldview-mode-tab"
+          :class="{ 'is-active': mode === 'document' }"
+          type="button"
+          role="tab"
+          :aria-selected="mode === 'document'"
+          @click="selectImmersiveMode('document')"
+        >
+          <strong>设定文档</strong>
+          <span>用文字建立世界的边界</span>
+        </button>
+        <button
+          class="story-worldview-mode-tab"
+          :class="{ 'is-active': mode === 'ontology' }"
+          type="button"
+          role="tab"
+          :aria-selected="mode === 'ontology'"
+          @click="selectImmersiveMode('ontology')"
+        >
+          <strong>世界构成</strong>
+          <span>用事实关系描述实体之间如何连接</span>
+        </button>
+      </template>
     </div>
 
     <div v-if="mode === 'document'" class="story-worldview-document-layout">
@@ -566,7 +609,7 @@ function togglePredicate(predicateId: string) {
     </div>
 
     <StoryWorldviewEntityDrawer
-      v-if="editingEntity"
+      v-if="isImmersive && editingEntity"
       :entity="editingEntity"
       :entities="entities"
       :role-assets="worldviewRoleAssetOptions"

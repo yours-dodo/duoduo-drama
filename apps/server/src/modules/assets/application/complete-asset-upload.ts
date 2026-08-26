@@ -31,7 +31,7 @@ export class CompleteAssetUpload {
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     assetId: string;

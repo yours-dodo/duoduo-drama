@@ -51,3 +51,17 @@ export class RollbackStoryArtifactDto {
   @IsOptional()
   expectedCurrentVersionNumber?: number;
 }
+
+export class SaveStoryOutlineDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(5_000_000)
+  content!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  expectedVersionNumber?: number;
+}

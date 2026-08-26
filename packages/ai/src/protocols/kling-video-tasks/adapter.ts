@@ -126,6 +126,7 @@ export function createKlingVideoTasksAdapter(): ResumableVideoProtocolAdapter<'k
             signal: request.signal,
             pollIntervalMs: request.options.pollIntervalMs,
             generateAudio: request.input.generateAudio,
+            now: request.now ?? Date.now,
           },
           sink,
         );
@@ -150,6 +151,7 @@ export function createKlingVideoTasksAdapter(): ResumableVideoProtocolAdapter<'k
                 'boolean'
                 ? request.operation.operationState.generateAudio
                 : undefined,
+            now: request.now ?? Date.now,
           },
           sink,
         );
@@ -232,6 +234,7 @@ async function pollLoop(
     signal: AbortSignal;
     pollIntervalMs: number;
     generateAudio?: boolean;
+    now: () => number;
   },
   sink: VideoProtocolEventSink,
 ): Promise<VideoProtocolTerminal> {
@@ -266,7 +269,7 @@ async function pollLoop(
     }
     if (status === 'succeeded') {
       const expiresAt = artifactExpiry(task.update_time);
-      if (expiresAt !== undefined && Date.now() >= expiresAt)
+      if (expiresAt !== undefined && input.now() >= expiresAt)
         return {
           status: 'failed',
           error: new AiRuntimeError(

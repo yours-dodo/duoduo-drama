@@ -14,7 +14,7 @@ export class ListProjectAssets {
   ) {}
 
   async execute(input: {
-    tenantId: string;
+    tenantId: string | null;
     actorUserId: string;
     projectId: string;
     page: { limit: number; after: { at: Date; id: string } | null };

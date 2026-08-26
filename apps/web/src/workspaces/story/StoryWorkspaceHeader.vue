@@ -23,7 +23,20 @@ const moduleBasePath = computed(() =>
     ? `/immersive/${encodeURIComponent(projectId.value)}`
     : `/${encodeURIComponent(projectId.value)}`,
 );
-const currentModule = computed(() => String(route.params.module ?? 'outline'));
+const currentModule = computed(() =>
+  String(route.params.module ?? route.meta.module ?? 'outline'),
+);
+const teamId = computed(() => {
+  const value = route.query.teamId;
+  return typeof value === 'string' && value ? value : null;
+});
+
+function moduleLocation(module: (typeof storyModules)[number]['key']) {
+  return {
+    path: `${moduleBasePath.value}/${module}`,
+    query: teamId.value ? { teamId: teamId.value } : undefined,
+  };
+}
 
 function readSavedTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'dark';
@@ -118,7 +131,7 @@ onBeforeUnmount(() => {
         :key="item.key"
         class="story-header-module-link"
         :class="{ 'is-active': currentModule === item.key }"
-        :to="`${moduleBasePath}/${item.key}`"
+        :to="moduleLocation(item.key)"
         :aria-current="currentModule === item.key ? 'page' : undefined"
       >
         {{ item.label }}

@@ -14,7 +14,7 @@ import type {
 
 interface AssetRow {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   uploadedByUserId: string;
   objectKey: string;
@@ -42,7 +42,7 @@ export class PrismaAssetRepository implements AssetRepository {
   }
 
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     assetId: string;
   }): Promise<AssetSnapshot | null> {
@@ -58,8 +58,31 @@ export class PrismaAssetRepository implements AssetRepository {
     });
   }
 
+  hasRoleReferences(request: {
+    tenantId: string | null;
+    projectId: string;
+    assetId: string;
+  }): Promise<boolean> {
+    return this.database.withClient(async (client) => {
+      const rows = await client.$queryRaw<Array<{ referenced: boolean }>>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM story_role_assets AS role
+          WHERE role.project_id = ${request.projectId}::uuid
+            AND ${tenantScope(request.tenantId, 'role')}
+            AND role.archived_at IS NULL
+            AND (
+              role.cover_asset_id = ${request.assetId}::uuid
+              OR role.view_asset_id = ${request.assetId}::uuid
+            )
+        ) AS referenced
+      `;
+      return rows[0]?.referenced === true;
+    });
+  }
+
   listForProject(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     page: { limit: number; after: { at: Date; id: string } | null };
   }): Promise<KeysetPage<AssetSnapshot>> {
@@ -84,7 +107,7 @@ export class PrismaAssetRepository implements AssetRepository {
           asset.created_at AS "createdAt",
           asset.updated_at AS "updatedAt"
         FROM assets AS asset
-        WHERE asset.tenant_id = ${request.tenantId}::uuid
+        WHERE ${tenantScope(request.tenantId)}
           AND asset.project_id = ${request.projectId}::uuid
           AND asset.status <> 'deleted'
           ${after}
@@ -104,7 +127,7 @@ export class PrismaAssetRepository implements AssetRepository {
   }
 
   transition(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     assetId: string;
     from: AssetStatus | readonly AssetStatus[];
@@ -161,6 +184,16 @@ function readAsset(row: AssetRow): AssetSnapshot {
     createdAt: new Date(row.createdAt),
     updatedAt: new Date(row.updatedAt),
   };
+}
+
+function tenantScope(tenantId: string | null, alias = 'asset') {
+  const tenantColumn =
+    alias === 'role'
+      ? Prisma.sql`role.tenant_id`
+      : Prisma.sql`asset.tenant_id`;
+  return tenantId === null
+    ? Prisma.sql`${tenantColumn} IS NULL`
+    : Prisma.sql`${tenantColumn} = ${tenantId}::uuid`;
 }
 
 function readStatus(value: string): AssetStatus {

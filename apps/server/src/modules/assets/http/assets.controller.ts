@@ -26,6 +26,7 @@ import {
   TenantContextGuard,
 } from '../../tenancy/http/tenant-context.guard.js';
 import { CompleteAssetUpload } from '../application/complete-asset-upload.js';
+import { CreateAssetDownloadUrl } from '../application/create-asset-download-url.js';
 import { CreateAssetUploadUrl } from '../application/create-asset-upload-url.js';
 import { DeleteAsset } from '../application/delete-asset.js';
 import { ListProjectAssets } from '../application/list-project-assets.js';
@@ -46,6 +47,8 @@ export class AssetsController {
     private readonly completeUpload: CompleteAssetUpload,
     @Inject(ListProjectAssets)
     private readonly listAssets: ListProjectAssets,
+    @Inject(CreateAssetDownloadUrl)
+    private readonly createDownloadUrl: CreateAssetDownloadUrl,
     @Inject(DeleteAsset)
     private readonly deleteAsset: DeleteAsset,
   ) {}
@@ -136,6 +139,25 @@ export class AssetsController {
     const tenant = readTenantContext(request);
     try {
       return await this.deleteAsset.execute({
+        tenantId: tenant.tenantId,
+        actorUserId: tenant.userId,
+        projectId,
+        assetId,
+      });
+    } catch (error) {
+      throwAssetHttpError(error);
+    }
+  }
+
+  @Get(':assetId/download-url')
+  async download(
+    @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
+    @Param('assetId', new ParseUUIDPipe({ version: '4' })) assetId: string,
+    @Req() request: Request,
+  ) {
+    const tenant = readTenantContext(request);
+    try {
+      return await this.createDownloadUrl.execute({
         tenantId: tenant.tenantId,
         actorUserId: tenant.userId,
         projectId,

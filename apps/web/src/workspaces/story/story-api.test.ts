@@ -1,16 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  archivePersonalStoryRoleAsset,
+  archivePersonalStoryProject,
   appendStoryMessage,
   appendPersonalStoryMessage,
   confirmStoryDraft,
   createPersonalStoryConversation,
   createPersonalStoryImportJob,
+  createPersonalStoryAssetUploadUrl,
+  completePersonalStoryAssetUpload,
   createPersonalStoryProject,
+  createPersonalStoryRoleAsset,
   createStoryConversation,
   createStoryProject,
   listPersonalStoryProjects,
+  listPersonalStoryRoleAssets,
   listStoryProjects,
+  getStoryOutline,
+  saveStoryOutline,
+  restoreStoryProject,
+  updatePersonalStoryRoleAsset,
 } from './story-api';
 
 describe('story API adapter', () => {
@@ -33,6 +43,54 @@ describe('story API adapter', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/me/story-projects?limit=20',
       expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('reads and saves the normalized outline through the matching scope endpoint', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            artifact: { id: 'artifact-1' },
+            currentVersion: null,
+            version: { id: 'version-1' },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getStoryOutline({ teamId: 'team-1', projectId: 'project-1' });
+    await saveStoryOutline(
+      { projectId: 'personal-project-1' },
+      {
+        content: '{"schemaVersion":"narrative-planning.v1"}',
+        expectedVersionNumber: 3,
+      },
+      'outline-save-key',
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/teams/team-1/story-projects/project-1/outline',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/me/story-projects/personal-project-1/outline',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'outline-save-key',
+        }),
+        body: JSON.stringify({
+          content: '{"schemaVersion":"narrative-planning.v1"}',
+          expectedVersionNumber: 3,
+        }),
+      }),
     );
   });
 
@@ -202,6 +260,37 @@ describe('story API adapter', () => {
     );
   });
 
+  it('archives and restores projects through the matching scope endpoint', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ project: { id: 'project-1' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await archivePersonalStoryProject('project-1', 4);
+    await restoreStoryProject('team-1', 'project-1', 5);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/me/story-projects/project-1/archive',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ expectedRevision: 4 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/teams/team-1/story-projects/project-1/restore',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ expectedRevision: 5 }),
+      }),
+    );
+  });
+
   it('registers a selected personal story file as an import job', async () => {
     const fetchMock = vi.fn(
       async () =>
@@ -233,6 +322,65 @@ describe('story API adapter', () => {
           byteSize: 1024,
         }),
       }),
+    );
+  });
+
+  it('uses server-generated role ids and revision-aware role mutations', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          init?.method === 'DELETE'
+            ? null
+            : JSON.stringify({
+                items: [],
+                roleAsset: {
+                  id: '30000000-0000-4000-8000-000000000001',
+                },
+              }),
+          {
+            status: init?.method === 'DELETE' ? 204 : 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listPersonalStoryRoleAssets('project-1');
+    await createPersonalStoryRoleAsset(
+      'project-1',
+      { category: 'protagonists', name: '林遥' },
+      'role-key',
+    );
+    await updatePersonalStoryRoleAsset('project-1', 'role-1', {
+      name: '林遥（新版）',
+      expectedRevision: 1,
+    });
+    await archivePersonalStoryRoleAsset('project-1', 'role-1', 2);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/me/story-projects/project-1/role-assets',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'role-key' }),
+        body: JSON.stringify({ category: 'protagonists', name: '林遥' }),
+      }),
+    );
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)),
+    ).not.toHaveProperty('id');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/me/story-projects/project-1/role-assets/role-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ name: '林遥（新版）', expectedRevision: 1 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/v1/me/story-projects/project-1/role-assets/role-1?expectedRevision=2',
+      expect.objectContaining({ method: 'DELETE' }),
     );
   });
 
@@ -286,6 +434,47 @@ describe('story API adapter', () => {
           'Idempotency-Key': 'personal-message-key',
         },
       }),
+    );
+  });
+
+  it('uses the project asset endpoints for cover upload registration and completion', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            asset: { id: 'asset-1', status: 'pending_upload' },
+            uploadUrl: 'https://storage.test/upload',
+            expiresAt: '2026-08-20T10:10:00.000Z',
+            requiredHeaders: { 'content-type': 'image/png' },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createPersonalStoryAssetUploadUrl('project-1', {
+      fileName: '林遥.png',
+      contentType: 'image/png',
+      byteSize: 2048,
+    });
+    await completePersonalStoryAssetUpload('project-1', 'asset-1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/me/story-projects/project-1/assets/upload-url',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          fileName: '林遥.png',
+          contentType: 'image/png',
+          byteSize: 2048,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/me/story-projects/project-1/assets/asset-1/complete',
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 });

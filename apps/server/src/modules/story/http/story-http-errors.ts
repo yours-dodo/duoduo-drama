@@ -1,8 +1,14 @@
 import { HttpStatus } from '@nestjs/common';
 
 import { ApplicationError } from '../../../platform/http/application-error.js';
+import { AgentGatewayError } from '../../../integrations/agent/agent-gateway.js';
 import { StoryImportFileInvalidError } from '../../../domain/story/story-import-job.js';
 import { IdempotencyConflictError } from '../../tenancy/application/create-team.js';
+import {
+  StoryRoleAssetArchivedError,
+  StoryRoleAssetInvalidError,
+  StoryRoleAssetRevisionConflictError,
+} from '../../../domain/story/story-role-asset.js';
 import {
   ConversationArchivedError,
   ConversationNotFoundError,
@@ -20,19 +26,106 @@ import {
   ProjectCollaboratorRoleInvalidError,
   StoryProjectAccessDeniedError,
   StoryProjectArchivedError,
+  StoryProjectPurgeUnavailableError,
   StoryProjectNotFoundError,
   StoryProjectRevisionConflictError,
   StoryProjectSpaceMoveRequiredError,
   StoryProjectTitleInvalidError,
+  StoryProjectDescriptionInvalidError,
+  StoryProjectEraInvalidError,
+  StoryProjectTagsInvalidError,
   StoryGenerationRequestNotFoundError,
   StoryGenerationResultUnavailableError,
   StoryArtifactNotFoundError,
   StoryArtifactVersionNotFoundError,
   StoryArtifactVersionConflictError,
   StoryArtifactVersionStateTransitionError,
+  StoryOutlineContentInvalidError,
+  StoryRoleAssetInUseError,
+  StoryRoleAssetNotFoundError,
+  StoryRoleAssetCoverAssetInvalidError,
+  StoryRoleAssetCoverUnavailableError,
+  StoryRoleAssetViewAssetInvalidError,
+  StoryRoleAssetViewUnavailableError,
 } from '../application/story-errors.js';
 
 export function throwStoryHttpError(error: unknown): never {
+  if (error instanceof AgentGatewayError) {
+    const status =
+      error.failureCode === 'timeout'
+        ? HttpStatus.GATEWAY_TIMEOUT
+        : error.failureCode === 'protocol_error'
+          ? HttpStatus.BAD_GATEWAY
+          : HttpStatus.SERVICE_UNAVAILABLE;
+    throw storyError(
+      'STORY_TAG_GENERATION_FAILED',
+      'Story AI tag generation is temporarily unavailable',
+      status,
+    );
+  }
+  if (error instanceof StoryRoleAssetNotFoundError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_NOT_FOUND',
+      'Story role asset not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+  if (error instanceof StoryRoleAssetInvalidError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_INVALID',
+      'Story role asset is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof StoryRoleAssetRevisionConflictError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_REVISION_CONFLICT',
+      'Story role asset was changed by another operation',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryRoleAssetInUseError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_IN_USE',
+      'Story role asset is referenced by another resource',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryRoleAssetCoverAssetInvalidError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_COVER_ASSET_INVALID',
+      'Story role cover must be an uploaded image asset in the same project',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof StoryRoleAssetCoverUnavailableError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_COVER_UNAVAILABLE',
+      'Story role cover is temporarily unavailable',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryRoleAssetViewAssetInvalidError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_VIEW_ASSET_INVALID',
+      'Story role view must be an uploaded image asset in the same project',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (error instanceof StoryRoleAssetViewUnavailableError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_VIEW_UNAVAILABLE',
+      'Story role view is temporarily unavailable',
+      HttpStatus.CONFLICT,
+    );
+  }
+  if (error instanceof StoryRoleAssetArchivedError) {
+    throw storyError(
+      'STORY_ROLE_ASSET_NOT_FOUND',
+      'Story role asset not found',
+      HttpStatus.NOT_FOUND,
+    );
+  }
   if (error instanceof StoryImportFileInvalidError) {
     throw storyError(
       'STORY_IMPORT_FILE_INVALID',
@@ -103,6 +196,13 @@ export function throwStoryHttpError(error: unknown): never {
       HttpStatus.CONFLICT,
     );
   }
+  if (error instanceof StoryOutlineContentInvalidError) {
+    throw storyError(
+      'STORY_OUTLINE_CONTENT_INVALID',
+      'Story outline content is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
   if (error instanceof StoryArtifactVersionStateTransitionError) {
     throw storyError(
       'STORY_ARTIFACT_VERSION_STATE_INVALID',
@@ -159,10 +259,28 @@ export function throwStoryHttpError(error: unknown): never {
       HttpStatus.CONFLICT,
     );
   }
+  if (error instanceof StoryProjectPurgeUnavailableError) {
+    throw storyError(
+      'STORY_PROJECT_PURGE_UNAVAILABLE',
+      'This story project can no longer be restored',
+      HttpStatus.GONE,
+    );
+  }
   if (error instanceof StoryProjectTitleInvalidError) {
     throw storyError(
       'STORY_PROJECT_TITLE_INVALID',
       'Story project title is invalid',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  if (
+    error instanceof StoryProjectDescriptionInvalidError ||
+    error instanceof StoryProjectEraInvalidError ||
+    error instanceof StoryProjectTagsInvalidError
+  ) {
+    throw storyError(
+      'STORY_PROJECT_METADATA_INVALID',
+      'Story project metadata is invalid',
       HttpStatus.BAD_REQUEST,
     );
   }

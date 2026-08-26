@@ -6,6 +6,7 @@ import type {
   StoryGenerationFailureCode,
   StoryTaskRef,
   StoryTaskSnapshot,
+  StoryTagGenerationResult,
 } from './agent-contracts.js';
 
 interface MockTask {
@@ -66,9 +67,18 @@ export class MockAgentGateway implements AgentGateway {
     }
     return { taskId: task.taskId, status: task.status, stage: task.stage };
   }
+
+  async summarizeStoryTags(): Promise<StoryTagGenerationResult> {
+    if (this.options.failureCode) {
+      throw new AgentGatewayError(this.options.failureCode);
+    }
+    return { era: '现代', tags: ['悬疑', '情感'] };
+  }
 }
 
-function mockResult(request: StoryGenerationAgentRequest): StoryGenerationAgentResult {
+function mockResult(
+  request: StoryGenerationAgentRequest,
+): StoryGenerationAgentResult {
   const prompt = request.userPrompt.trim();
   const title = `故事大纲：${prompt}`;
   const content = [

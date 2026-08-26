@@ -29,7 +29,9 @@ import {
 } from '../../identity/http/session-auth.guard.js';
 import { KeysetPageDto } from '../../tenancy/http/keyset-page.dto.js';
 import { ArchiveStoryProject } from '../application/archive-story-project.js';
+import { RestoreStoryProject } from '../application/restore-story-project.js';
 import { CreateStoryProject } from '../application/create-story-project.js';
+import { GenerateStoryProjectTags } from '../application/generate-story-project-tags.js';
 import { GetStoryProject } from '../application/get-story-project.js';
 import { ListStoryProjects } from '../application/list-story-projects.js';
 import { ListProjectAuditRecords } from '../application/list-project-audit-records.js';
@@ -38,6 +40,7 @@ import {
   ArchiveStoryProjectDto,
   CreateStoryProjectDto,
   UpdateStoryProjectDto,
+  GenerateStoryProjectTagsDto,
 } from './story-project.dto.js';
 import { throwStoryHttpError } from './story-http-errors.js';
 
@@ -53,8 +56,12 @@ export class MeStoryProjectsController {
     private readonly getProject: GetStoryProject,
     @Inject(UpdateStoryProject)
     private readonly updateProject: UpdateStoryProject,
+    @Inject(GenerateStoryProjectTags)
+    private readonly generateTags: GenerateStoryProjectTags,
     @Inject(ArchiveStoryProject)
     private readonly archiveProject: ArchiveStoryProject,
+    @Inject(RestoreStoryProject)
+    private readonly restoreProject: RestoreStoryProject,
     @Inject(ListProjectAuditRecords)
     private readonly listProjectAudit: ListProjectAuditRecords,
   ) {}
@@ -162,6 +169,36 @@ export class MeStoryProjectsController {
     }
   }
 
+  @Post(':projectId/tags/generate')
+  @HttpCode(HttpStatus.OK)
+  async generateProjectTags(
+    @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
+    @Body(
+      new ValidationPipe({
+        expectedType: GenerateStoryProjectTagsDto,
+        transform: true,
+        whitelist: true,
+      }),
+    )
+    body: GenerateStoryProjectTagsDto,
+    @Req() request: Request,
+  ) {
+    const session = readAuthenticatedSession(request);
+    try {
+      return await this.generateTags.execute({
+        tenantId: null,
+        actorUserId: session.userId,
+        projectId,
+        title: body.title,
+        description: body.description,
+        expectedRevision: body.expectedRevision,
+        requestId: readRequestId(request),
+      });
+    } catch (error) {
+      throwStoryHttpError(error);
+    }
+  }
+
   @Patch(':projectId')
   async update(
     @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
@@ -182,6 +219,9 @@ export class MeStoryProjectsController {
         actorUserId: session.userId,
         projectId,
         title: body.title,
+        description: body.description,
+        era: body.era,
+        tags: body.tags,
         visibility: 'private',
         expectedRevision: body.expectedRevision,
         requestId: readRequestId(request),
@@ -208,6 +248,34 @@ export class MeStoryProjectsController {
     const session = readAuthenticatedSession(request);
     try {
       return await this.archiveProject.execute({
+        tenantId: null,
+        actorUserId: session.userId,
+        projectId,
+        expectedRevision: body.expectedRevision,
+        requestId: readRequestId(request),
+      });
+    } catch (error) {
+      throwStoryHttpError(error);
+    }
+  }
+
+  @Post(':projectId/restore')
+  @HttpCode(HttpStatus.OK)
+  async restore(
+    @Param('projectId', new ParseUUIDPipe({ version: '4' })) projectId: string,
+    @Body(
+      new ValidationPipe({
+        expectedType: ArchiveStoryProjectDto,
+        transform: true,
+        whitelist: true,
+      }),
+    )
+    body: ArchiveStoryProjectDto,
+    @Req() request: Request,
+  ) {
+    const session = readAuthenticatedSession(request);
+    try {
+      return await this.restoreProject.execute({
         tenantId: null,
         actorUserId: session.userId,
         projectId,

@@ -7,8 +7,12 @@ export class StoryProjectNotFoundError extends Error {
 
 export {
   StoryProjectArchivedError,
+  StoryProjectPurgeUnavailableError,
   StoryProjectRevisionConflictError,
   StoryProjectTitleInvalidError,
+  StoryProjectDescriptionInvalidError,
+  StoryProjectEraInvalidError,
+  StoryProjectTagsInvalidError,
 } from '../../../domain/story/story-project.js';
 
 export {
@@ -63,6 +67,61 @@ export class StoryArtifactVersionConflictError extends Error {
   constructor() {
     super('Story artifact version was changed by another operation');
     this.name = 'StoryArtifactVersionConflictError';
+  }
+}
+
+export class StoryOutlineContentInvalidError extends Error {
+  constructor() {
+    super(
+      'Story outline content must be a valid narrative-planning.v1 JSON document',
+    );
+    this.name = 'StoryOutlineContentInvalidError';
+  }
+}
+
+export class StoryRoleAssetNotFoundError extends Error {
+  constructor() {
+    super('Story role asset was not found');
+    this.name = 'StoryRoleAssetNotFoundError';
+  }
+}
+
+export class StoryRoleAssetInUseError extends Error {
+  constructor() {
+    super('Story role asset is referenced by another resource');
+    this.name = 'StoryRoleAssetInUseError';
+  }
+}
+
+export class StoryRoleAssetCoverAssetInvalidError extends Error {
+  constructor() {
+    super(
+      'Story role asset cover must be an uploaded image asset in the same project',
+    );
+    this.name = 'StoryRoleAssetCoverAssetInvalidError';
+  }
+}
+
+export class StoryRoleAssetCoverUnavailableError extends Error {
+  constructor() {
+    super('Story role asset cover is unavailable');
+    this.name = 'StoryRoleAssetCoverUnavailableError';
+  }
+}
+
+export class StoryRoleAssetViewAssetInvalidError extends Error {
+  constructor() {
+    super(
+      'Story role asset view must be an uploaded image asset in the same project',
+    );
+    this.name = 'StoryRoleAssetViewAssetInvalidError';
+  }
+}
+
+export class StoryRoleAssetViewUnavailableError extends Error {
+  constructor() {
+    super('Story role asset view is unavailable');
+    this.name = 'StoryRoleAssetViewUnavailableError';
   }
 }
 

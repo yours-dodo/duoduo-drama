@@ -1,6 +1,8 @@
 import {
   canEditProject,
+  canArchiveProject,
   canManageProjectCollaborators,
+  canRestoreProject,
 } from '../../../domain/story/project-access-policy.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import type { TeamMembershipRepository } from '../../tenancy/ports/team-membership-repository.js';
@@ -69,6 +71,8 @@ export class GetStoryProject {
       });
     }
 
+    const now = await this.databaseClock.now();
+
     return {
       project: projectOutput(access.project, {
         collaborator: access.subject.collaborator,
@@ -78,6 +82,8 @@ export class GetStoryProject {
           access.project,
           access.subject,
         ),
+        canArchive: canArchiveProject(access.project, access.subject),
+        canRestore: canRestoreProject(access.project, access.subject, now),
       }),
     };
   }

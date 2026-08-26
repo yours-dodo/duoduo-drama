@@ -19,6 +19,7 @@ import { StorySpeechController } from './story-speech.controller.js';
 import { StorySpeechService } from './story-speech.service.js';
 import { StoryScriptsController } from './story-scripts.controller.js';
 import { StoryScriptsService } from './story-scripts.service.js';
+import { StoryTagsController } from './story-tags.controller.js';
 import { StoryTaskController } from './story-task.controller.js';
 import { StoryTaskService } from './story-task.service.js';
 import { StoryVideoController } from './story-video.controller.js';
@@ -27,6 +28,7 @@ import { StoryVideoService } from './story-video.service.js';
 @Module({
   controllers: [
     StoryScriptsController,
+    StoryTagsController,
     StoryImagesController,
     StorySpeechController,
     StoryVideoController,

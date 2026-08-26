@@ -5,9 +5,15 @@ model StoryProject {
   createdByUserId     String                @map("created_by_user_id") @db.Uuid
   ownerUserId         String                @map("owner_user_id") @db.Uuid
   title               String                @db.VarChar(200)
+  description         String                @default("") @db.VarChar(2000)
+  era                 String                @default("现代") @db.VarChar(16)
+  tags                String[]             @default([])
   creationMode        String                @default("standard") @map("creation_mode") @db.VarChar(16)
   visibility          String                @db.VarChar(16)
   status              String                @db.VarChar(16)
+  archivedAt          DateTime?             @map("archived_at") @db.Timestamptz(3)
+  purgeAt             DateTime?             @map("purge_at") @db.Timestamptz(3)
+  purgeStartedAt      DateTime?             @map("purge_started_at") @db.Timestamptz(3)
   revision            Int                   @default(1)
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -22,11 +28,13 @@ model StoryProject {
   assets              Asset[]
   artifacts           StoryArtifact[]
   importJobs          StoryImportJob[]
+  roleAssets          StoryRoleAsset[]
 
   @@unique([tenantId, id], map: "story_projects_tenant_id_id_key")
   @@index([spaceId, status, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_space_id_status_created_at_id_idx")
   @@index([ownerUserId, status, updatedAt(sort: Desc)], map: "story_projects_owner_user_id_status_updated_at_idx")
   @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)], map: "story_projects_tenant_id_created_at_id_idx")
   @@index([tenantId, visibility, status, createdAt(sort: Desc)], map: "story_projects_tenant_id_visibility_status_idx")
+  @@index([status, purgeAt], map: "story_projects_status_purge_at_idx")
   @@map("story_projects")
 }

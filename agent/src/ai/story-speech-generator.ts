@@ -70,12 +70,9 @@ export function createStorySpeechGenerator(
         throw new Error(`speech synthesis failed with HTTP ${response.status}`);
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      let binary = '';
-      for (const byte of bytes) binary += String.fromCharCode(byte);
       return {
         audioBase64: Buffer.from(bytes).toString('base64'),
-        mimeType:
-          config.responseFormat === 'wav' ? 'audio/wav' : 'audio/mpeg',
+        mimeType: config.responseFormat === 'wav' ? 'audio/wav' : 'audio/mpeg',
       };
     },
   };
@@ -88,13 +85,14 @@ export function createStorySpeechGenerator(
  * (`POST {baseUrl}/api/tts`, returns `audio/wav` bytes). `lineDelivery` maps
  * to `emotion_text` so voice-acting direction reaches the emotion model.
  */
-function createIndexTtsGenerator(config: StorySpeechConfig): StorySpeechGenerator {
+function createIndexTtsGenerator(
+  config: StorySpeechConfig,
+): StorySpeechGenerator {
   return {
     async synthesize(request) {
-      const baseUrl = (config.baseUrl?.trim() || 'http://127.0.0.1:3200').replace(
-        /\/$/,
-        '',
-      );
+      const baseUrl = (
+        config.baseUrl?.trim() || 'http://127.0.0.1:3200'
+      ).replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/api/tts`, {
         method: 'POST',
         headers: {
@@ -130,9 +128,14 @@ function createIndexTtsGenerator(config: StorySpeechConfig): StorySpeechGenerato
   };
 }
 
-async function readTtsErrorDetail(response: Response): Promise<string | undefined> {
+async function readTtsErrorDetail(
+  response: Response,
+): Promise<string | undefined> {
   try {
-    const payload = (await response.json()) as { detail?: string; message?: string };
+    const payload = (await response.json()) as {
+      detail?: string;
+      message?: string;
+    };
     return payload.detail ?? payload.message;
   } catch {
     return undefined;

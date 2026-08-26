@@ -45,9 +45,11 @@ export function validateAssetUpload(input: {
 }
 
 export function assetObjectKey(input: {
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   assetId: string;
 }): string {
-  return `tenants/${input.tenantId}/story-projects/${input.projectId}/assets/${input.assetId}/original`;
+  return input.tenantId
+    ? `tenants/${input.tenantId}/story-projects/${input.projectId}/assets/${input.assetId}/original`
+    : `personal/story-projects/${input.projectId}/assets/${input.assetId}/original`;
 }

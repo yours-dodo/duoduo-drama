@@ -9,7 +9,7 @@ export type AssetStatus = 'pending_upload' | 'uploaded' | 'failed' | 'deleted';
 
 export interface AssetSnapshot {
   id: string;
-  tenantId: string;
+  tenantId: string | null;
   projectId: string;
   uploadedByUserId: string;
   objectKey: string;
@@ -27,17 +27,22 @@ export interface AssetSnapshot {
 export interface AssetRepository {
   create(asset: AssetSnapshot): Promise<AssetSnapshot>;
   findById(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     assetId: string;
   }): Promise<AssetSnapshot | null>;
+  hasRoleReferences(request: {
+    tenantId: string | null;
+    projectId: string;
+    assetId: string;
+  }): Promise<boolean>;
   listForProject(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     page: KeysetPageRequest;
   }): Promise<KeysetPage<AssetSnapshot>>;
   transition(request: {
-    tenantId: string;
+    tenantId: string | null;
     projectId: string;
     assetId: string;
     from: AssetStatus | readonly AssetStatus[];

@@ -14,29 +14,20 @@ import type {
 import { ApplicationError } from './application-error.js';
 
 class ProbeRequest {
-  @IsString()
-  @IsNotEmpty()
   title!: string;
 }
 
-@Controller('platform-probes')
 class PlatformProbeController {
-  @Version('1')
-  @Post()
-  create(@Body() body: ProbeRequest): ProbeRequest {
+  create(body: ProbeRequest): ProbeRequest {
     return body;
   }
 
-  @Version('1')
-  @Get('context')
-  context(
-    @Req() requestContext: { cookies?: Record<string, string> },
-  ): Record<string, string | null> {
+  context(requestContext: {
+    cookies?: Record<string, string>;
+  }): Record<string, string | null> {
     return { session: requestContext.cookies?.session ?? null };
   }
 
-  @Version('1')
-  @Get('application-error')
   applicationError(): never {
     throw new ApplicationError({
       code: 'PROBE_NOT_FOUND',
@@ -46,12 +37,41 @@ class PlatformProbeController {
     });
   }
 
-  @Version('1')
-  @Get('unexpected-error')
   unexpectedError(): never {
     throw new Error('database-password=must-never-leak');
   }
 }
+
+// Keep this probe's metadata explicit so the test remains compatible with
+// Vitest's current TypeScript parser, which does not parse decorator syntax
+// in test modules. These calls are equivalent to the decorators above.
+IsString()(ProbeRequest.prototype, 'title');
+IsNotEmpty()(ProbeRequest.prototype, 'title');
+Controller('platform-probes')(PlatformProbeController);
+Body()(PlatformProbeController.prototype, 'create', 0);
+Req()(PlatformProbeController.prototype, 'context', 0);
+
+function applyMethodDecorators(
+  method: string,
+  ...decorators: MethodDecorator[]
+) {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    PlatformProbeController.prototype,
+    method,
+  );
+  for (const decorator of decorators) {
+    decorator(PlatformProbeController.prototype, method, descriptor!);
+  }
+}
+
+applyMethodDecorators('create', Post(), Version('1'));
+applyMethodDecorators('context', Get('context'), Version('1'));
+applyMethodDecorators(
+  'applicationError',
+  Get('application-error'),
+  Version('1'),
+);
+applyMethodDecorators('unexpectedError', Get('unexpected-error'), Version('1'));
 
 Reflect.defineMetadata(
   'design:paramtypes',

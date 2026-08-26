@@ -1,4 +1,8 @@
-import { canArchiveProject } from '../../../domain/story/project-access-policy.js';
+import {
+  canArchiveProject,
+  canRestoreProject,
+} from '../../../domain/story/project-access-policy.js';
+import type { ProjectCollaboratorRole } from '../../../domain/story/project-collaborator.js';
 import { StoryProject } from '../../../domain/story/story-project.js';
 import type { AuditRepository } from '../../audit/ports/audit-repository.js';
 import {
@@ -57,6 +61,7 @@ export class ArchiveStoryProject {
         },
       );
       requireProjectView(access.project, access.subject);
+      const now = await this.databaseClock.now();
       if (
         access.project.status === 'active' &&
         !canArchiveProject(access.project, access.subject)
@@ -64,13 +69,16 @@ export class ArchiveStoryProject {
         throw new StoryProjectNotFoundError();
       }
       if (access.project.status === 'archived') {
-        return { project: projectOutput(access.project, accessOutput(access)) };
+        return {
+          project: projectOutput(access.project, accessOutput(access, now)),
+        };
       }
 
       const project = StoryProject.restore(access.project);
-      const now = await this.databaseClock.now();
       if (!project.archive(input.expectedRevision, now)) {
-        return { project: projectOutput(access.project, accessOutput(access)) };
+        return {
+          project: projectOutput(access.project, accessOutput(access, now)),
+        };
       }
       const archived = project.toSnapshot();
       await this.projects.update(archived);
@@ -87,27 +95,42 @@ export class ArchiveStoryProject {
         requestId: input.requestId,
         occurredAt: now,
       });
-      return { project: projectOutput(archived, accessOutput(access)) };
+      return {
+        project: projectOutput(archived, accessOutput(access, now, archived)),
+      };
     });
   }
 }
 
-function accessOutput(access: {
-    project: { visibility: 'team' | 'private'; ownerUserId: string };
+function accessOutput(
+  access: {
+    project: {
+      visibility: 'team' | 'private';
+      ownerUserId: string;
+      status: 'active' | 'archived';
+      purgeAt?: Date | null;
+      purgeStartedAt?: Date | null;
+    };
     subject: {
       collaborator: boolean;
-      collaboratorRole?: string | null;
+      collaboratorRole?: ProjectCollaboratorRole | null;
       role: 'admin' | 'member' | null;
-    userId: string;
-  };
-}) {
+      userId: string;
+    };
+  },
+  now: Date,
+  project = access.project,
+) {
   return {
     collaborator: access.subject.collaborator,
     collaboratorRole: access.subject.collaboratorRole ?? null,
     canEdit: false,
     canManageCollaborators:
-      access.project.visibility === 'team' &&
+      project.status === 'active' &&
+      project.visibility === 'team' &&
       (access.subject.role === 'admin' ||
-        access.project.ownerUserId === access.subject.userId),
+        project.ownerUserId === access.subject.userId),
+    canArchive: false,
+    canRestore: canRestoreProject(project, access.subject, now),
   };
 }

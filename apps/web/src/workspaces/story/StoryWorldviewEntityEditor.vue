@@ -117,7 +117,7 @@ function saveEntity() {
         <p>字段用于 AI 与检索，补充说明承载叙事语境。</p>
       </div>
       <div class="worldview-editor-save">
-        <span>{{ status }}</span>
+        <span role="status" aria-live="polite">{{ status }}</span>
         <button type="submit">保存详情</button>
       </div>
     </header>

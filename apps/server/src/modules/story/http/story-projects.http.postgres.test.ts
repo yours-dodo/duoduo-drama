@@ -138,7 +138,7 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
     expect(persisted.rows[0]).toEqual({ module_count: '4', job_count: '1' });
   });
 
-  it('keeps private projects hidden, revokes collaborators, and audits admin access', async () => {
+  it('requires an explicit space move before changing project visibility', async () => {
     const auth = (builder: request.Test) =>
       builder.set('Cookie', `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}`);
     const write = (builder: request.Test) =>
@@ -163,50 +163,19 @@ describe.skipIf(!databaseUrl)('story project HTTP PostgreSQL flow', () => {
       ),
     ).expect(200);
 
-    await write(
-      request(app.getHttpServer()).patch(`${collection}/${projectId}`),
-    )
-      .send({ visibility: 'private', expectedRevision: 1 })
-      .expect(200);
-    await auth(
-      request(app.getHttpServer()).get(
-        `${collection}/${projectId}/collaborators`,
-      ),
-    ).expect(200, { items: [], nextCursor: null });
-
-    currentUserId = WRITER_ID;
-    currentEmail = 'writer@example.com';
-    await auth(
-      request(app.getHttpServer()).get(`${collection}/${projectId}`),
-    ).expect(404);
-    await auth(request(app.getHttpServer()).get(collection)).expect(200, {
-      items: [],
-      nextCursor: null,
-    });
-
-    currentUserId = ADMIN_ID;
-    currentEmail = 'admin@example.com';
-    await auth(
-      request(app.getHttpServer()).get(`${collection}/${projectId}`),
-    ).expect(200);
-    const audit = await auth(
-      request(app.getHttpServer()).get(
-        `${collection}/${projectId}/audit-records`,
-      ),
-    ).expect(200);
-    expect(
-      audit.body.items.some(
-        (item: { action: string }) =>
-          item.action === 'STORY_PROJECT_PRIVATE_VIEWED',
-      ),
-    ).toBe(true);
-
     const conflict = await write(
       request(app.getHttpServer()).patch(`${collection}/${projectId}`),
     )
-      .send({ title: '过期修改', expectedRevision: 1 })
+      .send({ visibility: 'private', expectedRevision: 1 })
       .expect(409);
-    expect(conflict.body.error.code).toBe('STORY_PROJECT_REVISION_CONFLICT');
+    expect(conflict.body.error.code).toBe('STORY_PROJECT_SPACE_MOVE_REQUIRED');
+    const collaborators = await auth(
+      request(app.getHttpServer()).get(
+        `${collection}/${projectId}/collaborators`,
+      ),
+    ).expect(200);
+    expect(collaborators.body.items).toHaveLength(1);
+    expect(collaborators.body.nextCursor).toBeNull();
   });
 
   it('rejects a project identifier from another tenant as not found', async () => {

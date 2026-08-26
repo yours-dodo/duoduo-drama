@@ -109,4 +109,34 @@ describe('StoryArtifactVersion', () => {
       }),
     ).toThrow(StoryArtifactVersionStatusInvalidError);
   });
+
+  it('updates a draft in place for debounced structured-editor saves', () => {
+    const version = StoryArtifactVersion.createDraft({
+      id: 'version-id',
+      tenantId: null,
+      artifactId: 'artifact-id',
+      versionNumber: 1,
+      content: '{"schemaVersion":"narrative-planning.v1"}',
+      contentFormat: 'json',
+      sourceType: 'user',
+      sourceMessageId: null,
+      generationRequestId: null,
+      createdByUserId: 'user-id',
+      createdAt: CREATED_AT,
+    });
+
+    expect(
+      version.updateDraftContent(
+        ' {"schemaVersion":"narrative-planning.v1","v":2} ',
+        'json',
+      ),
+    ).toBe(true);
+    expect(version.toSnapshot()).toMatchObject({
+      id: 'version-id',
+      versionNumber: 1,
+      content: '{"schemaVersion":"narrative-planning.v1","v":2}',
+      contentFormat: 'json',
+      status: 'draft',
+    });
+  });
 });

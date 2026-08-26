@@ -32,7 +32,9 @@ export class StoryScriptsController {
   async generate(@Body() body: GenerateStoryScriptBody) {
     if (typeof body.userPrompt !== 'string') {
       throw new HttpException(
-        { error: { code: 'protocol_error', message: 'userPrompt is required' } },
+        {
+          error: { code: 'protocol_error', message: 'userPrompt is required' },
+        },
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

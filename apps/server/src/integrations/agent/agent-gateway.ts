@@ -3,6 +3,8 @@ import type {
   AgentGateway,
   StoryGenerationAgentRequest,
   StoryGenerationAgentResult,
+  StoryTagGenerationRequest,
+  StoryTagGenerationResult,
 } from './agent-contracts.js';
 
 export const AGENT_GATEWAY = Symbol('AGENT_GATEWAY');
@@ -18,4 +20,6 @@ export type {
   AgentGateway,
   StoryGenerationAgentRequest,
   StoryGenerationAgentResult,
+  StoryTagGenerationRequest,
+  StoryTagGenerationResult,
 };

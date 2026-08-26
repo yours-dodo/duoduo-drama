@@ -8,11 +8,7 @@ import { StorySpeechService } from './story-speech.service.js';
 import { StoryVideoService } from './story-video.service.js';
 
 export type StoryTaskStage =
-  | 'queued'
-  | 'script'
-  | 'images'
-  | 'speech'
-  | 'video';
+  'queued' | 'script' | 'images' | 'speech' | 'video';
 
 export type StoryTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
@@ -38,7 +34,7 @@ export interface StoryTaskSnapshot {
   updatedAt: number;
 }
 
-interface StoryTask extends StoryTaskSnapshot {}
+type StoryTask = StoryTaskSnapshot;
 
 @Injectable()
 export class StoryTaskService implements OnModuleDestroy {

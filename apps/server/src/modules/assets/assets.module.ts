@@ -8,6 +8,7 @@ import {
 } from '../../config/server-config.js';
 import { DatabaseClock } from '../../platform/database/database-clock.js';
 import { DatabaseModule } from '../../platform/database/database.module.js';
+import { TransactionRunner } from '../../platform/database/transaction-runner.js';
 import {
   OBJECT_STORAGE,
   type ObjectStorage,
@@ -28,10 +29,12 @@ import {
   type TeamMembershipRepository,
 } from '../tenancy/ports/team-membership-repository.js';
 import { CompleteAssetUpload } from './application/complete-asset-upload.js';
+import { CreateAssetDownloadUrl } from './application/create-asset-download-url.js';
 import { CreateAssetUploadUrl } from './application/create-asset-upload-url.js';
 import { DeleteAsset } from './application/delete-asset.js';
 import { ListProjectAssets } from './application/list-project-assets.js';
 import { AssetsController } from './http/assets.controller.js';
+import { MeAssetsController } from './http/me-assets.controller.js';
 import { PrismaAssetRepository } from './infrastructure/prisma-asset.repository.js';
 import {
   ASSET_REPOSITORY,
@@ -40,10 +43,37 @@ import {
 
 @Module({
   imports: [DatabaseModule, IdentityModule, ObjectStorageModule, StoryModule],
-  controllers: [AssetsController],
+  controllers: [AssetsController, MeAssetsController],
   providers: [
     PrismaAssetRepository,
     { provide: ASSET_REPOSITORY, useExisting: PrismaAssetRepository },
+    {
+      provide: CreateAssetDownloadUrl,
+      inject: [
+        ASSET_REPOSITORY,
+        STORY_PROJECT_REPOSITORY,
+        TEAM_MEMBERSHIP_REPOSITORY,
+        PROJECT_COLLABORATOR_REPOSITORY,
+        OBJECT_STORAGE,
+        OBJECT_STORAGE_CONFIG,
+      ],
+      useFactory: (
+        assets: AssetRepository,
+        projects: StoryProjectRepository,
+        memberships: TeamMembershipRepository,
+        collaborators: ProjectCollaboratorRepository,
+        objectStorage: ObjectStorage,
+        objectStorageConfig: ObjectStorageConfig,
+      ) =>
+        new CreateAssetDownloadUrl(
+          assets,
+          projects,
+          memberships,
+          collaborators,
+          objectStorage,
+          objectStorageConfig,
+        ),
+    },
     {
       provide: CreateAssetUploadUrl,
       inject: [
@@ -125,6 +155,7 @@ import {
         TEAM_MEMBERSHIP_REPOSITORY,
         PROJECT_COLLABORATOR_REPOSITORY,
         OBJECT_STORAGE,
+        TransactionRunner,
       ],
       useFactory: (
         assets: AssetRepository,
@@ -132,6 +163,7 @@ import {
         memberships: TeamMembershipRepository,
         collaborators: ProjectCollaboratorRepository,
         objectStorage: ObjectStorage,
+        transactions: TransactionRunner,
       ) =>
         new DeleteAsset(
           assets,
@@ -139,6 +171,7 @@ import {
           memberships,
           collaborators,
           objectStorage,
+          transactions,
         ),
     },
   ],

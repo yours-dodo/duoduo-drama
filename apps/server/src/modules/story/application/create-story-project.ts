@@ -101,6 +101,8 @@ export class CreateStoryProject {
             canEdit: true,
             canManageCollaborators:
               project.spaceKind === 'team' && project.visibility === 'team',
+            canArchive: true,
+            canRestore: false,
           }),
           modules: modules
             .sort(
@@ -173,6 +175,8 @@ export class CreateStoryProject {
           canEdit: true,
           canManageCollaborators:
             project.spaceKind === 'team' && project.visibility === 'team',
+          canArchive: true,
+          canRestore: false,
         }),
         modules: modules.map(artifactOutput),
       };
