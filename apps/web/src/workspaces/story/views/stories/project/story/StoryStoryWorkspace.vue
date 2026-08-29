@@ -21,9 +21,24 @@ const volumes: StoryVolume[] = [
     number: '卷一',
     title: '雾城未眠',
     chapters: [
-      { id: 'chapter-01', number: '01', title: '雨夜来信', summary: '林遥收到一封来自十年前的信。' },
-      { id: 'chapter-02', number: '02', title: '被替换的档案', summary: '旧档案里出现了不属于任何人的签名。' },
-      { id: 'chapter-03', number: '03', title: '地下储存库', summary: '林遥第一次看见城市不愿记住的部分。' },
+      {
+        id: 'chapter-01',
+        number: '01',
+        title: '雨夜来信',
+        summary: '林遥收到一封来自十年前的信。',
+      },
+      {
+        id: 'chapter-02',
+        number: '02',
+        title: '被替换的档案',
+        summary: '旧档案里出现了不属于任何人的签名。',
+      },
+      {
+        id: 'chapter-03',
+        number: '03',
+        title: '地下储存库',
+        summary: '林遥第一次看见城市不愿记住的部分。',
+      },
     ],
   },
   {
@@ -31,8 +46,18 @@ const volumes: StoryVolume[] = [
     number: '卷二',
     title: '真相的代价',
     chapters: [
-      { id: 'chapter-04', number: '04', title: '周砚的证词', summary: '一个旧调查员终于决定说出当年的缺口。' },
-      { id: 'chapter-05', number: '05', title: '公开之前', summary: '林遥必须决定谁应该先知道真相。' },
+      {
+        id: 'chapter-04',
+        number: '04',
+        title: '周砚的证词',
+        summary: '一个旧调查员终于决定说出当年的缺口。',
+      },
+      {
+        id: 'chapter-05',
+        number: '05',
+        title: '公开之前',
+        summary: '林遥必须决定谁应该先知道真相。',
+      },
     ],
   },
 ];
@@ -59,12 +84,21 @@ const editorContents = reactive({ ...initialContents });
 const editorStatus = ref('已保存到当前原型');
 const editorElement = ref<HTMLElement | null>(null);
 
-const currentChapter = computed(() =>
-  volumes.flatMap((volume) => volume.chapters).find((chapter) => chapter.id === currentChapterId.value) ?? volumes[0].chapters[0],
+const currentChapter = computed(
+  () =>
+    volumes
+      .flatMap((volume) => volume.chapters)
+      .find((chapter) => chapter.id === currentChapterId.value) ??
+    volumes[0].chapters[0],
 );
-const totalChapters = computed(() => volumes.reduce((total, volume) => total + volume.chapters.length, 0));
-const currentVolume = computed(() =>
-  volumes.find((volume) => volume.chapters.some((chapter) => chapter.id === currentChapterId.value)) ?? volumes[0],
+const totalChapters = computed(() =>
+  volumes.reduce((total, volume) => total + volume.chapters.length, 0),
+);
+const currentVolume = computed(
+  () =>
+    volumes.find((volume) =>
+      volume.chapters.some((chapter) => chapter.id === currentChapterId.value),
+    ) ?? volumes[0],
 );
 
 function selectChapter(chapterId: string) {
@@ -91,12 +125,17 @@ function formatEditor(command: string, value?: string) {
 </script>
 
 <template>
-  <section class="story-story-workspace" aria-labelledby="story-story-workspace-title">
+  <section
+    class="story-story-workspace"
+    aria-labelledby="story-story-workspace-title"
+  >
     <header class="story-story-header">
       <div>
         <span class="story-story-kicker">生产结果 / STORY</span>
         <h2 id="story-story-workspace-title">故事正文</h2>
-        <p>沿着已经确认的结构推进正文，让每一章都保留清晰的节奏和可继续编辑的空间。</p>
+        <p>
+          沿着已经确认的结构推进正文，让每一章都保留清晰的节奏和可继续编辑的空间。
+        </p>
       </div>
       <div class="story-story-total">
         <strong>{{ volumes.length }}</strong>
@@ -112,26 +151,47 @@ function formatEditor(command: string, value?: string) {
         </header>
 
         <div class="story-story-volume-list">
-          <section v-for="volume in volumes" :key="volume.id" class="story-story-volume">
-            <button class="story-story-volume-header" type="button" :aria-expanded="expandedVolumes[volume.id]" @click="toggleVolume(volume.id)">
+          <section
+            v-for="volume in volumes"
+            :key="volume.id"
+            class="story-story-volume"
+          >
+            <button
+              class="story-story-volume-header"
+              type="button"
+              :aria-expanded="expandedVolumes[volume.id]"
+              @click="toggleVolume(volume.id)"
+            >
               <span>
                 <small>{{ volume.number }}</small>
                 <strong>{{ volume.title }}</strong>
               </span>
-              <span class="story-story-volume-chevron" :class="{ 'is-open': expandedVolumes[volume.id] }" aria-hidden="true">⌄</span>
+              <span
+                class="story-story-volume-chevron"
+                :class="{ 'is-open': expandedVolumes[volume.id] }"
+                aria-hidden="true"
+                >⌄</span
+              >
             </button>
 
-            <div v-if="expandedVolumes[volume.id]" class="story-story-chapter-list">
+            <div
+              v-if="expandedVolumes[volume.id]"
+              class="story-story-chapter-list"
+            >
               <button
                 v-for="chapter in volume.chapters"
                 :key="chapter.id"
                 class="story-story-chapter-item"
                 :class="{ 'is-active': currentChapterId === chapter.id }"
                 type="button"
-                :aria-current="currentChapterId === chapter.id ? 'page' : undefined"
+                :aria-current="
+                  currentChapterId === chapter.id ? 'page' : undefined
+                "
                 @click="selectChapter(chapter.id)"
               >
-                <span class="story-story-chapter-number">{{ chapter.number }}</span>
+                <span class="story-story-chapter-number">{{
+                  chapter.number
+                }}</span>
                 <span>
                   <strong>{{ chapter.title }}</strong>
                   <small>{{ chapter.summary }}</small>
@@ -145,18 +205,61 @@ function formatEditor(command: string, value?: string) {
       <article class="story-story-editor-panel" aria-label="故事正文编辑器">
         <header class="story-story-editor-header">
           <div>
-            <span class="story-story-label">{{ currentVolume.number }} / {{ currentVolume.title }}</span>
-            <h3>第 {{ currentChapter.number }} 章 · {{ currentChapter.title }}</h3>
+            <span class="story-story-label"
+              >{{ currentVolume.number }} / {{ currentVolume.title }}</span
+            >
+            <h3>
+              第 {{ currentChapter.number }} 章 · {{ currentChapter.title }}
+            </h3>
           </div>
           <span class="story-story-editor-state">{{ editorStatus }}</span>
         </header>
 
-        <div class="story-story-editor-toolbar" role="toolbar" aria-label="正文富文本工具栏">
-          <button type="button" title="加粗" aria-label="加粗" @click="formatEditor('bold')"><strong>B</strong></button>
-          <button type="button" title="斜体" aria-label="斜体" @click="formatEditor('italic')"><em>I</em></button>
-          <button type="button" title="二级标题" aria-label="二级标题" @click="formatEditor('formatBlock', '<h2>')">H2</button>
-          <button type="button" title="项目列表" aria-label="项目列表" @click="formatEditor('insertUnorderedList')">• —</button>
-          <button type="button" title="引用" aria-label="引用" @click="formatEditor('formatBlock', '<blockquote>')">“ ”</button>
+        <div
+          class="story-story-editor-toolbar"
+          role="toolbar"
+          aria-label="正文富文本工具栏"
+        >
+          <button
+            type="button"
+            title="加粗"
+            aria-label="加粗"
+            @click="formatEditor('bold')"
+          >
+            <strong>B</strong>
+          </button>
+          <button
+            type="button"
+            title="斜体"
+            aria-label="斜体"
+            @click="formatEditor('italic')"
+          >
+            <em>I</em>
+          </button>
+          <button
+            type="button"
+            title="二级标题"
+            aria-label="二级标题"
+            @click="formatEditor('formatBlock', '<h2>')"
+          >
+            H2
+          </button>
+          <button
+            type="button"
+            title="项目列表"
+            aria-label="项目列表"
+            @click="formatEditor('insertUnorderedList')"
+          >
+            • —
+          </button>
+          <button
+            type="button"
+            title="引用"
+            aria-label="引用"
+            @click="formatEditor('formatBlock', '<blockquote>')"
+          >
+            “ ”
+          </button>
         </div>
 
         <div

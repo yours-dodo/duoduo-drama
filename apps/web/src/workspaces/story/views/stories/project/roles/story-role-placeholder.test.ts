@@ -4,7 +4,7 @@ import {
   storyEraFromWorldview,
   storyRolePlaceholderUrl,
 } from './story-role-placeholder';
-import { createWorldviewKnowledgeGraphSeed } from './story-worldview-ontology';
+import { createWorldviewKnowledgeGraphSeed } from '../worldview/story-worldview-ontology';
 
 describe('story role placeholders', () => {
   it('reads the first configured location era and defaults to modern', () => {

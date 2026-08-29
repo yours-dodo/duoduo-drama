@@ -10,7 +10,7 @@ import {
   updateStoryProject,
   type StoryProject,
   type StoryProjectEra,
-} from './story-api';
+} from '../../../../api/story-api';
 
 const route = useRoute();
 const projectId = computed(() => String(route.params.projectId ?? ''));

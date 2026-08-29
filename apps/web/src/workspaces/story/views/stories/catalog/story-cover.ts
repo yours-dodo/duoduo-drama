@@ -1,4 +1,4 @@
-import type { StoryProject } from './story-api';
+import type { StoryProject } from '../../../api/story-api';
 
 export const storyCoverVariants = [
   'cover-a',

@@ -7,14 +7,14 @@ import {
   routerViewLocationKey,
 } from 'vue-router';
 
-import { createStoryRouter, toStoryRoutePath } from './router';
+import { createStoryRouter, toStoryRoutePath } from '../../routes/router';
 import {
   createStoryWorldviewStateRegistry,
   storyWorldviewStateRegistryKey,
-} from './story-worldview-state';
-import StoryChatPanel from './StoryChatPanel.vue';
-import StorySidebar from './StorySidebar.vue';
-import StoryWorkspaceHeader from './StoryWorkspaceHeader.vue';
+} from './project/worldview/story-worldview-state';
+import StoryChatPanel from './shared/StoryChatPanel.vue';
+import StorySidebar from './shared/StorySidebar.vue';
+import StoryWorkspaceHeader from './shared/StoryWorkspaceHeader.vue';
 
 const props = defineProps<{
   initialPath?: string;

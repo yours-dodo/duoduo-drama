@@ -2,11 +2,11 @@
 import { computed, onMounted, onUnmounted, ref, inject, watch } from 'vue';
 import { routerKey, type Router } from 'vue-router';
 
-import { ApiError } from '../../lib/server-api/api-error';
+import { ApiError } from '../../../../../lib/server-api/api-error';
 import {
   getSession,
   type SessionSnapshot,
-} from '../../lib/server-api/session-api';
+} from '../../../../../lib/server-api/session-api';
 import {
   appendStoryMessage,
   appendPersonalStoryMessage,
@@ -35,9 +35,9 @@ import {
   type StoryArtifactVersion,
   type StoryGenerationPipelineStage,
   type StoryProject,
-} from './story-api';
-import { toStoryRoutePath } from './router';
-import StoryStatusBar from './components/StoryStatusBar.vue';
+} from '../../../api/story-api';
+import { toStoryRoutePath } from '../../../routes/router';
+import StoryStatusBar from '../shared/StoryStatusBar.vue';
 
 type StorySpeechRecognition = {
   lang: string;

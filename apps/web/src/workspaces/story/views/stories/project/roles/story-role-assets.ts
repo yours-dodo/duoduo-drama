@@ -4,7 +4,7 @@ import type {
   StoryRoleCategory,
   StoryRoleAppearanceFrequency,
   StoryRoleGender,
-} from './story-api';
+} from '../../../../api/story-api';
 
 export const storyRoleCategoryOptions: ReadonlyArray<{
   value: StoryRoleCategory;
@@ -68,4 +68,4 @@ function cloneRole(role: StoryRoleAsset): StoryRoleAsset {
   };
 }
 
-export type { StoryRoleAsset } from './story-api';
+export type { StoryRoleAsset } from '../../../../api/story-api';

@@ -2,12 +2,12 @@
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
-import { isStoryModule, type StoryModule } from './router';
-import StoryBasicInfoWorkspace from './StoryBasicInfoWorkspace.vue';
-import StoryOutlineWorkspace from './StoryOutlineWorkspace.vue';
-import StoryRolesWorkspace from './StoryRolesWorkspace.vue';
-import StoryStoryWorkspace from './StoryStoryWorkspace.vue';
-import StoryWorldviewWorkspace from './StoryWorldviewWorkspace.vue';
+import { isStoryModule, type StoryModule } from '../../../routes/router';
+import StoryBasicInfoWorkspace from './basic/StoryBasicInfoWorkspace.vue';
+import StoryOutlineWorkspace from './outline/StoryOutlineWorkspace.vue';
+import StoryRolesWorkspace from './roles/StoryRolesWorkspace.vue';
+import StoryStoryWorkspace from './story/StoryStoryWorkspace.vue';
+import StoryWorldviewWorkspace from './worldview/StoryWorldviewWorkspace.vue';
 
 type StoryModuleDefinition = {
   label: string;
@@ -90,6 +90,7 @@ const currentModule = computed<StoryModule>(() => {
   const value = String(route.params.module ?? route.meta.module ?? 'outline');
   return isStoryModule(value) ? value : 'outline';
 });
+
 const currentTitleId = computed(() => {
   if (currentModule.value === 'worldview') return undefined;
   if (currentModule.value === 'outline') return undefined;

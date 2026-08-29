@@ -5,7 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   createProjectStoryRoleAsset,
   listProjectStoryRoleAssets,
-} from './story-role-api';
+} from '../../../../api/story-role-api';
 import {
   groupStoryRoleAssets,
   storyRoleCategoryLabel,
@@ -15,8 +15,11 @@ import {
   storyEraFromWorldview,
   storyRolePlaceholderUrl,
 } from './story-role-placeholder';
-import { useStoryWorldviewStateRegistry } from './story-worldview-state';
-import type { StoryRoleAsset, StoryRoleCategory } from './story-api';
+import { useStoryWorldviewStateRegistry } from '../worldview/story-worldview-state';
+import type {
+  StoryRoleAsset,
+  StoryRoleCategory,
+} from '../../../../api/story-api';
 
 const route = useRoute();
 const router = useRouter();

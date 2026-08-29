@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 
-import { ApiError } from '../../lib/server-api/api-error';
+import { ApiError } from '../../../../../../lib/server-api/api-error';
 import {
   archiveProjectStoryRoleAsset,
   completePersonalStoryAssetUpload,
@@ -12,7 +12,7 @@ import {
   getProjectStoryRoleAsset,
   uploadStoryAssetFile,
   updateProjectStoryRoleAsset,
-} from './story-role-api';
+} from '../../../../api/story-role-api';
 import {
   MAX_COVER_ASSET_BYTES,
   isSupportedCoverContentType,
@@ -29,7 +29,7 @@ import {
   storyEraFromWorldview,
   storyRolePlaceholderUrl,
 } from './story-role-placeholder';
-import { useStoryWorldviewStateRegistry } from './story-worldview-state';
+import { useStoryWorldviewStateRegistry } from '../worldview/story-worldview-state';
 
 const route = useRoute();
 const router = useRouter();
