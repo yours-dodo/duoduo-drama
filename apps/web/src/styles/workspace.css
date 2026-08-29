@@ -13485,6 +13485,40 @@ html[data-story-theme='light']
   outline-offset: 0;
 }
 
+.story-narrative-save-state {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  color: var(--narrative-muted);
+  background: color-mix(in srgb, var(--narrative-paper) 88%, #fff);
+  font: inherit;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+
+.story-narrative-save-state:disabled {
+  opacity: 1;
+}
+
+.story-narrative-save-state.is-error {
+  border-color: color-mix(
+    in srgb,
+    var(--narrative-accent) 52%,
+    var(--narrative-line)
+  );
+  color: var(--narrative-accent);
+  cursor: pointer;
+}
+
+.story-narrative-save-state.is-error:hover,
+.story-narrative-save-state.is-error:focus-visible {
+  background: color-mix(in srgb, var(--narrative-accent) 8%, transparent);
+  outline: 2px solid
+    color-mix(in srgb, var(--narrative-accent) 20%, transparent);
+  outline-offset: 0;
+}
+
 .story-narrative-view-toolbar strong {
   display: block;
   margin-top: 5px;
@@ -13528,7 +13562,14 @@ html[data-story-theme='light']
 
 @media (max-width: 700px) {
   .story-narrative-navigator {
-    display: none;
+    display: block;
+    max-height: 240px;
+    border-right: 0;
+    border-bottom: 1px solid var(--narrative-line);
+  }
+
+  .story-narrative-navigator.is-collapsed {
+    max-height: 68px;
   }
 
   .story-narrative-columns {

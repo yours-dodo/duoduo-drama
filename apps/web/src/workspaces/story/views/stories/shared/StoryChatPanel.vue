@@ -27,7 +27,12 @@ const message = ref('');
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
-              <path d="M15.8 14c0 1.6-1.3 2.8-2.8 2.8h-1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+              <path
+                d="M15.8 14c0 1.6-1.3 2.8-2.8 2.8h-1.2"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
             </svg>
           </span>
           <span>转为有声小说</span>
@@ -41,8 +46,22 @@ const message = ref('');
         >
           <span class="story-editor-chat-action-icon" aria-hidden="true">
             <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
-              <rect x="2.8" y="4.5" width="14.4" height="11" rx="1.2" stroke="currentColor" stroke-width="1.4" />
-              <path d="m6.3 4.5 2 3.2M10 4.5l2 3.2M13.7 4.5l2 3.2M6.5 10.3v3.4l3-1.7-3-1.7Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+              <rect
+                x="2.8"
+                y="4.5"
+                width="14.4"
+                height="11"
+                rx="1.2"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <path
+                d="m6.3 4.5 2 3.2M10 4.5l2 3.2M13.7 4.5l2 3.2M6.5 10.3v3.4l3-1.7-3-1.7Z"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </span>
           <span>推进至短剧</span>
@@ -69,8 +88,19 @@ const message = ref('');
       <div class="story-editor-chat-input-footer">
         <span>Enter 发送</span>
         <button type="submit" aria-label="发送消息" title="发送消息">
-          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true">
-            <path d="m3.5 3.8 13 6.2-13 6.2 2.1-5.3 6.1-.9-6.1-.9-2.1-5.3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+          <svg
+            viewBox="0 0 20 20"
+            width="18"
+            height="18"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="m3.5 3.8 13 6.2-13 6.2 2.1-5.3 6.1-.9-6.1-.9-2.1-5.3Z"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linejoin="round"
+            />
           </svg>
         </button>
       </div>

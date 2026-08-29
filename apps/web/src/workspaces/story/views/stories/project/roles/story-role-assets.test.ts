@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { StoryRoleAsset } from './story-api';
+import type { StoryRoleAsset } from '../../../../api/story-api';
 import { groupStoryRoleAssets } from './story-role-assets';
 
 describe('story role asset presentation', () => {

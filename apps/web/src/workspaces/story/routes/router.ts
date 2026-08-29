@@ -42,19 +42,21 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'stories-catalog',
-    component: () => import('./StoryCatalogView.vue'),
+    component: () => import('../views/stories/catalog/StoryCatalogView.vue'),
     meta: { page: 'catalog' } satisfies StoryRouteMeta,
   },
   {
     path: '/immersive',
     name: 'stories-immersive',
-    component: () => import('./StoryImmersiveView.vue'),
+    component: () =>
+      import('../views/stories/immersive/StoryImmersiveView.vue'),
     meta: { page: 'immersive' } satisfies StoryRouteMeta,
   },
   {
     path: '/templates',
     name: 'stories-templates',
-    component: () => import('./StoryTemplatesView.vue'),
+    component: () =>
+      import('../views/stories/templates/StoryTemplatesView.vue'),
     meta: { page: 'templates' } satisfies StoryRouteMeta,
   },
   {
@@ -66,7 +68,7 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/immersive/:projectId/:module',
     name: 'stories-immersive-project-module',
-    component: () => import('./StoryProjectView.vue'),
+    component: () => import('../views/stories/project/StoryProjectView.vue'),
     beforeEnter: (to) => validateProjectModule(to, 'immersive'),
     meta: { mode: 'immersive', page: 'project' } satisfies StoryRouteMeta,
   },
@@ -90,7 +92,8 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/:projectId/worldview/composition/:entityId/edit',
     name: 'stories-project-worldview-entity-edit',
-    component: () => import('./StoryWorldviewEntityEditView.vue'),
+    component: () =>
+      import('../views/stories/project/worldview/StoryWorldviewEntityEditView.vue'),
     meta: {
       mode: 'story',
       page: 'project',
@@ -101,7 +104,7 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/:projectId/worldview/:worldviewView',
     name: 'stories-project-worldview-view',
-    component: () => import('./StoryProjectView.vue'),
+    component: () => import('../views/stories/project/StoryProjectView.vue'),
     beforeEnter: validateWorldviewView,
     meta: {
       mode: 'story',
@@ -112,7 +115,8 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/:projectId/roles/:roleId/edit',
     name: 'stories-project-role-edit',
-    component: () => import('./StoryRoleEditView.vue'),
+    component: () =>
+      import('../views/stories/project/roles/StoryRoleEditView.vue'),
     beforeEnter: validateRoleId,
     meta: {
       mode: 'story',
@@ -123,7 +127,7 @@ export const storyRoutes: RouteRecordRaw[] = [
   {
     path: '/:projectId/:module',
     name: 'stories-project-module',
-    component: () => import('./StoryProjectView.vue'),
+    component: () => import('../views/stories/project/StoryProjectView.vue'),
     beforeEnter: (to) => validateProjectModule(to, 'story'),
     meta: { mode: 'story', page: 'project' } satisfies StoryRouteMeta,
   },

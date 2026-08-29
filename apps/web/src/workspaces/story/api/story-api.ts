@@ -1,4 +1,4 @@
-import { requestJson } from '../../lib/server-api/http-client';
+import { requestJson } from '../../../lib/server-api/http-client';
 
 export type StoryProjectVisibility = 'team' | 'private';
 export type StoryProjectStatus = 'active' | 'archived';
@@ -859,7 +859,7 @@ export function getStoryOutline(scope: {
 
 export function saveStoryOutline(
   scope: { teamId?: string | null; projectId: string },
-  input: { content: string; expectedVersionNumber?: number },
+  input: { content: string; expectedVersionNumber: number },
   idempotencyKey = createIdempotencyKey('save-story-outline'),
 ): Promise<StoryArtifactMutationResponse> {
   const path = scope.teamId

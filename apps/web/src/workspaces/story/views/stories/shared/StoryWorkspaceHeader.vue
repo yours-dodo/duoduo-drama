@@ -55,7 +55,10 @@ function applyTheme(nextTheme: 'light' | 'dark') {
   document.documentElement.dataset.theme = nextTheme;
   document.documentElement.dataset.storyTheme = nextTheme;
   const metaTheme = document.querySelector('meta[name="theme-color"]');
-  metaTheme?.setAttribute('content', nextTheme === 'light' ? '#F5F5F3' : '#080808');
+  metaTheme?.setAttribute(
+    'content',
+    nextTheme === 'light' ? '#F5F5F3' : '#080808',
+  );
   try {
     window.localStorage.setItem('duoduo-theme', nextTheme);
     window.localStorage.setItem('duoduo-story-theme', nextTheme);
@@ -139,7 +142,11 @@ onBeforeUnmount(() => {
     </nav>
 
     <div class="story-header-tools" aria-label="故事工作区工具">
-      <nav v-if="!isProjectRoute" class="story-header-nav" aria-label="故事工作区导航">
+      <nav
+        v-if="!isProjectRoute"
+        class="story-header-nav"
+        aria-label="故事工作区导航"
+      >
         <a href="/dramas">短剧工作台</a>
         <a href="/works">作品广场</a>
         <a href="/collaboration">联合创作</a>
@@ -152,9 +159,26 @@ onBeforeUnmount(() => {
         :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'"
         @click="toggleTheme"
       >
-        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
-          <circle cx="10" cy="10" r="3.2" stroke="currentColor" stroke-width="1.4" />
-          <path d="M10 2.2v2M10 15.8v2M17.8 10h-2M4.2 10h-2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9 4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          width="16"
+          height="16"
+          fill="none"
+        >
+          <circle
+            cx="10"
+            cy="10"
+            r="3.2"
+            stroke="currentColor"
+            stroke-width="1.4"
+          />
+          <path
+            d="M10 2.2v2M10 15.8v2M17.8 10h-2M4.2 10h-2M15.5 4.5l-1.4 1.4M5.9 14.1l-1.4 1.4M15.5 15.5l-1.4-1.4M5.9 5.9 4.5 4.5"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+          />
         </svg>
         <span class="sr-only">切换主题色</span>
       </button>
@@ -167,8 +191,20 @@ onBeforeUnmount(() => {
         :title="isFullscreen ? '退出全屏展示' : '全屏展示'"
         @click="toggleFullscreen"
       >
-        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
-          <path d="M7 3H3v4M13 3h4v4M17 13v4h-4M3 13v4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          width="16"
+          height="16"
+          fill="none"
+        >
+          <path
+            d="M7 3H3v4M13 3h4v4M17 13v4h-4M3 13v4h4"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
         <span class="sr-only">全屏展示</span>
       </button>
@@ -183,9 +219,26 @@ onBeforeUnmount(() => {
           title="系统教程"
           @click.stop="helpOpen = !helpOpen"
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none">
-            <circle cx="10" cy="10" r="7.2" stroke="currentColor" stroke-width="1.4" />
-            <path d="M7.9 7.6a2.2 2.2 0 1 1 3.4 1.8c-.8.5-1.3.9-1.3 1.8M10 14.4v.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            width="16"
+            height="16"
+            fill="none"
+          >
+            <circle
+              cx="10"
+              cy="10"
+              r="7.2"
+              stroke="currentColor"
+              stroke-width="1.4"
+            />
+            <path
+              d="M7.9 7.6a2.2 2.2 0 1 1 3.4 1.8c-.8.5-1.3.9-1.3 1.8M10 14.4v.1"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
           </svg>
           <span class="sr-only">系统教程</span>
         </button>
@@ -196,10 +249,20 @@ onBeforeUnmount(() => {
           aria-label="系统教程菜单"
           :hidden="!helpOpen"
         >
-          <button class="story-help-menu-item" type="button" role="menuitem" @click="closeHelpMenu">
+          <button
+            class="story-help-menu-item"
+            type="button"
+            role="menuitem"
+            @click="closeHelpMenu"
+          >
             系统教程
           </button>
-          <button class="story-help-menu-item" type="button" role="menuitem" @click="closeHelpMenu">
+          <button
+            class="story-help-menu-item"
+            type="button"
+            role="menuitem"
+            @click="closeHelpMenu"
+          >
             基础知识学习
           </button>
         </div>

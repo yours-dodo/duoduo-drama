@@ -61,7 +61,6 @@ export class SaveStoryOutlineDto {
 
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @IsOptional()
-  expectedVersionNumber?: number;
+  @Min(0)
+  expectedVersionNumber!: number;
 }

@@ -1,9 +1,9 @@
 import {
   getWorldviewEntities,
   type WorldviewKnowledgeGraphState,
-} from './story-worldview-ontology';
+} from '../worldview/story-worldview-ontology';
 
-import type { StoryRoleGender } from './story-api';
+import type { StoryRoleGender } from '../../../../api/story-api';
 
 type StoryRolePlaceholderEra = 'modern' | 'ancient';
 

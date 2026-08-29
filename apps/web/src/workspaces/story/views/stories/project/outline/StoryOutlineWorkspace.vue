@@ -1,22 +1,16 @@
 <script setup lang="ts">
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-} from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import StoryOutlineCanvas from './StoryOutlineCanvas.vue';
 import {
+  createIdempotencyKey,
   getPersonalStoryProject,
   getStoryOutline,
   getStoryProject,
   saveStoryOutline,
   type StoryArtifactVersion,
-} from './story-api';
+} from '../../../../api/story-api';
 import {
   buildOutlineLayout,
   clampOutlinePosition,
@@ -27,9 +21,12 @@ import {
 import {
   OUTLINE_VIEW_LABELS,
   type OutlineMode,
-  type OutlinePositionMap,
   type OutlineView,
 } from './story-outline-types';
+import {
+  StoryOutlineAutosave,
+  type StoryOutlineAutosaveState,
+} from './story-outline-autosave';
 import {
   createNarrativeMaterialPreviewDocument,
   type NarrativeMaterialPreview,
@@ -46,6 +43,12 @@ import {
   type NarrativeCanvasAssetType,
   type NarrativeDocument,
 } from './story-narrative-types';
+import {
+  activateOutlineOwner,
+  clearCanvasPositions,
+  readCanvasPositions,
+  writeCanvasPosition,
+} from './story-outline-workspace-state';
 
 const route = useRoute();
 const projectId = computed(() => String(route.params.projectId ?? ''));
@@ -63,19 +66,41 @@ const currentVersion = ref<StoryArtifactVersion | null>(null);
 const projectTitle = ref('叙事规划');
 const viewState = ref<'loading' | 'ready' | 'error'>('loading');
 const currentView = ref<OutlineView>('timeline-horizontal');
+const activeOwnerId = ref('');
+const canvasActivationSequence = ref(0);
 const selectedId = ref<string | null>(null);
 const focusRequest = ref<{ nodeId: string; sequence: number } | null>(null);
-const saving = ref(false);
+const saveState = ref<StoryOutlineAutosaveState>('idle');
 const navigatorCollapsed = ref(false);
 const materialPreviewRequest = ref<NarrativeMaterialPreviewRequest | null>(
   null,
 );
-const positionOverrides = reactive<OutlinePositionMap>({});
 const viewMode = ref<OutlineMode>('timeline');
-let autosaveTimer: number | null = null;
 let suppressAutosave = true;
-let saveQueued = false;
-let focusSequence = 0;
+
+const autosave = new StoryOutlineAutosave<StoryArtifactVersion>({
+  readContent: () =>
+    document.value && projectId.value ? JSON.stringify(document.value) : null,
+  readExpectedVersionNumber: () => currentVersion.value?.versionNumber ?? 0,
+  createIdempotencyKey: () => createIdempotencyKey('save-story-outline'),
+  save: async (batch) => {
+    const result = await saveStoryOutline(
+      scope.value,
+      {
+        content: batch.content,
+        expectedVersionNumber: batch.expectedVersionNumber,
+      },
+      batch.idempotencyKey,
+    );
+    return result.version;
+  },
+  onSaved: (version) => {
+    currentVersion.value = version;
+  },
+  onStateChange: (state) => {
+    saveState.value = state;
+  },
+});
 
 const viewModeOptions: readonly { value: OutlineMode; label: string }[] = [
   { value: 'timeline', label: '时间轴' },
@@ -85,15 +110,27 @@ const viewOptions = computed(() => getViewsForMode(viewMode.value));
 
 const outlineDocument = computed<OutlineDocument>(() =>
   document.value
-    ? narrativeDocumentToOutline(document.value)
+    ? narrativeDocumentToOutline(
+        document.value,
+        activeOwnerId.value || document.value.rootStoryId,
+      )
     : { nodes: [], edges: [] },
+);
+const positionOverrides = computed(() =>
+  document.value
+    ? readCanvasPositions(
+        document.value.canvases,
+        activeOwnerId.value,
+        currentView.value,
+      )
+    : {},
 );
 const currentLayout = computed(() =>
   buildOutlineLayout(
     outlineDocument.value.nodes,
     outlineDocument.value.edges,
     currentView.value,
-    positionOverrides,
+    positionOverrides.value,
   ),
 );
 const materialPreview = computed<NarrativeMaterialPreview | null>(() => {
@@ -111,7 +148,7 @@ const materialPreview = computed<NarrativeMaterialPreview | null>(() => {
       preview.document.nodes,
       preview.document.edges,
       currentView.value,
-      positionOverrides,
+      positionOverrides.value,
     ),
   };
 });
@@ -125,15 +162,19 @@ const arcsWithChapters = computed(
     })) ?? [],
 );
 const materialDropTargetIds = computed(() =>
-  document.value
-    ? [
-        document.value.story.id,
-        ...document.value.arcs.map((arc) => arc.id),
-        ...document.value.chapters.map((chapter) => chapter.id),
-        ...document.value.beats.map((beat) => beat.id),
-      ]
-    : [],
+  outlineDocument.value.nodes.map((node) => node.id),
 );
+const saveStateLabel = computed(() => {
+  if (saveState.value === 'pending') return '待保存';
+  if (saveState.value === 'saving') return '正在保存';
+  if (saveState.value === 'saved') {
+    return currentVersion.value
+      ? `已保存 · v${currentVersion.value.versionNumber}`
+      : '已保存';
+  }
+  if (saveState.value === 'error') return '保存失败 · 点击重试';
+  return '';
+});
 
 watch(viewMode, (mode) => {
   currentView.value = getDefaultView(mode);
@@ -146,14 +187,14 @@ onMounted(() => {
   void loadOutline();
 });
 onBeforeUnmount(() => {
-  if (autosaveTimer !== null) window.clearTimeout(autosaveTimer);
+  autosave.dispose();
 });
 
 watch(
   document,
   () => {
     if (suppressAutosave || viewState.value !== 'ready') return;
-    scheduleAutosave();
+    autosave.schedule();
   },
   { deep: true },
 );
@@ -174,59 +215,52 @@ async function loadOutline() {
       outlineResult.currentVersion?.content,
       { title: projectTitle.value },
     );
+    if (parsed.source === 'invalid') {
+      throw new Error('当前大纲版本无法安全读取');
+    }
     document.value = normalizeNarrativeDocument(parsed.document);
-    selectedId.value =
-      document.value.chapters[0]?.id ?? document.value.story.id;
+    resetActiveOwner(document.value.story.id);
+    currentView.value = 'timeline-horizontal';
+    viewMode.value = 'timeline';
     viewState.value = 'ready';
     suppressAutosave = false;
-    if (parsed.migrated) scheduleAutosave();
+    if (parsed.migrated) autosave.schedule();
   } catch {
     document.value = createNarrativeDocument({ title: projectTitle.value });
-    selectedId.value =
-      document.value.chapters[0]?.id ?? document.value.story.id;
+    resetActiveOwner(document.value.story.id);
     viewState.value = 'error';
     suppressAutosave = false;
   }
 }
 
-function scheduleAutosave() {
-  if (autosaveTimer !== null) window.clearTimeout(autosaveTimer);
-  autosaveTimer = window.setTimeout(() => {
-    autosaveTimer = null;
-    void saveDocument();
-  }, 800);
-}
-
-async function saveDocument() {
-  if (!document.value || !projectId.value) return;
-  if (saving.value) {
-    saveQueued = true;
-    return;
-  }
-  saving.value = true;
-  try {
-    const result = await saveStoryOutline(scope.value, {
-      content: JSON.stringify(document.value),
-      expectedVersionNumber: currentVersion.value?.versionNumber,
-    });
-    currentVersion.value = result.version;
-  } catch {
-    return;
-  } finally {
-    saving.value = false;
-    if (saveQueued) {
-      saveQueued = false;
-      scheduleAutosave();
-    }
-  }
-}
-
 function selectEntity(entityId: string) {
-  selectedId.value = entityId;
-  focusRequest.value = {
-    nodeId: entityId,
-    sequence: ++focusSequence,
-  };
+  if (!document.value?.canvases[entityId]) return;
+  const next = activateOutlineOwner(
+    {
+      activeOwnerId: activeOwnerId.value,
+      selectedId: selectedId.value,
+      focusRequest: focusRequest.value,
+      materialPreviewRequest: materialPreviewRequest.value,
+      activationSequence: canvasActivationSequence.value,
+    },
+    entityId,
+  );
+  if (next.activeOwnerId === activeOwnerId.value) {
+    selectedId.value = entityId;
+    return;
+  }
+  activeOwnerId.value = next.activeOwnerId;
+  selectedId.value = next.selectedId;
+  focusRequest.value = null;
+  materialPreviewRequest.value = null;
+  canvasActivationSequence.value = next.activationSequence;
+}
+function resetActiveOwner(ownerId: string) {
+  activeOwnerId.value = ownerId;
+  selectedId.value = ownerId;
+  focusRequest.value = null;
+  materialPreviewRequest.value = null;
+  canvasActivationSequence.value += 1;
 }
 function selectCanvasNode(nodeId: string) {
   selectedId.value = nodeId;
@@ -246,7 +280,8 @@ function addArc() {
     chapterIds: [],
   });
   document.value.story.arcIds.push(id);
-  selectedId.value = id;
+  document.value = normalizeNarrativeDocument(document.value);
+  selectEntity(id);
 }
 function deleteArc(arcId: string) {
   if (!document.value) return;
@@ -266,15 +301,9 @@ function deleteArc(arcId: string) {
     : `删除空幕“${arc.title}”？`;
   if (!window.confirm(confirmation)) return;
 
-  const migratedChapterIds = new Set(result.migratedChapterIds);
-  const migratedBeatIds = document.value.beats
-    .filter((beat) => migratedChapterIds.has(beat.chapterId))
-    .map((beat) => beat.id);
-  [arcId, ...result.migratedChapterIds, ...migratedBeatIds].forEach(
-    (nodeId) => delete positionOverrides[nodeId],
-  );
+  const wasActive = activeOwnerId.value === arcId;
   document.value = result.document;
-  if (selectedId.value === arcId) selectEntity(targetArc.id);
+  if (wasActive) resetActiveOwner(document.value.story.id);
 }
 function addChapter(arcId: string) {
   if (!document.value) return;
@@ -301,7 +330,8 @@ function addChapter(arcId: string) {
     referenceIds: [],
   });
   document.value.arcs.find((arc) => arc.id === arcId)?.chapterIds.push(id);
-  selectedId.value = id;
+  document.value = normalizeNarrativeDocument(document.value);
+  selectEntity(id);
 }
 function deleteChapter(chapterId: string) {
   if (!document.value) return;
@@ -318,23 +348,26 @@ function deleteChapter(chapterId: string) {
     : `删除“${chapter.title}”？`;
   if (!window.confirm(confirmation)) return;
 
-  [chapterId, ...result.removedBeatIds].forEach(
-    (nodeId) => delete positionOverrides[nodeId],
-  );
+  const wasActive = activeOwnerId.value === chapterId;
   document.value = result.document;
-  if (
-    selectedId.value === chapterId ||
-    result.removedBeatIds.includes(selectedId.value ?? '')
-  ) {
-    selectEntity(result.parentArcId);
-  }
+  if (wasActive) resetActiveOwner(document.value.story.id);
 }
 function moveNode(payload: { nodeId: string; x: number; y: number }) {
-  positionOverrides[payload.nodeId] = clampOutlinePosition(payload);
+  if (!document.value) return;
+  writeCanvasPosition(
+    document.value.canvases,
+    activeOwnerId.value,
+    currentView.value,
+    payload.nodeId,
+    clampOutlinePosition(payload),
+  );
 }
 function relayoutCurrentView() {
-  Object.keys(positionOverrides).forEach(
-    (key) => delete positionOverrides[key],
+  if (!document.value) return;
+  clearCanvasPositions(
+    document.value.canvases,
+    activeOwnerId.value,
+    currentView.value,
   );
 }
 function addNarrativeMaterial(payload: {
@@ -342,19 +375,32 @@ function addNarrativeMaterial(payload: {
   parentId: string;
 }) {
   if (!document.value) return;
+  const canvas = document.value.canvases[activeOwnerId.value];
+  if (!canvas) return;
+  const validParentIds = new Set(
+    outlineDocument.value.nodes.map((node) => node.id),
+  );
+  if (!validParentIds.has(payload.parentId)) return;
 
   const { type } = payload;
   const label = NARRATIVE_CANVAS_ASSET_LABELS[type];
-  const sequence =
-    document.value.assets.filter((asset) => asset.type === type).length + 1;
+  const sequence = canvas.nodes.filter((node) => node.type === type).length + 1;
   const id = createEntityId(type);
-  document.value.assets.push({
+  canvas.nodes.push({
     id,
     type,
+    title: `未命名${label}${sequence > 1 ? sequence : ''}`,
+    summary: `待补充${label}说明`,
+    order: canvas.nodes.length,
     refId: id,
-    label: `未命名${label}${sequence > 1 ? sequence : ''}`,
     parentId: payload.parentId,
-    relation: `待补充${label}说明`,
+  });
+  canvas.edges.push({
+    id: `narrative-asset-${payload.parentId}-${id}`,
+    source: payload.parentId,
+    target: id,
+    kind: 'relation',
+    label,
   });
   selectedId.value = id;
 }
@@ -430,7 +476,7 @@ function createEntityId(type: string) {
             v-if="document"
             type="button"
             class="story-narrative-tree-root"
-            :class="{ 'is-selected': selectedId === document.story.id }"
+            :class="{ 'is-selected': activeOwnerId === document.story.id }"
             @click="selectEntity(document.story.id)"
           >
             <span class="story-narrative-tree-mark">S</span
@@ -448,7 +494,7 @@ function createEntityId(type: string) {
               <button
                 type="button"
                 class="story-narrative-tree-row"
-                :class="{ 'is-selected': selectedId === group.arc.id }"
+                :class="{ 'is-selected': activeOwnerId === group.arc.id }"
                 @click="selectEntity(group.arc.id)"
               >
                 <span class="story-narrative-tree-mark">A</span
@@ -484,7 +530,7 @@ function createEntityId(type: string) {
               <button
                 type="button"
                 class="story-narrative-tree-row is-chapter"
-                :class="{ 'is-selected': selectedId === chapter.id }"
+                :class="{ 'is-selected': activeOwnerId === chapter.id }"
                 @click="selectEntity(chapter.id)"
               >
                 <span class="story-narrative-tree-mark">{{
@@ -553,8 +599,21 @@ function createEntityId(type: string) {
                 {{ OUTLINE_VIEW_LABELS[view] }}
               </button>
             </div>
+            <button
+              v-if="saveStateLabel"
+              type="button"
+              class="story-narrative-save-state"
+              :class="`is-${saveState}`"
+              :disabled="saveState !== 'error'"
+              role="status"
+              aria-live="polite"
+              @click="autosave.retry()"
+            >
+              {{ saveStateLabel }}
+            </button>
           </div>
           <StoryOutlineCanvas
+            :key="`${activeOwnerId}:${canvasActivationSequence}`"
             :layout="currentLayout"
             :edges="outlineDocument.edges"
             :view="currentView"

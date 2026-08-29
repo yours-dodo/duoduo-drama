@@ -73,7 +73,7 @@ export class StoryArtifactVersionConflictError extends Error {
 export class StoryOutlineContentInvalidError extends Error {
   constructor() {
     super(
-      'Story outline content must be a valid narrative-planning.v1 JSON document',
+      'Story outline content must be a valid narrative-planning.v1 or v2 JSON document',
     );
     this.name = 'StoryOutlineContentInvalidError';
   }

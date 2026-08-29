@@ -9,10 +9,8 @@ import {
   artifactVersionOutput,
 } from './story-artifact-output.js';
 import { readStoryOutlineAccess } from './story-outline-access.js';
-import {
-  StoryArtifactVersionConflictError,
-  StoryOutlineContentInvalidError,
-} from './story-errors.js';
+import { StoryArtifactVersionConflictError } from './story-errors.js';
+import { validateStoryOutlineContent } from './story-outline-content.js';
 import type { ProjectCollaboratorRepository } from '../ports/project-collaborator-repository.js';
 import type { StoryArtifactRepository } from '../ports/story-artifact-repository.js';
 import type { StoryArtifactVersionRepository } from '../ports/story-artifact-version-repository.js';
@@ -42,11 +40,11 @@ export class SaveStoryOutline {
     actorUserId: string;
     projectId: string;
     content: string;
-    expectedVersionNumber?: number;
+    expectedVersionNumber: number;
     idempotencyKey: string;
     requestId: string;
   }) {
-    validateNarrativeContent(input.content);
+    validateStoryOutlineContent(input.content);
     return this.transactions.run(async () => {
       const access = await readStoryOutlineAccess(
         {
@@ -87,9 +85,9 @@ export class SaveStoryOutline {
         };
       }
       const versions = await this.versions.listForArtifact({
-          tenantId: access.artifact.tenantId,
-          artifactId: access.artifact.id,
-        });
+        tenantId: access.artifact.tenantId,
+        artifactId: access.artifact.id,
+      });
       const latestVersionNumber = versions.reduce(
         (latest, version) => Math.max(latest, version.versionNumber),
         0,
@@ -99,39 +97,26 @@ export class SaveStoryOutline {
             (version) => version.id === access.artifact.currentVersionId,
           ) ?? null)
         : null;
-      if (
-        input.expectedVersionNumber !== undefined &&
-        current?.versionNumber !== input.expectedVersionNumber
-      ) {
+      if ((current?.versionNumber ?? 0) !== input.expectedVersionNumber) {
         throw new StoryArtifactVersionConflictError();
       }
 
       const now = await this.databaseClock.now();
-      let version: ReturnType<StoryArtifactVersion['toSnapshot']>;
-      let created = false;
-      if (current?.status === 'draft') {
-        const draft = StoryArtifactVersion.restore(current);
-        draft.updateDraftContent(input.content, 'json');
-        version = draft.toSnapshot();
-        await this.versions.update(version);
-      } else {
-        const draft = StoryArtifactVersion.createDraft({
-          id: this.ids.create(),
-          tenantId: access.artifact.tenantId,
-          artifactId: access.artifact.id,
-          versionNumber: latestVersionNumber + 1,
-          content: input.content,
-          contentFormat: 'json',
-          sourceType: 'user',
-          sourceMessageId: null,
-          generationRequestId: null,
-          createdByUserId: input.actorUserId,
-          createdAt: now,
-        });
-        version = draft.toSnapshot();
-        created = true;
-        await this.versions.create(version);
-      }
+      const draft = StoryArtifactVersion.createDraft({
+        id: this.ids.create(),
+        tenantId: access.artifact.tenantId,
+        artifactId: access.artifact.id,
+        versionNumber: latestVersionNumber + 1,
+        content: input.content,
+        contentFormat: 'json',
+        sourceType: 'user',
+        sourceMessageId: null,
+        generationRequestId: null,
+        createdByUserId: input.actorUserId,
+        createdAt: now,
+      });
+      const version = draft.toSnapshot();
+      await this.versions.create(version);
 
       const artifact = StoryArtifact.restore(access.artifact);
       artifact.setCurrentVersion(version.id, now);
@@ -166,7 +151,7 @@ export class SaveStoryOutline {
           versionNumber: version.versionNumber,
           status: version.status,
           sourceType: version.sourceType,
-          created,
+          created: true,
         },
         requestId: input.requestId,
         occurredAt: now,
@@ -177,68 +162,4 @@ export class SaveStoryOutline {
       };
     });
   }
-}
-
-function validateNarrativeContent(content: string) {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new StoryOutlineContentInvalidError();
-  }
-  if (!isNarrativeDocumentPayload(parsed)) {
-    throw new StoryOutlineContentInvalidError();
-  }
-}
-
-function isNarrativeDocumentPayload(value: unknown): value is {
-  schemaVersion: 'narrative-planning.v1';
-  rootStoryId: string;
-  story: Record<string, unknown>;
-  arcs: unknown[];
-  chapters: unknown[];
-  beats: unknown[];
-  assets: unknown[];
-} {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    candidate.schemaVersion === 'narrative-planning.v1' &&
-    typeof candidate.rootStoryId === 'string' &&
-    isRecord(candidate.story) &&
-    typeof candidate.story.id === 'string' &&
-    candidate.story.type === 'story' &&
-    typeof candidate.story.title === 'string' &&
-    typeof candidate.story.summary === 'string' &&
-    isStringArray(candidate.story.arcIds) &&
-    isEntityArray(candidate.arcs, 'arc') &&
-    isEntityArray(candidate.chapters, 'chapter') &&
-    isEntityArray(candidate.beats, 'beat') &&
-    isEntityArray(candidate.assets)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object');
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === 'string')
-  );
-}
-
-function isEntityArray(
-  value: unknown,
-  type?: string,
-): value is Record<string, unknown>[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (item) =>
-        isRecord(item) &&
-        typeof item.id === 'string' &&
-        (type === undefined || item.type === type),
-    )
-  );
 }
